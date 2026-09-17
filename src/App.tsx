@@ -4,7 +4,7 @@ import { downloadMidi } from './midi/exportMidi'
 import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from './plan/schema'
 import { detectJev, heuristicPlanner, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from './planner'
 import { shadowExchanges } from './planner/HeuristicPlanner'
-import { renderPlan } from './render/renderPlan'
+import { renderPlan, secondsPerTick } from './render/renderPlan'
 import { DebugPanel } from './ui/DebugPanel'
 import { Confidence, PlanPanel } from './ui/PlanPanel'
 import { SheetView } from './ui/SheetView'
@@ -201,6 +201,22 @@ export function App() {
       setPlaying(false)
     }
   }, [engine, score, instrument, loop])
+
+  /** A click on bar N: jump there if sounding, otherwise start playing from there. */
+  const seekBar = useCallback(
+    async (index: number) => {
+      if (!score) return
+      const from = index * score.meter.ticksPerBar * secondsPerTick(score)
+      if (engine.seek(from)) return
+      setPlaying(true)
+      try {
+        await engine.play(score, instrument, { loop, from, onEnd: () => setPlaying(false) })
+      } catch {
+        setPlaying(false)
+      }
+    },
+    [engine, score, instrument, loop],
+  )
 
   const stop = useCallback(() => {
     engine.stop()
@@ -418,7 +434,7 @@ export function App() {
                   {saved ? `Saved ${saved}` : 'Download MIDI'}
                 </button>
               </div>
-              <SheetView score={score} engine={engine} playing={playing} accent={accent} />
+              <SheetView score={score} engine={engine} playing={playing} accent={accent} onSeekBar={(index) => void seekBar(index)} />
             </section>
 
             <PlanPanel plan={plan} score={score} decisions={generated.trace.decisions} edited={edited} onApply={setEditedPlan} />
