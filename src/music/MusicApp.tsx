@@ -275,7 +275,7 @@ export default function MusicApp() {
       : audio.state === 'error'
         ? `Audio error: ${audio.message}`
         : audio.state === 'ready'
-          ? `${audio.instrument.replace('_', ' ')} ready`
+          ? 'ready'
           : 'Audio starts on first play'
 
   return (
@@ -405,6 +405,25 @@ export default function MusicApp() {
                 <button type="button" className={`primary play ${playing ? 'is-playing' : ''}`} onClick={() => (playing ? stop() : void play())} aria-pressed={playing}>
                   {playing ? 'Stop' : 'Play'}
                 </button>
+                <button
+                  type="button"
+                  className={`ghost icon-button ${saved ? 'is-saved' : ''}`}
+                  title={saved ? `Saved ${saved}` : 'Download MIDI'}
+                  aria-label={saved ? `Saved ${saved}` : 'Download MIDI'}
+                  onClick={() => {
+                    setSaved(downloadMidi(score, instrument))
+                    setTimeout(() => setSaved(null), 2500)
+                  }}
+                >
+                  {saved ? (
+                    <span aria-hidden="true">✓</span>
+                  ) : (
+                    <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true">
+                      <path d="M10 2.5a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V3.25A.75.75 0 0 1 10 2.5Z" />
+                      <path d="M3.5 13.25a.75.75 0 0 1 .75.75v1.5c0 .69.56 1.25 1.25 1.25h9c.69 0 1.25-.56 1.25-1.25v-1.5a.75.75 0 0 1 1.5 0v1.5A2.75 2.75 0 0 1 14.5 18h-9A2.75 2.75 0 0 1 2.75 15.5v-1.5a.75.75 0 0 1 .75-.75Z" />
+                    </svg>
+                  )}
+                </button>
                 <label className="switch">
                   <input type="checkbox" checked={loop} onChange={(event) => setLoop(event.target.checked)} />
                   <span>Loop</span>
@@ -423,16 +442,6 @@ export default function MusicApp() {
                 <span className={`audio-status ${audio.state}`} role="status">
                   {audioLabel}
                 </span>
-                <button
-                  type="button"
-                  className="ghost push-right"
-                  onClick={() => {
-                    setSaved(downloadMidi(score, instrument))
-                    setTimeout(() => setSaved(null), 2500)
-                  }}
-                >
-                  {saved ? `Saved ${saved}` : 'Download MIDI'}
-                </button>
               </div>
               <SheetView score={score} engine={engine} playing={playing} accent={accent} onSeekBar={(index) => void seekBar(index)} />
             </section>
