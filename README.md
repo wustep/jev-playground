@@ -1,4 +1,4 @@
-# Jev Playground / music
+# Jev Playground
 
 Can a **System One** model steer music across styles?
 
@@ -8,6 +8,16 @@ Can a **System One** model steer music across styles?
 - **App code** expands that plan into notes, engraves it (VexFlow), plays it (smplr) and exports it (`.mid`).
 
 Styles on the dial: **Bach · Beethoven · Debussy · Philip Glass · Nahre Sol · Elijah Fox**.
+
+## Routes
+
+| Route | What |
+| --- | --- |
+| `/` | Landing page: links to the demos. |
+| `/music/` | The composer described below: Jev picks labels, code writes the notes. |
+| `/trolley/` | Absurd trolley problems. Put anyone or anything on either track (counts, traits, a twist), or **Randomize**; then ask what Jev would do. Jev makes typed decisions only — `trolley_cast` (Choices over closed tables, sampled by code) and `trolley_judge` (a decision Choice, difficulty and absurdity Scores, a “most people would pull” Noul). Every sentence is assembled by code (`src/trolley/describe.ts`). Clearly hypothetical; no harm is ever described. |
+
+One Vite entry; `src/main.tsx` switches on the path and lazy-loads each demo (the landing page and the trolley never download VexFlow). `vercel.json` rewrites `/music/*` and `/trolley/*` to `index.html` so direct visits and refreshes work. `?debug=1` works on both demos.
 
 ## Run
 
@@ -34,6 +44,13 @@ Copy `.env.example` → `.env.local`. **Nothing is required** — with no key th
 
 `/api/jev` is served by a Vercel function in production (`api/jev.ts`) and by a Vite middleware during `npm run dev` (`vite.config.ts`) — same handler (`server/jevHandler.ts`), so `TYPESAFE_API_KEY` in `.env.local` just works locally without `vercel dev`.
 
+### `/api/jev` hardening
+
+- **Allowlist, not a proxy.** The body must be one of six typed ops (music: `concept`, `globals`, `bar`, `score`; trolley: `trolley_cast`, `trolley_judge`), re-validated against the enums; the server builds the actual `state`/`questions`. Raw `state`/`questions` are rejected with 400.
+- **Rate limit.** 90 POSTs per minute per client IP (`JEV_RATE_LIMIT` overrides), keyed on `x-vercel-forwarded-for` / `x-real-ip` — headers Vercel's edge sets and a client can't forge. Over the limit: `429` + `Retry-After`. The counters are **in memory per function instance**, so on serverless this is best-effort: a cold start resets it and parallel instances count separately. That is enough to stop loops and casual abuse; a hard cap needs a shared store (Vercel KV / Upstash), which this project doesn't have configured.
+- **Nothing secret in responses.** The key is only ever sent upstream in the `Authorization` header. `GET` returns `{ available, model }` and no other env. Failed upstream calls return a generic message — never TypeSafe's response body; successful ones pass back only `model`, `answers`, `usage`.
+- 16 kB body cap, `GET`/`POST` only (`405` + `Allow`), `Cache-Control: no-store`. Covered by `server/jevHandler.test.ts`.
+
 On Vercel: `vercel env add TYPESAFE_API_KEY production`, then redeploy. The header chip flips from “Jev offline · stub” to “Jev connected”.
 
 ## Architecture: Jev vs renderer
@@ -57,7 +74,7 @@ On Vercel: `vercel env add TYPESAFE_API_KEY production`, then redeploy. The head
       └──▶ scoreToMidi()    @tonejs/midi                           midi/exportMidi.ts
 ```
 
-**Where plan JSON feeds the renderer:** one call, in `src/App.tsx`:
+**Where plan JSON feeds the renderer:** one call, in `src/music/MusicApp.tsx`:
 
 ```ts
 const score = useMemo(() => renderPlan(plan, generated.input.seed), [plan, generated])
@@ -133,13 +150,18 @@ One `AudioContext`, created on the first user gesture. Every instrument and the 
 
 ```
 api/jev.ts              Vercel function → server/jevHandler.ts
-server/jevHandler.ts    validate JevOp → build request → TypeSafe (key stays here)
+server/jevHandler.ts    rate limit → validate op (allowlist) → build request → TypeSafe (key stays here)
+server/rateLimit.ts     per-IP fixed window, in memory (best-effort on serverless)
+src/main.tsx            path switch: / · /music/ · /trolley/ (lazy chunks)
+src/landing/ src/shell/ landing page · route helper
+src/music/MusicApp.tsx  the composer page
+src/trolley/            schema (closed tables) · requests (typed ops) · describe (all sentences) · play (Jev + stub) · page
 src/plan/               schema (enums, plan, validation) · style briefs + stub priors
 src/planner/            Planner interface · HeuristicPlanner · JevPlanner · pick policy · jev/
 src/render/             renderPlan (the seam) · harmony · melody · voiceLeading · textures/
 src/sheet/              notation splitting (ticks → tied note values) · VexFlow drawing
 src/audio/ src/midi/    playback engine · MIDI export
-src/ui/ src/App.tsx     dial, transport, plan panel (editable JSON), match row, debug panel
+src/ui/                 sheet view, plan panel (editable JSON), debug panel
 ```
 
 Files imported by the serverless function use explicit `.js` import extensions (Node ESM); everything else is extensionless.

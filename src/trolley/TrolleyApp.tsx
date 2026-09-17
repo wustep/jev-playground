@@ -234,9 +234,9 @@ export default function TrolleyApp() {
           <div className="verdict-body">
             <div className="lever-bar" role="img" aria-label={`Pull the lever ${pullPercent}%, do nothing ${100 - (pullPercent ?? 0)}%`}>
               <span className="lever-pull" style={{ width: `${pullPercent}%` }}>
-                {(pullPercent ?? 0) >= 12 ? `pull ${pullPercent}%` : ''}
+                {(pullPercent ?? 0) >= 24 ? `pull ${pullPercent}%` : ''}
               </span>
-              <span className="lever-stay">{100 - (pullPercent ?? 0) >= 12 ? `leave it ${100 - (pullPercent ?? 0)}%` : ''}</span>
+              <span className="lever-stay">{100 - (pullPercent ?? 0) >= 30 ? `leave it ${100 - (pullPercent ?? 0)}%` : ''}</span>
             </div>
             <Meter label="Confidence" value={verdict.confidence} max={1} word={`${Math.round(verdict.confidence * 100)}%`} />
             <Meter label="How hard" value={verdict.difficulty} max={3} word={DIFFICULTY_WORDS[Math.round(Math.max(0, Math.min(3, verdict.difficulty)))]} />

@@ -16,8 +16,8 @@ Do not drop any item. Small commits; `git push` after each. When ALL are done: m
 - [x] Deepen style strings / research; tone down Philip Glass repetition (priors/textures, not just prose)
 - [x] Click a measure on the sheet to seek playback to that bar
 - [x] Investigate perceived slowness (renderPlan was ~ms — check VexFlow/sheet path); ship cheap wins in this PR
-- [ ] Routes: `/` landing (links to Music + Trolley), `/music/` = composer, `/trolley/` absurd editable cast trolley; SPA rewrites for refresh
-- [ ] API: IP rate-limit `/api/jev` (429 + Retry-After); no key leak; allowlisted ops; extend for trolley as needed; tests
+- [x] Routes: `/` landing (links to Music + Trolley), `/music/` = composer, `/trolley/` absurd editable cast trolley; SPA rewrites for refresh
+- [x] API: IP rate-limit `/api/jev` (429 + Retry-After); no key leak; allowlisted ops; extend for trolley as needed; tests
 - [ ] Merge PR #2 to main (Stephen asked for main + Vercel ready)
 - [ ] Confirm production Vercel deploy healthy
 
