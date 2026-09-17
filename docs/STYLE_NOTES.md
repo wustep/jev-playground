@@ -163,6 +163,21 @@ Delport on the Tirol Concerto), the IRCAM survey, and Wikipedia.
 - Textures: `melody_over_ostinato` (Metamorphosis), `pulsing_chords` (with the
   Étude 6 single repeated note), `displaced_arpeggio`, `interlocking_hands`;
   `minimal_cells` picks one of three cell families per piece.
+- **Second pass, after listening: it was still too locked.** The first version
+  hammered one figure for sixteen bars, which is the caricature, not the music —
+  the sources above all describe *process* (Two Pages adds a note per repeat;
+  *Opening* swaps a "loop breaker" bar; Tirol gives each section a new bass;
+  Mad Rush alternates blocks). So:
+  `minimal_cells` now moves one *stage* every two bars — bare cell → one note
+  added → rotated to start a note later (phase) → both, with a colour tone on
+  top — then repeats the cycle an inversion higher, thinning the left hand to a
+  slow bass in one stage of four; loop-built harmony switches to a **second
+  cycle for the middle of the piece** and returns to the first to close; the
+  additive forms trade plain `restatement` bars for `development` / `sequence` /
+  `echo`; `minimal_cells` fell from 45 % to 28 % of the pulse archetype (20 %
+  overall) in favour of `displaced_arpeggio`, `interlocking_hands` and
+  `melody_over_ostinato`; static contours fell from 45 % to 28 %. The brief
+  handed to Jev now describes the process rather than the ostinato.
 
 ## Nahre Sol
 

@@ -528,25 +528,25 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   glass: {
     brief:
-      'American minimalism, c. 1980. A cycle of two to eight plain chords, related by thirds and common tones rather than by function, repeated as in a theme and variations; six-four chords and changing inversions give each pass a new bass. Arpeggio cells, rocking thirds and two-against-three cross-rhythms over a slow bass; change is additive and arrives in blocks, with sudden terraced dynamics instead of a climax. Mostly minor, no leading-tone cadences — pieces stop rather than close. Piano, electric organ, strings, voices.',
+      'American minimalism, c. 1980. Process music: a small cell is stated and then changed a little at a time — a note added, the figure rotated so it starts one note later, a layer doubled in speed — so that nothing is repeated unchanged for long. The harmony is a cycle of two to eight plain chords related by thirds and common tones rather than by function; each pass takes a new inversion and so a new bass, and every eight bars or so a different cycle takes over. Rocking thirds, arpeggio cells and two-against-three cross-rhythms over a slow bass, often under a bare slow melody. Dynamics move in blocks, with sudden terraces instead of a climax. Mostly minor, no leading-tone cadences — pieces stop rather than close. Piano, electric organ, strings, voices.',
     priors: {
-      form: { additive_loop: 55, layered_build: 25, arch_return: 12, call_and_response: 8 },
+      form: { additive_loop: 40, layered_build: 30, arch_return: 18, call_and_response: 12 },
       key: { F_minor: 16, A_minor: 14, D_minor: 12, G_minor: 12, C_minor: 10, E_minor: 10, C_major: 8, F_major: 8, A_major: 4, Eb_major: 3, Ab_major: 3 },
       meter: { four_four: 45, six_eight: 30, three_four: 25 },
-      texture: { minimal_cells: 30, melody_over_ostinato: 20, pulsing_chords: 15, displaced_arpeggio: 10, toccata_perpetual: 8, wash_arpeggio: 7, interlocking_hands: 5, broken_chord_prelude: 5 },
+      texture: { melody_over_ostinato: 22, minimal_cells: 20, displaced_arpeggio: 14, pulsing_chords: 12, interlocking_hands: 10, wash_arpeggio: 8, toccata_perpetual: 8, broken_chord_prelude: 6 },
       palette: { diatonic: 70, modal: 20, modal_dark: 10 },
       tempo: { moderato: 40, allegro: 25, andante: 25, adagio: 10 },
       dynamics: { mp: 40, mf: 30, p: 25, f: 5 },
       dynamicShape: { terraced: 35, steady: 30, waves: 15, build_then_drop: 20 },
       defaultInstrument: { grand_piano: 55, church_organ: 20, strings: 15, choir: 5, electric_piano: 5 },
-      contour: { static: 45, rise: 20, arch: 15, fall: 10, wave: 10 },
+      contour: { static: 28, rise: 22, wave: 18, arch: 16, fall: 16 },
     },
     archetypes: {
       hypnotic_pulse: {
         weight: 34,
         priors: {
           form: { additive_loop: 65, layered_build: 35 },
-          texture: { minimal_cells: 45, pulsing_chords: 20, displaced_arpeggio: 15, interlocking_hands: 10, broken_chord_prelude: 10 },
+          texture: { minimal_cells: 28, displaced_arpeggio: 22, interlocking_hands: 20, pulsing_chords: 18, broken_chord_prelude: 12 },
           tempo: { moderato: 45, allegro: 40, andante: 15 },
           dynamicShape: { terraced: 35, steady: 35, waves: 15, build_then_drop: 15 },
         },
@@ -610,9 +610,9 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           open: [['i', 'i', 'bVII', 'bVImaj7']],
         },
         loops: [
-          ['bVI', 'i64'], // Mad Rush: the bass rocks a semitone while two notes hold
-          ['bVI', 'i64', 'i64', 'bVI', 'bVII', 'bVI', 'i64', 'i64'], // Mad Rush, the bass chant
           ['i', 'bVI', 'bIII', 'V'],
+          ['bVI', 'i64', 'i64', 'bVI', 'bVII', 'bVI', 'i64', 'i64'], // Mad Rush, the bass chant
+          ['bVI', 'i64'], // Mad Rush: the bass rocks a semitone while two notes hold
           ['i', 'bVI', 'bVII', 'V7'],
           ['i', 'bIII', 'V', 'V7'],
           ['i', 'i', 'bVII', 'bVImaj7'],

@@ -107,7 +107,13 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
   const chords: ChordId[] = []
   const candidates: ChordId[][] = []
   const heads = new Map<PhraseSlot['material'], readonly ChordId[]>()
-  const loop = pickUnit(book.loops.length ? book.loops : book.heads, undefined)
+  // Loop-built pieces don't sit on one cycle: a second cycle takes over for
+  // the middle of the piece (a harmonic shift every eight bars or so) and the
+  // first returns to close. Short pieces keep the one.
+  const cycles = book.loops.length ? book.loops : book.heads
+  const loopA = pickUnit(cycles, undefined)
+  const others = cycles.filter((cycle) => cycle !== loopA.unit)
+  const loopB = others.length && slots.length >= 4 ? { unit: sample ? others[Math.floor(random() * others.length)] : others[0], pool: others } : loopA
   let loopAt = 0
 
   /** One unit from `units`, preferring those that don't just repeat the chord we are coming from. */
@@ -182,6 +188,10 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
         break
       }
       case 'loop': {
+        const at = slots.indexOf(slot)
+        const middle = at >= Math.floor(slots.length / 2) && at < slots.length - 1
+        const loop = middle ? loopB : loopA
+        if (at === Math.floor(slots.length / 2) || at === slots.length - 1) loopAt = 0 // a new section starts its cycle from the top
         const bars = Array.from({ length: 4 }, () => loop.unit[loopAt++ % loop.unit.length])
         // Each later pass may take a different inversion: the same cycle over a new bass.
         push(slot.varied ? vary(bars) : bars, loop.pool.map((cycle) => bars.map((_, k) => cycle[(loopAt - 4 + k) % cycle.length])))

@@ -41,24 +41,41 @@ export function minimalCells(bar: BarContext): BarNotes {
   const octaveUp = (pitch: string, semitones: number) => nearestNote([Note.pitchClass(pitch)], midiOf(pitch) + semitones)
   const tones = [...voicing, octaveUp(voicing[0], 12)].map((pitch) => (lift ? octaveUp(pitch, lift) : pitch))
 
-  // The process: statements loop a plain cell in eighths; development adds a
-  // note to the cell and doubles the speed; contrast turns the cell upside down.
+  // The process. Nothing is ever simply repeated for long: every two bars the
+  // piece moves one STAGE on, and a stage changes the cell itself —
+  //   stage 0  the bare cell            stage 2  rotated: it starts one note later (phase)
+  //   stage 1  one note added           stage 3  added AND rotated, a colour tone on top
+  // — then the cycle starts again an inversion higher. Development doubles the
+  // speed; contrast turns the cell upside down. The ear hears one idea growing,
+  // not one figure hammered for sixteen bars.
   const fast = role === 'development' || role === 'climax'
-  const cell = role === 'contrast' ? CELLS.inverted : fast ? CELLS.additive : meter.ticksPerBar === 12 ? [0, 1, 2] : CELLS.plain
+  const base = role === 'contrast' ? CELLS.inverted : fast ? CELLS.additive : meter.ticksPerBar === 12 ? [0, 1, 2] : CELLS.plain
+  const stage = Math.floor(bar.index / 2)
+  const grown = stage % 2 === 1 ? [...base, base[1 % base.length], 3] : [...base]
+  const rotation = stage % 4 >= 2 ? 1 + (stage % 3) : 0
+  const cell = grown.map((_, k) => grown[(k + rotation) % grown.length])
+  const colour = bar.chord.extensions[0] ?? bar.chord.core[3]
+  const crown = colour && stage % 4 === 3 ? nearestNote([colour], midiOf(tones[tones.length - 1]) + 3) : undefined
+  // Each full cycle of four stages lifts the whole cell one inversion.
+  const lifted = Math.floor(stage / 4) % 2
   const step = fast ? 1 : 2
   // A rising/falling contour nudges the second half of the bar up/down an inversion.
   const shift = bar.plan.contour === 'rise' ? 1 : bar.plan.contour === 'fall' ? -1 : 0
   const right: Voice = []
   for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += step, k++) {
     const inSecondHalf = tick >= meter.ticksPerBar / 2
-    const index = clamp(cell[k % cell.length] + (inSecondHalf ? shift : 0), 0, tones.length - 1)
-    right.push(note(tick, step, tones[index], velocity + (k % cell.length === 0 ? 4 : -4)))
+    const index = clamp(cell[k % cell.length] + lifted + (inSecondHalf ? shift : 0), 0, tones.length - 1)
+    const top = crown && k % cell.length === cell.length - 1
+    right.push(note(tick, step, top ? crown : tones[index], velocity + (k % cell.length === 0 ? 4 : -4)))
   }
 
   // Left hand. In 12-tick meters it plays four dotted eighths against the
-  // right hand's six eighths — a true 2-against-3. In 4/4 it rocks in eighths.
+  // right hand's six eighths — a true 2-against-3. In 4/4 it rocks in eighths,
+  // and in the later stages of each cycle thins to a slow bass in long notes
+  // (the three-speed layering of the fast pieces).
   const left: Voice = []
-  const leftStep = meter.ticksPerBar === 12 ? 3 : 2
+  const slowBass = stage % 4 === 2 && role !== 'climax'
+  const leftStep = slowBass ? meter.ticksPerBar / 2 : meter.ticksPerBar === 12 ? 3 : 2
   for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += leftStep, k++) {
     const pitch = role === 'climax' ? [k % 2 === 0 ? low : fifth, octaveUp(k % 2 === 0 ? low : fifth, 12)] : [k % 2 === 0 ? low : fifth]
     left.push(note(tick, leftStep, pitch, velocity - 10))

@@ -13,7 +13,7 @@ Do not drop any item. Small commits; `git push` after each. When ALL are done: m
 - [x] Style-switch loading / clear in-flight feedback
 - [x] Prewarm/cache one 16-bar plan+score per artist; click artist plays immediately; Generate replaces with new seed
 - [x] More horizontal padding on sheet music
-- [ ] Deepen style strings / research; tone down Philip Glass repetition (priors/textures, not just prose)
+- [x] Deepen style strings / research; tone down Philip Glass repetition (priors/textures, not just prose)
 - [x] Click a measure on the sheet to seek playback to that bar
 - [x] Investigate perceived slowness (renderPlan was ~ms — check VexFlow/sheet path); ship cheap wins in this PR
 - [ ] Routes: `/` landing (links to Music + Trolley), `/music/` = composer, `/trolley/` absurd editable cast trolley; SPA rewrites for refresh

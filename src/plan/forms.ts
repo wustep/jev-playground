@@ -82,12 +82,12 @@ const R = {
   echoReturn: ['restatement', 'echo', 'dissolve', 'cadence'],
   miniArch: ['statement', 'contrast', 'restatement', 'cadence'],
 
-  cellAlone: ['statement', 'restatement', 'restatement', 'restatement'],
-  cellBreaker: ['statement', 'restatement', 'restatement', 'surprise'],
+  cellAlone: ['statement', 'restatement', 'development', 'restatement'],
+  cellBreaker: ['statement', 'restatement', 'development', 'surprise'],
   cellGrow: ['restatement', 'development', 'restatement', 'surprise'],
   cellFast: ['development', 'development', 'climax', 'development'],
   cellPeak: ['development', 'sequence', 'climax', 'climax'],
-  cellStop: ['restatement', 'restatement', 'dissolve', 'cadence'],
+  cellStop: ['restatement', 'echo', 'dissolve', 'cadence'],
   miniLoop: ['statement', 'restatement', 'development', 'cadence'],
 
   pair: ['statement', 'development', 'restatement', 'echo'],
@@ -97,7 +97,7 @@ const R = {
   fade: ['restatement', 'echo', 'dissolve', 'cadence'],
   miniMosaic: ['statement', 'echo', 'surprise', 'cadence'],
 
-  bare: ['statement', 'restatement', 'restatement', 'development'],
+  bare: ['statement', 'restatement', 'development', 'sequence'],
   addLayer: ['restatement', 'development', 'restatement', 'development'],
   thicken: ['development', 'sequence', 'development', 'surprise'],
   summit: ['development', 'climax', 'climax', 'development'],
