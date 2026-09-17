@@ -266,12 +266,14 @@ export function App() {
             </option>
           </select>
         </label>
-        <label>
+        <label className="control-bars">
           Bars
-          <select value={String(bars)} onChange={(event) => setBars(event.target.value === 'auto' ? 'auto' : (Number(event.target.value) as 4 | 8))}>
+          <select value={String(bars)} onChange={(event) => setBars(event.target.value === 'auto' ? 'auto' : (Number(event.target.value) as 4 | 8 | 16 | 32))}>
             <option value="auto">planner decides</option>
             <option value="4">4</option>
             <option value="8">8</option>
+            <option value="16">16</option>
+            <option value="32">32</option>
           </select>
         </label>
         <label title="argmax: always the most probable option. sample: draw from the returned distribution with the seed.">
@@ -306,10 +308,18 @@ export function App() {
               void generate({ seed: next })
             }}
           >
-            {busy ? 'Planning…' : 'Generate'}
+            {busy ? 'Planning…' : 'Generate plan'}
           </button>
         </div>
       </form>
+
+      <p className="flow-hint" aria-hidden={false}>
+        <span><b>1</b> Pick a style</span>
+        <span className="flow-arrow">→</span>
+        <span><b>2</b> Generate</span>
+        <span className="flow-arrow">→</span>
+        <span><b>3</b> Play / inspect</span>
+      </p>
 
       {generated?.notice && <p className="banner warn">{generated.notice}</p>}
       {error && <p className="banner warn">{error}</p>}
@@ -349,8 +359,8 @@ export function App() {
           <div className="workbench">
             <section className="panel sheet-panel">
               <div className="transport">
-                <button type="button" className="primary play" onClick={() => (playing ? stop() : void play())} aria-pressed={playing}>
-                  {playing ? '■ Stop' : '▶ Play'}
+                <button type="button" className={`primary play ${playing ? 'is-playing' : ''}`} onClick={() => (playing ? stop() : void play())} aria-pressed={playing}>
+                  {playing ? 'Stop' : 'Play'}
                 </button>
                 <label className="switch">
                   <input type="checkbox" checked={loop} onChange={(event) => setLoop(event.target.checked)} />
@@ -378,7 +388,7 @@ export function App() {
                     setTimeout(() => setSaved(null), 2500)
                   }}
                 >
-                  {saved ? `Saved ${saved}` : '↓ Download .mid'}
+                  {saved ? `Saved ${saved}` : 'Download MIDI'}
                 </button>
               </div>
               <SheetView score={score} engine={engine} playing={playing} accent={accent} />
