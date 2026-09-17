@@ -4,5 +4,8 @@
 
 import { handleJev } from '../server/jevHandler.js'
 
+// Module-scoped so this file type-checks without @types/node (see api/tsconfig.json).
+declare const process: { env: Record<string, string | undefined> }
+
 export const GET = (request: Request) => handleJev(request, process.env)
 export const POST = (request: Request) => handleJev(request, process.env)

@@ -1,0 +1,13 @@
+{
+  // Used only by Vercel's function builder (@vercel/node picks the tsconfig
+  // nearest the entrypoint). Type-checking happens in the root `tsc --noEmit`.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["./**/*.ts", "../server/**/*.ts"]
+}
