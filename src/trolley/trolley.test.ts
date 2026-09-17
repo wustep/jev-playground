@@ -35,6 +35,13 @@ describe('trolley sentences are written by code', () => {
     expect(scenarioText({ ...CLASSIC, twist: 'livestreamed' })).toContain(TWISTS.livestreamed)
   })
 
+  it('puts a visitor’s own entry into the prose', () => {
+    const own = { entity: 'custom' as const, custom: { label: 'rubber chicken', emoji: '🐔' }, trait: 'asleep' as const }
+    expect(groupPhrase({ ...own, count: 1 })).toBe('rubber chicken, fast asleep')
+    expect(groupPhrase({ ...own, count: 3 })).toBe('3 × rubber chicken, fast asleep')
+    expect(judgeOffline({ ...CLASSIC, siding: [{ ...own, count: 1 }] }).decision).toBe('pull_lever')
+  })
+
   it('never describes harm', () => {
     for (const theme of THEME_IDS) {
       for (let seed = 1; seed <= 20; seed++) {

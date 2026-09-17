@@ -109,10 +109,42 @@ export const COUNT_IDS = keysOf<CountId>(COUNTS)
 export const MAX_COUNT = 999
 export const MAX_GROUPS_PER_TRACK = 4
 
+/** A user-written entry: a short label and an emoji, instead of a row of the table. */
+export interface CustomEntity {
+  label: string
+  emoji: string
+}
+
 export interface Group {
-  entity: EntityId
+  /** A row of the closed table, or 'custom' with `custom` filled in. */
+  entity: EntityId | 'custom'
+  custom?: CustomEntity
   count: number
   trait: TraitId
+}
+
+export const MAX_CUSTOM_LABEL = 32
+/**
+ * The ONLY free text this app ever lets through to Jev, so it is kept narrow:
+ * letters, digits, spaces and a little punctuation — no quotes, colons,
+ * braces, backticks or line breaks, nothing that can look like structure or a
+ * state path. It reaches Jev as one JSON string value describing who is on a
+ * track; it is never placed in instructions or criteria.
+ */
+const CUSTOM_LABEL = /^[\p{L}\p{N}][\p{L}\p{N} '’\-.,&!?]*$/u
+/** One emoji (with optional variation selector, skin tone or ZWJ sequence). UI only: never sent to Jev. */
+const CUSTOM_EMOJI = /^\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier}|\u200D\p{Extended_Pictographic}\uFE0F?)*$/u
+
+export function parseCustomEntity(raw: unknown, path: string): CustomEntity {
+  if (!raw || typeof raw !== 'object') throw new TrolleyValidationError(`${path}: expected { label, emoji }`)
+  const { label, emoji } = raw as Record<string, unknown>
+  // Line breaks and other control characters are refused, not tidied away; runs of plain spaces are collapsed.
+  const text = typeof label === 'string' && !/[\u0000-\u001f\u007f\u2028\u2029]/.test(label) ? label.trim().replace(/ +/g, ' ') : ''
+  if (text.length < 1 || text.length > MAX_CUSTOM_LABEL || !CUSTOM_LABEL.test(text)) {
+    throw new TrolleyValidationError(`${path}.label: 1–${MAX_CUSTOM_LABEL} letters, digits, spaces or ' - . , & ! ?`)
+  }
+  if (typeof emoji !== 'string' || emoji.length > 16 || !CUSTOM_EMOJI.test(emoji)) throw new TrolleyValidationError(`${path}.emoji: expected a single emoji`)
+  return { label: text, emoji }
 }
 
 export interface Scenario {
@@ -153,7 +185,9 @@ function parseGroups(raw: unknown, path: string): Group[] {
     if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > MAX_COUNT) {
       throw new TrolleyValidationError(`${path}[${i}].count: expected a whole number from 1 to ${MAX_COUNT}`)
     }
-    return { entity: option(ENTITIES, group.entity, `${path}[${i}].entity`), count, trait: option(TRAITS, group.trait, `${path}[${i}].trait`) }
+    const trait = option(TRAITS, group.trait, `${path}[${i}].trait`)
+    if (group.entity === 'custom') return { entity: 'custom' as const, custom: parseCustomEntity(group.custom, `${path}[${i}].custom`), count, trait }
+    return { entity: option(ENTITIES, group.entity, `${path}[${i}].entity`), count, trait }
   })
 }
 

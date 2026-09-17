@@ -17,9 +17,12 @@ const TRAIT_PHRASE: Record<TraitId, { one: string; many: string }> = {
 }
 
 export const entityEmoji = (entity: EntityId) => ENTITY_NOUNS[entity].emoji
+export const groupEmoji = (group: Group) => (group.entity === 'custom' ? (group.custom?.emoji ?? '❓') : ENTITY_NOUNS[group.entity].emoji)
 
 export function groupPhrase(group: Group): string {
-  const noun = ENTITY_NOUNS[group.entity]
+  // A custom label can't be pluralised by code, so many of them read "3 × rubber chicken".
+  const label = group.custom?.label.trim() || 'something'
+  const noun = group.entity === 'custom' ? { one: label, many: `× ${label}` } : ENTITY_NOUNS[group.entity]
   const head = group.count === 1 ? noun.one : `${group.count.toLocaleString('en-US')} ${noun.many}`
   const trait = TRAIT_PHRASE[group.trait][group.count === 1 ? 'one' : 'many']
   return trait ? `${head}, ${trait}` : head

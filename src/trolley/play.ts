@@ -144,7 +144,10 @@ const ODDNESS: Record<EntityId, number> = {
 }
 const TRAIT_WEIGHT: Record<TraitId, number> = { plain: 1, asleep: 1.05, waving: 1.15, volunteered: 0.6, owes_you_money: 1.1, secret_villain: 0.35, about_to_do_good: 1.5, filming: 0.95, insured: 0.85 }
 
-const loss = (groups: readonly Group[]) => groups.reduce((sum, g) => sum + WORTH[g.entity] * TRAIT_WEIGHT[g.trait] * g.count ** 0.8, 0)
+/** The stub can't know what a visitor's custom entry is worth; it takes a middling guess. */
+const worth = (g: Group) => (g.entity === 'custom' ? 6 : WORTH[g.entity])
+const oddness = (g: Group) => (g.entity === 'custom' ? 2.5 : ODDNESS[g.entity])
+const loss = (groups: readonly Group[]) => groups.reduce((sum, g) => sum + worth(g) * TRAIT_WEIGHT[g.trait] * g.count ** 0.8, 0)
 
 /** Offline stand-in for the judge: utilitarian arithmetic with a bias toward not acting. */
 export function judgeOffline(scenario: Scenario): Verdict {
@@ -155,7 +158,7 @@ export function judgeOffline(scenario: Scenario): Verdict {
   const logit = 1.4 * Math.log(ahead / siding) - 0.45 + (twistBias[scenario.twist] ?? 0)
   const pull = 1 / (1 + Math.exp(-logit))
   const groups = [...scenario.ahead, ...scenario.siding]
-  const oddness = groups.length ? groups.reduce((sum, g) => sum + ODDNESS[g.entity] + (g.trait === 'plain' ? 0 : 0.6), 0) / groups.length + (scenario.twist === 'none' ? 0 : 0.5) : 0
+  const odd = groups.length ? groups.reduce((sum, g) => sum + oddness(g) + (g.trait === 'plain' ? 0 : 0.6), 0) / groups.length + (scenario.twist === 'none' ? 0 : 0.5) : 0
   const op: TrolleyOp = { op: 'trolley_judge', scenario }
   return {
     source: 'stub',
@@ -163,7 +166,7 @@ export function judgeOffline(scenario: Scenario): Verdict {
     pull,
     confidence: Math.abs(pull - 0.5) * 2,
     difficulty: 3 * (1 - Math.abs(pull - 0.5) * 2) * Math.min(1, (ahead + siding) / 20),
-    absurdity: Math.min(3, oddness),
+    absurdity: Math.min(3, odd),
     mostPeoplePull: 1 / (1 + Math.exp(-(logit - 0.3))),
     exchange: { label: 'judge the dilemma', op, request: buildTrolleyRequest(op, DEFAULT_MODEL), sent: false },
   }

@@ -1011,8 +1011,63 @@ button.small {
   padding-bottom: 14px;
 }
 
-.track > .ghost {
-  margin: 0 14px;
+.track-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.custom-entity {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.custom-entity input {
+  height: 34px;
+  border: 1px solid var(--ink);
+  background: var(--sheet);
+  border-radius: 0;
+  flex: 1;
+}
+
+.emoji-picker {
+  position: relative;
+  flex: none;
+}
+
+.emoji-button {
+  width: 40px;
+  padding: 0;
+  font-size: 19px;
+}
+
+.emoji-palette {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(296px, 80vw);
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--ink);
+  background: var(--sheet);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.emoji-option {
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+}
+
+.emoji-option.selected {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .track-summary {
@@ -1357,9 +1412,14 @@ button.small {
     grid-row: 2;
   }
 
-  .group-row button {
+  .group-row > button {
     grid-column: 3;
     grid-row: 1;
+  }
+
+  .custom-entity input,
+  .emoji-button {
+    height: 44px;
   }
 
   .group-row input,

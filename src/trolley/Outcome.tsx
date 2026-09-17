@@ -4,7 +4,7 @@
 // decision, nothing from Jev. Still a cartoon: emoji and a cross, no more.
 
 import type { CSSProperties } from 'react'
-import { entityEmoji, trackPhrase } from './describe'
+import { groupEmoji, trackPhrase } from './describe'
 import type { DecisionId, Group, Scenario } from './schema'
 
 /** Emoji shown per group before collapsing the rest into "+N". */
@@ -21,7 +21,7 @@ function Cast({ groups, lost, offset }: { groups: readonly Group[]; lost: boolea
           <span key={g} className="outcome-group">
             {Array.from({ length: shown }, (_, k) => (
               <span key={k} className={`outcome-figure ${lost ? 'is-lost' : 'is-saved'}`} style={{ '--i': index++ } as CSSProperties} aria-hidden="true">
-                <span className="outcome-emoji">{entityEmoji(group.entity)}</span>
+                <span className="outcome-emoji">{groupEmoji(group)}</span>
               </span>
             ))}
             {group.count > shown && <span className="outcome-more">+{(group.count - shown).toLocaleString('en-US')}</span>}
