@@ -103,8 +103,8 @@ export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
         })}
       </dl>
 
-      {/* Column count lives in CSS (4, or 8 for long plans on wide screens) so narrow screens can override it. */}
-      <ol className="bar-strip" data-cols={plan.bars.length <= 8 ? '4' : '8'}>
+      {/* Always 4 bars per row — 8-wide was unreadable in the plan panel. */}
+      <ol className="bar-strip" data-cols="4">
         {plan.bars.map((bar, i) => {
           const decision = edited ? undefined : byField.get(`bars[${i}].chord`)
           return (
