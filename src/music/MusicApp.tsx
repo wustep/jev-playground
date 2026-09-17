@@ -9,18 +9,13 @@ import { DebugPanel } from '../ui/DebugPanel'
 import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
+import { styleCache, type Generated } from './styleCache'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
 
 const initialDebug = () => {
   const value = new URLSearchParams(window.location.search).get('debug')
   return value !== null && value !== '0' && value !== 'false'
-}
-
-interface Generated extends PlanResult {
-  input: PlanInput
-  /** Set when the requested planner failed and the stub stepped in. */
-  notice: string | null
 }
 
 export default function MusicApp() {
@@ -70,28 +65,45 @@ export default function MusicApp() {
   }, [])
 
   const abortRef = useRef<AbortController | null>(null)
-  // One finished piece per style, in memory: clicking through the dial shows it
-  // at once. Generate replaces the entry; a change of length or planner misses it.
-  const cacheRef = useRef(new Map<StyleId, Generated>())
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+  // One finished piece per style — module + sessionStorage so leaving /music
+  // (or the browser tab) and coming back still has whatever finished, even if
+  // other styles never completed.
   const [pendingStyle, setPendingStyle] = useState<StyleId | null>(null)
   const [planStatus, setPlanStatus] = useState<string | null>(null)
 
   const generate = useCallback(
-    async (overrides: Partial<PlanInput> & { planner?: PlannerId } = {}) => {
-      abortRef.current?.abort()
+    async (overrides: Partial<PlanInput> & { planner?: PlannerId } = {}, opts: { cancelPrior?: boolean } = {}) => {
+      if (opts.cancelPrior !== false) abortRef.current?.abort()
       const abort = new AbortController()
       abortRef.current = abort
       const input: PlanInput = { style, bars, pick, brief, seed, ...overrides }
       const wanted = overrides.planner ?? plannerChoice
       const planner = wanted === 'jev' && jev?.planner ? jev.planner : heuristicPlanner
 
-      engine.stop()
-      setPlaying(false)
-      setError(null)
-      setProgress([])
-      setMatches(null)
-      setPendingStyle(input.style)
-      setPlanStatus('Planning…')
+      if (mountedRef.current) {
+        engine.stop()
+        setPlaying(false)
+        setError(null)
+        setProgress([])
+        setMatches(null)
+        setPendingStyle(input.style)
+        setPlanStatus('Planning…')
+      }
+      const settle = { fn: null as null | ((value: Generated | null) => void) }
+      const successOnly = new Promise<Generated>((resolve, reject) => {
+        settle.fn = (value) => {
+          if (value) resolve(value)
+          else reject(new DOMException('aborted', 'AbortError'))
+        }
+      })
+      styleCache.setInflight(input.style, successOnly)
       const started = performance.now()
       let result: PlanResult
       let notice: string | null = null
@@ -99,27 +111,39 @@ export default function MusicApp() {
         result = await planner.plan(input, {
           signal: abort.signal,
           onProgress: (decisions) => {
+            if (!mountedRef.current) return
             setProgress(decisions)
             const last = decisions[decisions.length - 1]
             setPlanStatus(last ? `Planning… ${decisions.length} decisions` : 'Planning…')
           },
         })
       } catch (cause) {
-        if (abort.signal.aborted) return
+        if (abort.signal.aborted) {
+          settle.fn?.(null)
+          return
+        }
         if (planner === heuristicPlanner) {
-          setProgress(null)
-          setPendingStyle(null)
-          setError(cause instanceof Error ? cause.message : String(cause))
+          settle.fn?.(null)
+          if (mountedRef.current) {
+            setProgress(null)
+            setPendingStyle(null)
+            setError(cause instanceof Error ? cause.message : String(cause))
+          }
           return
         }
         // Never fake a Jev answer: say it failed, then show the stub's plan.
         notice = `Jev request failed (${cause instanceof Error ? cause.message : String(cause)}). Showing the offline stub’s plan instead.`
         result = await heuristicPlanner.plan(input)
       }
-      if (abort.signal.aborted) return
+      if (abort.signal.aborted) {
+        settle.fn?.(null)
+        return
+      }
       const made: Generated = { ...result, input, notice }
-      cacheRef.current.set(input.style, made)
+      styleCache.set(input.style, made)
+      settle.fn?.(made)
       const seconds = Math.max(result.trace.latencyMs, performance.now() - started) / 1000
+      if (!mountedRef.current) return
       setProgress(null)
       setPendingStyle(null)
       setEditedPlan(null)
@@ -131,13 +155,38 @@ export default function MusicApp() {
     [style, bars, pick, brief, seed, plannerChoice, jev, engine],
   )
 
-  // First paint: something on the stand before anyone clicks.
+  // First paint: restore session cache / in-flight plan, else stub once.
   const bootedRef = useRef(false)
   useEffect(() => {
     if (bootedRef.current) return
     bootedRef.current = true
-    void generate({ planner: 'heuristic' })
-  }, [generate])
+    const id = style
+    const cached = styleCache.get(id)
+    if (cached && cached.input.bars === bars) {
+      setSeed(cached.input.seed)
+      setGenerated(cached)
+      setInstrument(cached.plan.defaultInstrument)
+      setPlanStatus(`Restored plan and ${cached.input.bars} bars`)
+      return
+    }
+    const pending = styleCache.getInflight(id)
+    if (pending) {
+      setPendingStyle(id)
+      setPlanStatus('Planning…')
+      void pending.then((made) => {
+        if (!mountedRef.current || made.input.bars !== bars) return
+        setSeed(made.input.seed)
+        setGenerated(made)
+        setInstrument(made.plan.defaultInstrument)
+        setPendingStyle(null)
+        setPlanStatus(`Generated plan and ${made.input.bars} bars in ${(made.trace.latencyMs / 1000).toFixed(2)}s`)
+      }).catch(() => {
+        if (mountedRef.current) void generate({ planner: 'heuristic' }, { cancelPrior: false })
+      })
+      return
+    }
+    void generate({ planner: 'heuristic' }, { cancelPrior: false })
+  }, [generate, style, bars])
 
   // Prewarm offline stubs only (instant dial, no network). Live Jev is cached
   // lazily on first Generate / dial miss — prewarming all six styles was ~108
@@ -147,10 +196,10 @@ export default function MusicApp() {
     const idle = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 300))
     idle(async () => {
       for (const id of STYLE_IDS) {
-        if (cancelled || cacheRef.current.has(id)) continue
+        if (cancelled || styleCache.has(id)) continue
         const input: PlanInput = { style: id, bars: 16, pick: 'sample', brief: true, seed: newSeed() }
         const result = await heuristicPlanner.plan(input)
-        if (!cancelled && !cacheRef.current.has(id)) cacheRef.current.set(id, { ...result, input, notice: null })
+        if (!cancelled && !styleCache.has(id)) styleCache.set(id, { ...result, input, notice: null })
       }
     })
     return () => {
@@ -162,7 +211,24 @@ export default function MusicApp() {
   const chooseStyle = (id: StyleId) => {
     setStyle(id)
     const wanted = plannerChoice === 'jev' && jev?.planner ? 'jev' : 'heuristic'
-    const cached = cacheRef.current.get(id)
+    const pending = styleCache.getInflight(id)
+    if (pending) {
+      setPendingStyle(id)
+      setPlanStatus('Planning…')
+      void pending.then((cached) => {
+        if (!mountedRef.current || cached.input.bars !== bars) return
+        setSeed(cached.input.seed)
+        setGenerated(cached)
+        setInstrument(cached.plan.defaultInstrument)
+        setPendingStyle(null)
+        setPlanStatus(`Generated plan and ${cached.input.bars} bars in ${(cached.trace.latencyMs / 1000).toFixed(2)}s`)
+      }).catch(() => {
+        /* aborted or superseded */
+        if (mountedRef.current) setPendingStyle(null)
+      })
+      return
+    }
+    const cached = styleCache.get(id)
     if (cached && cached.input.bars === bars) {
       abortRef.current?.abort()
       engine.stop()
