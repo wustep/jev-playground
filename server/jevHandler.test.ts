@@ -120,7 +120,7 @@ describe('trolley ops', () => {
 
     const judge = buildTrolleyRequest(parseTrolleyOp({ op: 'trolley_judge', scenario: CLASSIC }), 'jev-latest')
     expect(Object.keys(judge.questions)).toEqual(['decision', 'difficulty', 'absurdity', 'most_people_pull'])
-    expect(JSON.stringify(judge.state)).toContain('An ordinary stranger')
+    expect(JSON.stringify(judge.state)).toContain('A stranger')
     expect(JSON.stringify(judge.state)).not.toContain('"stranger"')
   })
 })

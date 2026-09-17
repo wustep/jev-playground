@@ -142,7 +142,7 @@ const ODDNESS: Record<EntityId, number> = {
   philosopher: 2, mime: 3, billionaire: 2, influencer: 2.5, tax_auditor: 2.5, nobel_scientist: 1, time_traveller: 3,
   priceless_painting: 2, last_pizza: 3, your_phone: 2.5, production_database: 3, lottery_ticket: 2.5, houseplant: 3, rubber_ducks: 3,
 }
-const TRAIT_WEIGHT: Record<TraitId, number> = { plain: 1, asleep: 1.05, waving: 1.15, volunteered: 0.6, owes_you_money: 1.1, secret_villain: 0.35, about_to_do_good: 1.5, filming: 0.95, insured: 0.85, judging_you: 0.9 }
+const TRAIT_WEIGHT: Record<TraitId, number> = { plain: 1, asleep: 1.05, waving: 1.15, volunteered: 0.6, owes_you_money: 1.1, secret_villain: 0.35, about_to_do_good: 1.5, filming: 0.95, insured: 0.85 }
 
 const loss = (groups: readonly Group[]) => groups.reduce((sum, g) => sum + WORTH[g.entity] * TRAIT_WEIGHT[g.trait] * g.count ** 0.8, 0)
 

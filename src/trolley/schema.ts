@@ -9,62 +9,73 @@
 export type Table<K extends string> = Readonly<Record<K, string>>
 const keysOf = <K extends string>(table: Table<K>) => Object.keys(table) as K[]
 
-/** Who or what can stand on a track. Descriptions double as Jev's Choice criteria. */
-export const ENTITIES = {
-  stranger: 'An ordinary stranger you have never met',
-  your_wife: 'Your wife, whom you love',
-  your_best_friend: 'Your best friend since childhood',
-  your_boss: 'Your boss, mid performance review',
-  grandma: 'A kindly grandmother carrying fresh cookies',
-  dog: 'A very good dog',
-  cat: 'A cat who is indifferent to your choice',
-  goldfish: 'A goldfish in a bowl, somehow on the track',
-  robot: 'A polite household robot with feelings-adjacent firmware',
-  clone_of_you: 'An exact clone of you, made this morning',
-  philosopher: 'A moral philosopher taking notes on what you do',
-  mime: 'A mime pretending to be trapped in a box',
-  billionaire: 'A billionaire who would happily pay you to pull the lever',
-  influencer: 'An influencer livestreaming the whole thing',
-  tax_auditor: 'The tax auditor assigned to your case',
-  nobel_scientist: 'A scientist one experiment away from a major cure',
-  time_traveller: 'A time traveller who insists this has already happened',
-  priceless_painting: 'A priceless, irreplaceable painting',
-  last_pizza: 'The last slice of pizza on Earth',
-  your_phone: 'Your phone, not backed up',
-  production_database: 'The only copy of the production database',
-  lottery_ticket: 'A winning lottery ticket, unsigned',
-  houseplant: 'A houseplant you have kept alive for nine years',
-  rubber_ducks: 'A crate of rubber ducks',
+/**
+ * Who or what can stand on a track. ONE set of words: the dropdown label, the
+ * scenario prose (src/trolley/describe.ts) and the description Jev is given
+ * are all built from `one` / `many`, so what you pick is what you read is what
+ * gets judged. `many` follows a number: "5 strangers", "3 of your bosses".
+ */
+export const ENTITY_NOUNS = {
+  stranger: { one: 'a stranger', many: 'strangers', emoji: '🧍' },
+  your_wife: { one: 'your wife', many: 'clones of your wife', emoji: '👰' },
+  your_best_friend: { one: 'your best friend', many: 'of your best friends', emoji: '🧑‍🤝‍🧑' },
+  your_boss: { one: 'your boss', many: 'of your bosses', emoji: '👔' },
+  grandma: { one: 'a grandmother', many: 'grandmothers', emoji: '👵' },
+  dog: { one: 'a very good dog', many: 'very good dogs', emoji: '🐕' },
+  cat: { one: 'an indifferent cat', many: 'indifferent cats', emoji: '🐈' },
+  goldfish: { one: 'a goldfish', many: 'goldfish', emoji: '🐠' },
+  robot: { one: 'a polite robot', many: 'polite robots', emoji: '🤖' },
+  clone_of_you: { one: 'a clone of you', many: 'clones of you', emoji: '🪞' },
+  philosopher: { one: 'a moral philosopher', many: 'moral philosophers', emoji: '🧐' },
+  mime: { one: 'a mime', many: 'mimes', emoji: '🤡' },
+  billionaire: { one: 'a billionaire', many: 'billionaires', emoji: '🎩' },
+  influencer: { one: 'an influencer', many: 'influencers', emoji: '🤳' },
+  tax_auditor: { one: 'your tax auditor', many: 'tax auditors', emoji: '🧾' },
+  nobel_scientist: { one: 'a scientist close to a cure', many: 'scientists close to a cure', emoji: '🔬' },
+  time_traveller: { one: 'a time traveller', many: 'time travellers', emoji: '⏳' },
+  priceless_painting: { one: 'a priceless painting', many: 'priceless paintings', emoji: '🖼️' },
+  last_pizza: { one: 'the last pizza on Earth', many: 'of the last pizzas on Earth', emoji: '🍕' },
+  your_phone: { one: 'your phone, not backed up', many: 'phones, none backed up', emoji: '📱' },
+  production_database: { one: 'the production database', many: 'production databases', emoji: '🗄️' },
+  lottery_ticket: { one: 'a winning lottery ticket', many: 'winning lottery tickets', emoji: '🎟️' },
+  houseplant: { one: 'a beloved houseplant', many: 'beloved houseplants', emoji: '🪴' },
+  rubber_ducks: { one: 'a crate of rubber ducks', many: 'crates of rubber ducks', emoji: '🦆' },
 } as const
-export type EntityId = keyof typeof ENTITIES
+export type EntityId = keyof typeof ENTITY_NOUNS
+
+const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
+/** Dropdown labels and Jev's Choice criteria: the singular phrase, capitalised ("A stranger"). */
+export const ENTITIES = Object.fromEntries(Object.entries(ENTITY_NOUNS).map(([id, noun]) => [id, capitalise(noun.one)])) as Table<EntityId>
 export const ENTITY_IDS = keysOf<EntityId>(ENTITIES)
 
+/** A detail about a group. Label = the words the prose uses, capitalised. */
 export const TRAITS = {
-  plain: 'Nothing special about them',
-  asleep: 'Fast asleep and unaware',
+  plain: 'No detail',
+  asleep: 'Fast asleep',
   waving: 'Waving at you cheerfully',
-  volunteered: 'Volunteered to be there and signed a waiver',
-  owes_you_money: 'Owes you a significant amount of money',
-  secret_villain: 'Secretly a cartoon villain with a plan',
-  about_to_do_good: 'About to do something wonderful for the world',
-  filming: 'Filming you and will post the result',
+  volunteered: 'Volunteered and signed a waiver',
+  owes_you_money: 'Owes you money',
+  secret_villain: 'Secretly a cartoon villain',
+  about_to_do_good: 'About to do something wonderful',
+  filming: 'Filming you',
   insured: 'Extremely well insured',
-  judging_you: 'Silently judging you',
 } as const
 export type TraitId = keyof typeof TRAITS
 export const TRAIT_IDS = keysOf<TraitId>(TRAITS)
 
+/** The twist sentence, exactly as the scenario prints it. */
 export const TWISTS = {
-  none: 'No twist: the plain classic dilemma',
-  nobody_knows: 'Nobody will ever know what you chose',
-  livestreamed: 'The whole thing is being livestreamed to millions',
-  lever_costs_money: 'Pulling the lever costs you fifty dollars',
-  trolley_is_slow: 'The trolley is moving at walking pace and everyone could probably step off',
-  you_built_it: 'You designed this trolley line and signed off on the brakes',
-  loop_track: 'The side track loops back onto the main line eventually',
-  late_for_meeting: 'You are already late for a meeting',
-  lever_is_sticky: 'The lever is sticky and unpleasant to touch',
-  it_is_a_drill: 'A sign says this might only be a drill',
+  none: 'No twist',
+  nobody_knows: 'Nobody will ever know what you chose.',
+  livestreamed: 'Millions are watching live.',
+  lever_costs_money: 'Pulling the lever costs you fifty dollars.',
+  trolley_is_slow: 'The trolley is at walking pace; everyone could probably just step off.',
+  you_built_it: 'You designed this trolley line and signed off on the brakes.',
+  loop_track: 'The side track loops back onto the main line eventually.',
+  late_for_meeting: 'You are already late for a meeting.',
+  lever_is_sticky: 'The lever is sticky and unpleasant to touch.',
+  it_is_a_drill: 'A sign says this might only be a drill.',
 } as const
 export type TwistId = keyof typeof TWISTS
 export const TWIST_IDS = keysOf<TwistId>(TWISTS)

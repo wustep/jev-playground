@@ -9,6 +9,7 @@ import { ABSURDITY_WORDS, DIFFICULTY_WORDS, entityEmoji, scenarioText, trackPhra
 import { Outcome } from './Outcome'
 import { castOffline, castWithJev, jevAvailable, judgeOffline, judgeWithJev, randomTheme, type Exchange, type Verdict } from './play'
 import { rng } from '../planner/pick'
+import { Diamond } from '../ui/Diamond'
 import { CLASSIC, ENTITIES, ENTITY_IDS, MAX_COUNT, MAX_GROUPS_PER_TRACK, THEMES, TRAITS, TRAIT_IDS, TWISTS, TWIST_IDS, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
@@ -20,8 +21,6 @@ const initialDebug = () => {
   const value = new URLSearchParams(window.location.search).get('debug')
   return value !== null && value !== '0' && value !== 'false'
 }
-
-const short = (text: string) => text.split(/[:—,]/)[0]
 
 function TrackEditor({ id, title, hint, groups, onChange }: { id: TrackId; title: string; hint: string; groups: Group[]; onChange: (groups: Group[]) => void }) {
   const update = (index: number, patch: Partial<Group>) => onChange(groups.map((group, i) => (i === index ? { ...group, ...patch } : group)))
@@ -52,14 +51,14 @@ function TrackEditor({ id, title, hint, groups, onChange }: { id: TrackId; title
             <select value={group.entity} aria-label="Who or what" onChange={(event) => update(index, { entity: event.target.value as EntityId })}>
               {ENTITY_IDS.map((entity) => (
                 <option key={entity} value={entity}>
-                  {entityEmoji(entity)} {short(ENTITIES[entity])}
+                  {entityEmoji(entity)} {ENTITIES[entity]}
                 </option>
               ))}
             </select>
             <select value={group.trait} aria-label="Detail" onChange={(event) => update(index, { trait: event.target.value as TraitId })}>
               {TRAIT_IDS.map((trait) => (
                 <option key={trait} value={trait}>
-                  {trait === 'plain' ? '— no detail —' : TRAITS[trait]}
+                  {TRAITS[trait]}
                 </option>
               ))}
             </select>
@@ -108,7 +107,7 @@ export default function TrolleyApp() {
   const [castExchange, setCastExchange] = useState<Exchange | null>(null)
   const [busy, setBusy] = useState<'cast' | 'judge' | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [tally, setTally] = useState({ pulled: 0, spared: 0 })
+  const [verdictCount, setVerdictCount] = useState(0)
   const [debug, setDebug] = useState(initialDebug)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -172,7 +171,7 @@ export default function TrolleyApp() {
     }
     if (abort.signal.aborted) return
     setVerdict(result)
-    setTally((t) => (result.decision === 'pull_lever' ? { ...t, pulled: t.pulled + 1 } : { ...t, spared: t.spared + 1 }))
+    setVerdictCount((n) => n + 1)
     setBusy(null)
   }, [live, scenario])
 
@@ -206,19 +205,17 @@ export default function TrolleyApp() {
         </div>
       </header>
 
-      <p className="trolley-disclaimer">A cartoon thought experiment. Nobody here is real and nothing is ever harmed.</p>
-
-      <section className="panel dilemma" aria-live="polite">
-        <p className="dilemma-text">{scenarioText(scenario)}</p>
+      <section className="panel dilemma" aria-live="polite" aria-busy={busy === 'cast'}>
+        <p className={`dilemma-text ${busy === 'cast' ? 'is-stale' : ''}`}>{scenarioText(scenario)}</p>
         <div className="dilemma-actions">
           <button type="button" className="ghost" disabled={busy !== null} onClick={() => void randomize()}>
-            {busy === 'cast' ? 'Casting…' : '🎲 Randomize'}
+            {busy === 'cast' ? <><Diamond className="diamond" aria-label="Casting" /> Casting…</> : '🎲 Randomize'}
           </button>
           <button type="button" className="ghost" disabled={busy !== null} onClick={() => edit(CLASSIC)}>
             Classic
           </button>
           <button type="button" className="primary" disabled={busy !== null} onClick={() => void judge()}>
-            {busy === 'judge' ? 'Asking…' : live ? 'What would Jev do?' : 'What would the stub do?'}
+            {busy === 'judge' ? <><Diamond className="diamond" aria-label="Asking" /> Asking…</> : live ? 'What would Jev do?' : 'What would the stub do?'}
           </button>
         </div>
         {theme && <p className="muted dilemma-theme">Premise drawn by code: {THEMES[theme]}.</p>}
@@ -226,8 +223,18 @@ export default function TrolleyApp() {
 
       {notice && <p className="banner warn">{notice}</p>}
 
+      {busy === 'judge' && !verdict && (
+        <section className="panel verdict verdict-pending" aria-busy="true">
+          <header className="panel-head">
+            <h2>
+              <Diamond className="diamond diamond-lg" /> {live ? 'Asking Jev…' : 'Working it out…'}
+            </h2>
+          </header>
+        </section>
+      )}
+
       {verdict && (
-        <section className={`panel verdict verdict-${verdict.decision}`} aria-live="polite">
+        <section className={`panel verdict ${busy === 'judge' ? 'is-stale' : ''} verdict-${verdict.decision}`} aria-live="polite">
           <header className="panel-head">
             <h2>{verdictText(verdict.decision, Math.max(verdict.pull, 1 - verdict.pull))}</h2>
             <span className={`tag ${verdict.source === 'jev' ? 'tag-live' : ''}`}>{verdict.source === 'jev' ? 'Jev' : 'offline stub'}</span>
@@ -244,10 +251,7 @@ export default function TrolleyApp() {
             <Meter label="How absurd" value={verdict.absurdity} max={3} word={ABSURDITY_WORDS[Math.round(Math.max(0, Math.min(3, verdict.absurdity)))]} />
             <Meter label="Most people would pull" value={verdict.mostPeoplePull} max={1} word={`${Math.round(verdict.mostPeoplePull * 100)}%`} />
             {/* Keyed by the verdict so the little scene replays for every new decision. */}
-            <Outcome key={`${verdict.decision}-${tally.pulled + tally.spared}`} scenario={scenario} decision={verdict.decision} />
-            <p className="muted tally">
-              This session: lever pulled {tally.pulled}×, left alone {tally.spared}×.
-            </p>
+            <Outcome key={verdictCount} scenario={scenario} decision={verdict.decision} />
           </div>
         </section>
       )}
@@ -263,7 +267,7 @@ export default function TrolleyApp() {
           <select value={scenario.twist} onChange={(event) => edit({ ...scenario, twist: event.target.value as TwistId })}>
             {TWIST_IDS.map((twist) => (
               <option key={twist} value={twist}>
-                {short(TWISTS[twist])}
+                {TWISTS[twist]}
               </option>
             ))}
           </select>
