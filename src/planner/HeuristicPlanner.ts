@@ -10,7 +10,6 @@
 //                   harmony book by the form's phrase slots; contours per bar
 
 import {
-  BAR_COUNT_IDS,
   BAR_ROLE_IDS,
   CHARACTER_IDS,
   CHORD_IDS,
@@ -284,9 +283,7 @@ export class HeuristicPlanner implements Planner {
       emit(decision(field, globals[field], probabilities))
     }
 
-    const countProbabilities = withFloor(BAR_COUNT_IDS, priors.barCount)
-    const barCount: BarCount = input.bars === 'auto' ? (Number(pickFrom(countProbabilities, input.pick, random, authored(priors.barCount))) as BarCount) : input.bars
-    emit(decision('barCount', String(barCount), countProbabilities, input.bars === 'auto' ? undefined : 1))
+    const barCount: BarCount = input.bars
 
     // 3 ─ bars: the form gives the roles and says how to assemble the harmony
     const slots = formSlots(globals.form as FormId, barCount)

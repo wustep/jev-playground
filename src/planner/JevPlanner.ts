@@ -2,7 +2,7 @@
 //
 //   request 1      the CHARACTER of the piece: most typical (Choice) + which ones
 //                  this composer writes at all (one Noul each); code combines them
-//   request 2      form + globals + bar count, given that character (fan-out)
+//   request 2      form + globals, given that character            (fan-out)
 //   requests 3..N  one per bar: chord + contour, with the progression so far
 //                  in state, because chords must see each other
 //   score()        one request, one Score question per style
@@ -14,7 +14,6 @@
 // decides (argmax or seeded sampling) — code owns the policy, Jev the judgment.
 
 import {
-  BAR_COUNTS,
   BAR_ROLE_IDS,
   CHARACTERS,
   CHARACTER_IDS,
@@ -151,14 +150,14 @@ export class JevPlanner implements Planner {
     decisions.push({ field: 'character', choice: character, confidence: marginConfidence(plausibility), probabilities: plausibility })
     options?.onProgress?.([...decisions])
 
-    // 2 ─ form, globals and length in a single fan-out, all conditioned on that character
+    // 2 ─ form and globals in a single fan-out, all conditioned on that character
     const second = await ask('globals + form', { op: 'globals', style: input.style, brief: input.brief, character })
     const globals = { character } as Record<GlobalField, string>
     for (const field of GLOBAL_FIELD_IDS) {
       if (field === 'character') continue
       globals[field] = decide(second, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
     }
-    const barCount: BarCount = input.bars === 'auto' ? (Number(decide(second, 'barCount', 'barCount', BAR_COUNTS)) as BarCount) : input.bars
+    const barCount: BarCount = input.bars
     // Roles are the form, expanded by code: coherent by construction.
     const roles = formRoles(globals.form as FormId, barCount)
     roles.forEach((role, i) => {

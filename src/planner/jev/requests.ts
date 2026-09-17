@@ -27,7 +27,6 @@
 //    describe standalone situations because the model never sees the ordering.
 
 import {
-  BAR_COUNTS,
   BAR_ROLES,
   CHARACTERS,
   CHARACTER_IDS,
@@ -159,10 +158,6 @@ function globalsRequest(op: Extract<JevOp, { op: 'globals' }>, model: string): S
     if (field === 'character') continue
     questions[field] = choice(GLOBAL_INSTRUCTIONS[field], GLOBAL_FIELDS[field])
   }
-  questions.barCount = choice(
-    'How long should a piece with the character in `piece_character` be, in the style of `requested_style.name`?',
-    BAR_COUNTS,
-  )
   return {
     model,
     state: { task: TASK, requested_style: styleState(op.style, op.brief), piece_character: CHARACTERS[op.character] },

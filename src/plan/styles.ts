@@ -20,7 +20,6 @@
 // as verified (from their own teaching material) or inferred.
 
 import type {
-  BarCountId,
   CharacterId,
   ChordId,
   ContourId,
@@ -49,7 +48,6 @@ export interface StylePriors {
   dynamics: Weights<DynamicId>
   dynamicShape: Weights<DynamicShapeId>
   defaultInstrument: Weights<InstrumentId>
-  barCount: Weights<BarCountId>
   contour: Weights<ContourId>
 }
 
@@ -110,7 +108,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { mf: 50, mp: 25, f: 25 },
       dynamicShape: { terraced: 50, steady: 30, waves: 10, late_surge: 10 },
       defaultInstrument: { harpsichord: 50, church_organ: 25, grand_piano: 25 },
-      barCount: { '8': 45, '16': 25, '4': 20, '32': 10 },
       contour: { rise: 18, fall: 20, arch: 16, pendulum: 14, wave: 12, leap_fall: 10, dip: 6, drop_rise: 2, static: 2 },
     },
     archetypes: {
@@ -148,7 +145,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           tempo: { andante: 45, adagio: 35, moderato: 20 },
           dynamicShape: { steady: 60, terraced: 40 },
           defaultInstrument: { church_organ: 50, choir: 20, harpsichord: 15, grand_piano: 15 },
-          barCount: { '8': 50, '4': 25, '16': 20, '32': 5 },
           contour: { arch: 30, fall: 30, rise: 20, dip: 10, static: 10 },
         },
       },
@@ -162,7 +158,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           tempo: { adagio: 45, andante: 40, largo: 15 },
           dynamics: { mp: 50, p: 30, mf: 20 },
           dynamicShape: { terraced: 40, waves: 30, steady: 30 },
-          barCount: { '16': 40, '8': 35, '32': 20, '4': 5 },
           contour: { arch: 28, fall: 22, leap_fall: 18, wave: 16, rise: 10, dip: 6 },
         },
       },
@@ -174,7 +169,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           texture: { two_voice_counterpoint: 40, stride_dance: 35, aria_walking_bass: 25 },
           meter: { six_eight: 50, three_four: 50 },
           tempo: { allegro: 50, moderato: 35, presto: 15 },
-          barCount: { '16': 45, '8': 35, '32': 15, '4': 5 },
           contour: { leap_fall: 25, pendulum: 20, rise: 18, fall: 17, wave: 12, arch: 8 },
         },
       },
@@ -255,7 +249,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { f: 30, ff: 15, p: 35, pp: 20 },
       dynamicShape: { sudden_contrast: 35, build_then_drop: 20, crescendo: 20, arch: 10, late_surge: 10, waves: 5 },
       defaultInstrument: { grand_piano: 90, strings: 10 },
-      barCount: { '8': 50, '16': 25, '4': 15, '32': 10 },
       contour: { rise: 24, fall: 16, arch: 14, leap_fall: 12, static: 12, drop_rise: 8, wave: 8, dip: 4, pendulum: 2 },
     },
     archetypes: {
@@ -403,7 +396,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { pp: 50, p: 40, mp: 10 },
       dynamicShape: { arch: 40, waves: 20, steady: 15, decrescendo: 15, late_surge: 10 },
       defaultInstrument: { grand_piano: 85, strings: 8, choir: 7 },
-      barCount: { '8': 40, '16': 25, '4': 25, '32': 10 },
       contour: { fall: 22, arch: 22, wave: 16, static: 14, dip: 10, rise: 8, drop_rise: 5, leap_fall: 3 },
     },
     archetypes: {
@@ -547,7 +539,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { mp: 40, mf: 30, p: 25, f: 5 },
       dynamicShape: { terraced: 35, steady: 30, waves: 15, build_then_drop: 20 },
       defaultInstrument: { grand_piano: 55, church_organ: 20, strings: 15, choir: 5, electric_piano: 5 },
-      barCount: { '8': 40, '16': 35, '32': 15, '4': 10 },
       contour: { static: 45, rise: 20, arch: 15, fall: 10, wave: 10 },
     },
     archetypes: {
@@ -677,7 +668,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { mf: 35, mp: 30, p: 20, f: 10, pp: 5 },
       dynamicShape: { terraced: 25, late_surge: 20, arch: 20, sudden_contrast: 15, crescendo: 10, waves: 10 },
       defaultInstrument: { grand_piano: 62, electric_piano: 30, strings: 5, harpsichord: 3 },
-      barCount: { '8': 45, '16': 30, '4': 15, '32': 10 },
       contour: { arch: 18, wave: 16, rise: 14, fall: 14, pendulum: 12, leap_fall: 10, static: 10, dip: 6 },
     },
     archetypes: {
@@ -798,7 +788,6 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { p: 45, mp: 35, pp: 15, mf: 5 },
       dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 20 },
       defaultInstrument: { grand_piano: 55, electric_piano: 35, strings: 5, choir: 5 },
-      barCount: { '8': 40, '4': 25, '16': 25, '32': 10 },
       contour: { arch: 22, fall: 20, wave: 18, rise: 14, static: 10, leap_fall: 8, dip: 8 },
     },
     archetypes: {

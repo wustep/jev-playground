@@ -1,11 +1,11 @@
-import type { CompositionPlan, StyleId, StyleMatchScore } from '../plan/schema'
+import type { BarCount, CompositionPlan, StyleId, StyleMatchScore } from '../plan/schema'
 import type { JevOp } from './jev/requests'
 import type { SystemOneRequest, SystemOneResponse } from './jev/systemOne'
 
 export interface PlanInput {
   style: StyleId
-  /** Force a length, or let the planner decide. */
-  bars: 4 | 8 | 16 | 32 | 'auto'
+  /** Length in bars. Always the caller's decision — a planner never picks it. */
+  bars: BarCount
   /**
    * How code turns a distribution into a decision:
    *  • `argmax` — always the most probable option (deterministic per style)

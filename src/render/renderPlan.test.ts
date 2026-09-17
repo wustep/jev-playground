@@ -94,7 +94,7 @@ describe('renderPlan', () => {
     const planner = new HeuristicPlanner()
     for (const style of STYLE_IDS) {
       for (let seed = 1; seed <= 25; seed++) {
-        const { plan } = await planner.plan({ style, bars: 'auto', pick: 'sample', seed, brief: true })
+        const { plan } = await planner.plan({ style, bars: ([4, 8, 16, 32] as const)[seed % 4], pick: 'sample', seed, brief: true })
         expect(parsePlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan)
         assertWellFormed(renderPlan(plan, seed))
       }

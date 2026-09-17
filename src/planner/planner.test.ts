@@ -49,9 +49,9 @@ function fakeJev(prefer: Record<string, string> = {}) {
 
 describe('JevPlanner', () => {
   it('assembles a valid plan from a character, one fan-out, and one request per bar', async () => {
-    const { transport, seen } = fakeJev({ character: 'hypnotic_pulse', writes_hypnotic_pulse: 'yes', form: 'additive_loop', barCount: '8', texture: 'minimal_cells', key: 'A_minor', chord: 'bVI' })
+    const { transport, seen } = fakeJev({ character: 'hypnotic_pulse', writes_hypnotic_pulse: 'yes', form: 'additive_loop', texture: 'minimal_cells', key: 'A_minor', chord: 'bVI' })
     const planner = new JevPlanner(transport)
-    const { plan, trace } = await planner.plan({ style: 'glass', bars: 'auto', pick: 'argmax', seed: 1, brief: false })
+    const { plan, trace } = await planner.plan({ style: 'glass', bars: 8, pick: 'argmax', seed: 1, brief: false })
 
     expect(parsePlan(plan)).toEqual(plan)
     expect(plan.character).toBe('hypnotic_pulse')
@@ -71,8 +71,9 @@ describe('JevPlanner', () => {
     // … and with the brief off, the style's name is all Jev gets.
     expect(seen[0].state).toMatchObject({ requested_style: { name: 'Philip Glass' } })
     expect(JSON.stringify(seen[0].state)).not.toContain('minimalism')
-    // Request 2 fans out form + the eight other globals + length, conditioned on that character.
-    expect(Object.keys(seen[1].questions)).toHaveLength(9 + 1)
+    // Request 2 fans out form + the eight other globals, conditioned on that character. Length is never asked.
+    expect(Object.keys(seen[1].questions)).toHaveLength(9)
+    expect(Object.keys(seen[1].questions)).not.toContain('barCount')
     expect(JSON.stringify(seen[1].state)).toContain('steady motoric pulse')
     // Bar requests carry the progression so far and offer the chord labels that exist in this mode.
     const fifth = seen[6]
@@ -88,7 +89,7 @@ describe('JevPlanner', () => {
 
   it('keeps a sampled progression moving without touching what the trace reports', async () => {
     // A Jev that answers "tonic" to every chord question, the way the live model does for restatements.
-    const { transport } = fakeJev({ barCount: '8', key: 'C_major', chord: 'I' })
+    const { transport } = fakeJev({ key: 'C_major', chord: 'I' })
     const { plan, trace } = await new JevPlanner(transport).plan({ style: 'bach', bars: 8, pick: 'sample', seed: 4, brief: true })
     const repeats = plan.bars.filter((bar, i) => i > 0 && bar.chord === plan.bars[i - 1].chord).length
     expect(repeats).toBeLessThan(4)
@@ -183,7 +184,7 @@ describe('HeuristicPlanner', () => {
   it('keeps each plan coherent with its character', async () => {
     const planner = new HeuristicPlanner()
     for (let seed = 1; seed <= 120; seed++) {
-      const { plan } = await planner.plan({ style: 'bach', bars: 'auto', pick: 'sample', seed, brief: true })
+      const { plan } = await planner.plan({ style: 'bach', bars: 8, pick: 'sample', seed, brief: true })
       if (plan.character === 'solemn_hymn') expect(['presto', 'allegro']).not.toContain(plan.tempo)
       if (plan.character === 'dance_lilt') expect(plan.meter).not.toBe('four_four')
       if (plan.character === 'stormy_drama') expect(plan.key.endsWith('_minor')).toBe(true)

@@ -323,6 +323,20 @@ button.small {
   margin-left: auto;
 }
 
+.controls-actions .primary {
+  min-width: 132px;
+  height: 40px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+/* Policy knobs (decide-by, style brief, seed): only with Debug on. */
+.controls-advanced {
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+
 .banner {
   margin: 0;
   padding: 9px 12px;
@@ -914,7 +928,7 @@ button.small {
     grid-column: 1 / -1;
     margin-left: 0;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .controls-actions .primary {

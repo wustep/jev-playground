@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AudioEngine, type EngineStatus } from './audio/engine'
 import { downloadMidi } from './midi/exportMidi'
-import { INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type CompositionPlan, type InstrumentId, type StyleId } from './plan/schema'
+import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from './plan/schema'
 import { detectJev, heuristicPlanner, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from './planner'
 import { shadowExchanges } from './planner/HeuristicPlanner'
 import { renderPlan } from './render/renderPlan'
@@ -27,7 +27,7 @@ export function App() {
   const [style, setStyle] = useState<StyleId>('bach')
   const [plannerChoice, setPlannerChoice] = useState<PlannerId>('heuristic')
   const [jev, setJev] = useState<JevAvailability | null>(null)
-  const [bars, setBars] = useState<PlanInput['bars']>('auto')
+  const [bars, setBars] = useState<BarCount>(16)
   const [pick, setPick] = useState<PlanInput['pick']>('sample')
   const [brief, setBrief] = useState(true)
   const [seed, setSeed] = useState(newSeed)
@@ -247,13 +247,7 @@ export function App() {
         ))}
       </div>
 
-      <form
-        className="controls"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void generate()
-        }}
-      >
+      <div className="controls">
         <label>
           Planner
           <select value={plannerChoice} onChange={(event) => setPlannerChoice(event.target.value as PlannerId)}>
@@ -265,50 +259,65 @@ export function App() {
         </label>
         <label className="control-bars">
           Bars
-          <select value={String(bars)} onChange={(event) => setBars(event.target.value === 'auto' ? 'auto' : (Number(event.target.value) as 4 | 8 | 16 | 32))}>
-            <option value="auto">planner decides</option>
-            <option value="4">4</option>
-            <option value="8">8</option>
-            <option value="16">16</option>
-            <option value="32">32</option>
+          <select value={bars} onChange={(event) => setBars(Number(event.target.value) as BarCount)}>
+            {BAR_COUNT_VALUES.map((count) => (
+              <option key={count} value={count}>
+                {count}
+              </option>
+            ))}
           </select>
-        </label>
-        <label title="argmax: always the most probable option. sample: draw from the returned distribution with the seed.">
-          Decide by
-          <select value={pick} onChange={(event) => setPick(event.target.value as PlanInput['pick'])}>
-            <option value="sample">sampling the distribution</option>
-            <option value="argmax">argmax</option>
-          </select>
-        </label>
-        <label title="Jev only: include a prose description of the style in state, or send just the name.">
-          Style brief
-          <select value={brief ? 'on' : 'off'} onChange={(event) => setBrief(event.target.value === 'on')}>
-            <option value="on">name + description</option>
-            <option value="off">name only</option>
-          </select>
-        </label>
-        <label>
-          Seed
-          <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
         </label>
         <div className="controls-actions">
-          <button type="submit" className="ghost" disabled={busy} title="Generate with exactly this seed">
-            Use seed
-          </button>
           <button
             type="button"
             className="primary"
             disabled={busy}
+            title="A new piece in this style (new seed)"
             onClick={() => {
               const next = newSeed()
               setSeed(next)
               void generate({ seed: next })
             }}
           >
-            {busy ? 'Planning…' : 'Generate plan'}
+            {busy ? 'Generating…' : 'Generate'}
           </button>
         </div>
-      </form>
+      </div>
+
+      {debug && (
+        <form
+          className="controls controls-advanced"
+          aria-label="Planner policy (debug)"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void generate()
+          }}
+        >
+          <label title="Both planners return a distribution per decision. argmax: always the most probable option. sample: draw from it with the seed.">
+            Decide by
+            <select value={pick} onChange={(event) => setPick(event.target.value as PlanInput['pick'])}>
+              <option value="sample">sampling the distribution</option>
+              <option value="argmax">argmax</option>
+            </select>
+          </label>
+          <label title="Jev only: include a prose description of the style in state, or send just the name.">
+            Style brief
+            <select value={brief ? 'on' : 'off'} onChange={(event) => setBrief(event.target.value === 'on')}>
+              <option value="on">name + description</option>
+              <option value="off">name only</option>
+            </select>
+          </label>
+          <label>
+            Seed
+            <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
+          </label>
+          <div className="controls-actions">
+            <button type="submit" className="ghost" disabled={busy} title="Regenerate with exactly this seed and these settings">
+              Re-run this seed
+            </button>
+          </div>
+        </form>
+      )}
 
       {busy && progress && progress.length > 0 && (
         <p className="banner" role="status">
