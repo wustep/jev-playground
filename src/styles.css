@@ -829,6 +829,48 @@ button.small {
   font-size: 12px;
 }
 
+/* ── work in flight ───────────────────────────────────────────────────────── */
+
+.dial-stop {
+  position: relative;
+  overflow: hidden;
+}
+
+/* A bar along the bottom of the stop being planned: determinate for Jev, a sweep for the instant stub. */
+.dial-stop.is-loading::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: max(12%, calc(var(--progress, 0) * 100%));
+  background: var(--stop);
+  transition: width 0.25s ease;
+  animation: dial-pulse 1s ease-in-out infinite;
+}
+
+.dial-stop.is-loading .dial-tag {
+  color: var(--stop);
+}
+
+@keyframes dial-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* The piece on the stand is about to be replaced. */
+.sheet-panel.is-stale .sheet-frame {
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dial-stop.is-loading::after {
+    animation: none;
+  }
+}
+
 /* ── narrow screens ───────────────────────────────────────────────────────── */
 /* Keep these last: they have to win over every base rule above. */
 

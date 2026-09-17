@@ -70,6 +70,10 @@ export function App() {
   }, [])
 
   const abortRef = useRef<AbortController | null>(null)
+  // One finished piece per style, in memory: clicking through the dial shows it
+  // at once. Generate replaces the entry; a change of length or planner misses it.
+  const cacheRef = useRef(new Map<StyleId, Generated>())
+  const [pendingStyle, setPendingStyle] = useState<StyleId | null>(null)
 
   const generate = useCallback(
     async (overrides: Partial<PlanInput> & { planner?: PlannerId } = {}) => {
@@ -84,6 +88,7 @@ export function App() {
       setPlaying(false)
       setError(null)
       setProgress([])
+      setPendingStyle(input.style)
       let result: PlanResult
       let notice: string | null = null
       try {
@@ -92,6 +97,7 @@ export function App() {
         if (abort.signal.aborted) return
         if (planner === heuristicPlanner) {
           setProgress(null)
+          setPendingStyle(null)
           setError(cause instanceof Error ? cause.message : String(cause))
           return
         }
@@ -100,10 +106,13 @@ export function App() {
         result = await heuristicPlanner.plan(input)
       }
       if (abort.signal.aborted) return
+      const made: Generated = { ...result, input, notice }
+      cacheRef.current.set(input.style, made)
       setProgress(null)
+      setPendingStyle(null)
       setEditedPlan(null)
       setMatches(null)
-      setGenerated({ ...result, input, notice })
+      setGenerated(made)
       setInstrument(result.plan.defaultInstrument)
     },
     [style, bars, pick, brief, seed, plannerChoice, jev, engine],
@@ -116,6 +125,52 @@ export function App() {
     bootedRef.current = true
     void generate({ planner: 'heuristic' })
   }, [generate])
+
+  // Prewarm: once idle, plan one piece for every other style with the offline
+  // planner (milliseconds, no network) so the whole dial answers instantly.
+  // Live Jev is NOT prewarmed — six styles is ~110 requests per page load.
+  useEffect(() => {
+    let cancelled = false
+    const idle = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 300))
+    idle(async () => {
+      for (const id of STYLE_IDS) {
+        if (cancelled || cacheRef.current.has(id)) continue
+        const input: PlanInput = { style: id, bars: 16, pick: 'sample', brief: true, seed: newSeed() }
+        const result = await heuristicPlanner.plan(input)
+        if (!cancelled && !cacheRef.current.has(id)) cacheRef.current.set(id, { ...result, input, notice: null })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  /** Dial click: show the cached piece at once; only plan when there is none that fits. */
+  const chooseStyle = (id: StyleId) => {
+    setStyle(id)
+    const wanted = plannerChoice === 'jev' && jev?.planner ? 'jev' : 'heuristic'
+    const cached = cacheRef.current.get(id)
+    if (cached && cached.input.bars === bars) {
+      abortRef.current?.abort()
+      engine.stop()
+      setPlaying(false)
+      setProgress(null)
+      setError(null)
+      setEditedPlan(null)
+      setMatches(null)
+      setSeed(cached.input.seed)
+      setGenerated(cached)
+      setInstrument(cached.plan.defaultInstrument)
+      // The offline piece is on the stand; if Jev is the chosen planner, its version follows and replaces it.
+      if (cached.trace.planner === wanted) {
+        setPendingStyle(null)
+        return
+      }
+    }
+    const next = newSeed()
+    setSeed(next)
+    void generate({ style: id, seed: next })
+  }
 
   const plan = editedPlan ?? generated?.plan ?? null
 
@@ -190,6 +245,8 @@ export function App() {
 
   const accent = STYLE_THEME[plan?.style ?? style].accent
   const busy = progress !== null
+  // Decisions landed so far over the number a plan of this length makes (character + 9 globals + role/chord/contour per bar).
+  const planProgress = busy ? Math.min(1, (progress?.length ?? 0) / (10 + bars * 3)) : 0
   const edited = editedPlan !== null
   const exchanges = useMemo(
     () => (generated && plan ? (edited ? shadowExchanges(plan, generated.input.brief) : generated.trace.exchanges) : []),
@@ -232,17 +289,13 @@ export function App() {
             type="button"
             role="radio"
             aria-checked={style === id}
-            className={`dial-stop ${style === id ? 'selected' : ''}`}
-            style={{ '--stop': STYLE_THEME[id].accent } as CSSProperties}
-            onClick={() => {
-              const next = newSeed()
-              setStyle(id)
-              setSeed(next)
-              void generate({ style: id, seed: next })
-            }}
+            className={`dial-stop ${style === id ? 'selected' : ''} ${pendingStyle === id ? 'is-loading' : ''}`}
+            style={{ '--stop': STYLE_THEME[id].accent, '--progress': pendingStyle === id ? planProgress : 0 } as CSSProperties}
+            aria-busy={pendingStyle === id}
+            onClick={() => chooseStyle(id)}
           >
             <span className="dial-name">{STYLE_LABELS[id]}</span>
-            <span className="dial-tag">{STYLE_THEME[id].tagline}</span>
+            <span className="dial-tag">{pendingStyle === id ? (plannerChoice === 'jev' && jev?.planner ? `asking Jev… ${Math.round(planProgress * 100)}%` : 'planning…') : STYLE_THEME[id].tagline}</span>
           </button>
         ))}
       </div>
@@ -331,7 +384,7 @@ export function App() {
       {generated && plan && score && (
         <>
           <div className="workbench">
-            <section className="panel sheet-panel">
+            <section className={`panel sheet-panel ${busy ? 'is-stale' : ''}`} aria-busy={busy}>
               <div className="transport">
                 <button type="button" className={`primary play ${playing ? 'is-playing' : ''}`} onClick={() => (playing ? stop() : void play())} aria-pressed={playing}>
                   {playing ? 'Stop' : 'Play'}
