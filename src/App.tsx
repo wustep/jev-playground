@@ -4,7 +4,7 @@ import { downloadMidi } from './midi/exportMidi'
 import { INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type CompositionPlan, type InstrumentId, type StyleId } from './plan/schema'
 import { detectJev, heuristicPlanner, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from './planner'
 import { shadowExchanges } from './planner/HeuristicPlanner'
-import { renderPlan, scoreDuration } from './render/renderPlan'
+import { renderPlan } from './render/renderPlan'
 import { DebugPanel } from './ui/DebugPanel'
 import { Confidence, PlanPanel } from './ui/PlanPanel'
 import { SheetView } from './ui/SheetView'
@@ -310,14 +310,6 @@ export function App() {
         </div>
       </form>
 
-      <p className="flow-hint" aria-hidden={false}>
-        <span><b>1</b> Pick a style</span>
-        <span className="flow-arrow">→</span>
-        <span><b>2</b> Generate</span>
-        <span className="flow-arrow">→</span>
-        <span><b>3</b> Play / inspect</span>
-      </p>
-
       {busy && progress && progress.length > 0 && (
         <p className="banner" role="status">
           Planning… {progress.length} decisions so far — last: <code>{progress[progress.length - 1].field}</code> ={' '}
@@ -329,36 +321,6 @@ export function App() {
 
       {generated && plan && score && (
         <>
-          <ol className="pipeline" aria-label="How this piece was made">
-            <li>
-              <b>“{STYLE_LABELS[plan.style]}”</b>
-              <span>style string</span>
-            </li>
-            <li>
-              <b>{generated.trace.planner === 'jev' ? 'Jev' : 'Heuristic stub'}</b>
-              <span>
-                {generated.trace.planner === 'jev'
-                  ? `${generated.trace.requests} requests · ${(generated.trace.latencyMs / 1000).toFixed(2)} s · ${generated.trace.inputTokens ?? 0} tok`
-                  : `offline · ${generated.trace.latencyMs.toFixed(1)} ms`}
-              </span>
-            </li>
-            <li>
-              <b>CompositionPlan</b>
-              <span>{generated.trace.decisions.length} enum decisions{edited ? ' · edited' : ''}</span>
-            </li>
-            <li>
-              <b>renderPlan()</b>
-              <span>
-                {score.bars.reduce((sum, bar) => sum + [...bar.treble, ...bar.bass].flat().reduce((n, note) => n + note.pitches.length, 0), 0)} notes ·{' '}
-                {scoreDuration(score).toFixed(1)} s
-              </span>
-            </li>
-            <li>
-              <b>Sheet · Audio · MIDI</b>
-              <span>VexFlow · smplr · @tonejs/midi</span>
-            </li>
-          </ol>
-
           <div className="workbench">
             <section className="panel sheet-panel">
               <div className="transport">

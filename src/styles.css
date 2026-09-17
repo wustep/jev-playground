@@ -337,90 +337,6 @@ button.small {
   background: color-mix(in srgb, var(--warn) 6%, var(--sheet));
 }
 
-/* ── flow hint (generate → hear → inspect) ───────────────────────────────── */
-
-.flow-hint {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  margin: -4px 0 0;
-  padding: 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-
-.flow-hint b {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 4px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.flow-arrow {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.control-bars select {
-  min-width: 7.5rem;
-  font-weight: 600;
-}
-
-/* ── pipeline strip ───────────────────────────────────────────────────────── */
-
-.pipeline {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-
-.pipeline li {
-  position: relative;
-  padding: 8px 14px 9px 20px;
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.pipeline li + li::before {
-  content: '→';
-  position: absolute;
-  left: -6px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.pipeline b {
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pipeline span {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ── panels ───────────────────────────────────────────────────────────────── */
 
 .workbench {
@@ -1011,29 +927,7 @@ button.small {
     height: 48px;
   }
 
-  .flow-hint {
-    margin: 0;
-    font-size: 10.5px;
-    gap: 4px 6px;
-  }
 
-  /* Pipeline: one swipeable row instead of five stacked blocks above the music. */
-  .pipeline {
-    display: flex;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .pipeline::-webkit-scrollbar {
-    display: none;
-  }
-
-  .pipeline li {
-    flex: 0 0 auto;
-    max-width: 62vw;
-    padding: 7px 12px 8px 18px;
-  }
 
   /* Transport: Play is the whole first row; everything else wraps beneath it. */
   .transport {
