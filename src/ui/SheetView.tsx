@@ -75,6 +75,7 @@ export function SheetView({ score, engine, playing, accent }: Props) {
       return
     }
     let raf = 0
+    let followedTop = -1
     const tickSeconds = secondsPerTick(score)
     const totalTicks = score.bars.length * score.meter.ticksPerBar
     const paint = () => {
@@ -86,6 +87,12 @@ export function SheetView({ score, engine, playing, accent }: Props) {
       const tick = (position / tickSeconds) % totalTicks
       const bar = layout.bars[Math.min(layout.bars.length - 1, Math.floor(tick / score.meter.ticksPerBar))]
       if (!bar) return
+      // On phones the frame is a capped scroll box: keep the sounding system in view.
+      const frame = frameRef.current
+      if (frame && bar.top !== followedTop && frame.scrollHeight > frame.clientHeight + 1) {
+        followedTop = bar.top
+        frame.scrollTo({ top: Math.max(0, bar.top - 10), behavior: 'smooth' })
+      }
       const dpr = window.devicePixelRatio || 1
       pen.setTransform(dpr, 0, 0, dpr, 0, 0)
       pen.fillStyle = `${accent}14`

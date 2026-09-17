@@ -58,6 +58,8 @@ export function bassFor(
 ): string {
   const center = (options.lo + options.hi) / 2
   const from = previous ? midiOf(previous) : center
+  // An inversion or pedal written into the label is not ours to re-voice.
+  if (chord.fixedBass) return nearestNote([chord.bass], from, options.lo, options.hi)
   const root = nearestNote([chord.root], from, options.lo, options.hi)
   if (!options.allowInversion || !previous) return root
   const third = nearestNote([chord.pcs[1]], from, options.lo, options.hi)
@@ -80,3 +82,18 @@ export function essentialTones(chord: ResolvedChord, size: number, options: { ro
 }
 
 export const sortAscending = (notes: string[]) => [...notes].sort(byPitch)
+
+/**
+ * The left hand's lowest note for textures that simply sit on the bass: the
+ * label's bass (root, or the inversion / pedal note), nearest to where the
+ * bass was last so inverted progressions actually walk by step.
+ */
+export function lowBass(chord: ResolvedChord, previous: string | undefined, fallback: number, lo: number, hi: number): string {
+  return nearestNote([chord.bass], previous ? midiOf(previous) : fallback, lo, hi)
+}
+
+/** The tone a fifth-ish above the bass that fills out an open left hand without doubling the bass. */
+export function bassPartner(chord: ResolvedChord, bass: string): string {
+  const candidates = [chord.core[2], chord.core[1], chord.root].filter((pc) => pc && pc !== chord.bass)
+  return nearestNote([candidates[0] ?? chord.root], midiOf(bass) + 7)
+}

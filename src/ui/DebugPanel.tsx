@@ -109,24 +109,26 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
           </table>
 
           <h3>Bars — chord + role sequence</h3>
-          <table className="grid-table">
-            <thead>
-              <tr><th>#</th><th>chord</th><th>resolved</th><th>conf.</th><th>role</th><th>conf.</th><th>contour</th></tr>
-            </thead>
-            <tbody>
-              {plan.bars.map((bar, i) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td><code>{bar.chord}</code></td>
-                  <td>{score.bars[i]?.chordSymbol}</td>
-                  <td>{percent(byField.get(`bars[${i}].chord`)?.confidence)}</td>
-                  <td><code>{bar.role}</code></td>
-                  <td>{percent(byField.get(`bars[${i}].role`)?.confidence)}</td>
-                  <td><code>{bar.contour}</code></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-scroll">
+            <table className="grid-table">
+              <thead>
+                <tr><th>#</th><th>chord</th><th>resolved</th><th>conf.</th><th>role</th><th>conf.</th><th>contour</th></tr>
+              </thead>
+              <tbody>
+                {plan.bars.map((bar, i) => (
+                  <tr key={i}>
+                    <td>{i + 1}</td>
+                    <td><code>{bar.chord}</code></td>
+                    <td>{score.bars[i]?.chordSymbol}</td>
+                    <td>{percent(byField.get(`bars[${i}].chord`)?.confidence)}</td>
+                    <td><code>{bar.role}</code></td>
+                    <td>{percent(byField.get(`bars[${i}].role`)?.confidence)}</td>
+                    <td><code>{bar.contour}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <p className="sequence">
             {plan.bars.map((bar) => bar.chord).join(' → ')}
           </p>
@@ -137,43 +139,47 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
           {globals.length === 0 ? (
             <p className="muted">No planner decisions for a hand-edited plan.</p>
           ) : (
-            <table className="grid-table">
-              <thead>
-                <tr><th>field</th><th>choice</th><th>conf.</th><th>runner-up</th></tr>
-              </thead>
-              <tbody>
-                {globals.map((d) => {
-                  const runnerUp = Object.entries(d.probabilities).filter(([option]) => option !== d.choice).sort((a, b) => b[1] - a[1])[0]
-                  return (
-                    <tr key={d.field}>
-                      <td>{d.field}</td>
-                      <td><code>{d.choice}</code> <span className="muted">{percent(d.probabilities[d.choice])}</span></td>
-                      <td>{percent(d.confidence)}</td>
-                      <td className="muted">{runnerUp ? `${runnerUp[0]} ${percent(runnerUp[1])}` : '—'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="table-scroll">
+              <table className="grid-table">
+                <thead>
+                  <tr><th>field</th><th>choice</th><th>conf.</th><th>runner-up</th></tr>
+                </thead>
+                <tbody>
+                  {globals.map((d) => {
+                    const runnerUp = Object.entries(d.probabilities).filter(([option]) => option !== d.choice).sort((a, b) => b[1] - a[1])[0]
+                    return (
+                      <tr key={d.field}>
+                        <td>{d.field}</td>
+                        <td><code>{d.choice}</code> <span className="muted">{percent(d.probabilities[d.choice])}</span></td>
+                        <td>{percent(d.confidence)}</td>
+                        <td className="muted">{runnerUp ? `${runnerUp[0]} ${percent(runnerUp[1])}` : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
 
           <h3>Style match</h3>
           {matches ? (
-            <table className="grid-table">
-              <thead>
-                <tr><th>style</th><th>match</th><th>conf.</th><th>raw 0–2</th></tr>
-              </thead>
-              <tbody>
-                {STYLE_IDS.filter((style) => matches[style]).map((style) => (
-                  <tr key={style} className={style === plan.style ? 'row-target' : undefined}>
-                    <td>{STYLE_LABELS[style]}</td>
-                    <td><code>{matches[style]!.match}</code></td>
-                    <td>{percent(matches[style]!.confidence)}</td>
-                    <td>{matches[style]!.raw.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-scroll">
+              <table className="grid-table">
+                <thead>
+                  <tr><th>style</th><th>match</th><th>conf.</th><th>raw 0–2</th></tr>
+                </thead>
+                <tbody>
+                  {STYLE_IDS.filter((style) => matches[style]).map((style) => (
+                    <tr key={style} className={style === plan.style ? 'row-target' : undefined}>
+                      <td>{STYLE_LABELS[style]}</td>
+                      <td><code>{matches[style]!.match}</code></td>
+                      <td>{percent(matches[style]!.confidence)}</td>
+                      <td>{matches[style]!.raw.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p className="muted">Not scored yet.</p>
           )}

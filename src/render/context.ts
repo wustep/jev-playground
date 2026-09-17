@@ -1,4 +1,4 @@
-import type { BarPlan, BarRoleId, PaletteId } from '../plan/schema'
+import type { BarPlan, BaseRoleId, CharacterId, PaletteId } from '../plan/schema'
 import type { KeyInfo, ResolvedChord } from './harmony'
 import { clamp } from './pitch'
 import type { MeterInfo, Note, Voice } from './score'
@@ -11,7 +11,28 @@ export interface RenderMemory {
   voicings: Record<string, string[]>
   /** Rhythm of the first statement, reused by restatements. */
   rhythms: Record<string, number[]>
+  /** Pitches of the first statement per line: a restatement over the same chord brings the tune back. */
+  motifs: Record<string, { chord: string; pitches: string[] }>
+  /** Rhythm of the previous bar per line, so `sequence` and `echo` bars can repeat its figure. */
+  lastRhythms: Record<string, number[]>
+  /**
+   * Per-piece pattern choices (which Alberti figure, which cell shape …),
+   * rolled once from the seed so a piece is consistent with itself but two
+   * seeds of the same plan don't sound identical.
+   */
+  choices: Record<string, number>
   bass?: string
+}
+
+export const newMemory = (): RenderMemory => ({ lines: {}, voicings: {}, rhythms: {}, motifs: {}, lastRhythms: {}, choices: {} })
+
+/** Pick one of `count` variants for this piece, once, and remember it. */
+export function pieceChoice(bar: BarContext, key: string, count: number): number {
+  const known = bar.memory.choices[key]
+  if (known != null) return known % count
+  const rolled = Math.floor(bar.rand() * count)
+  bar.memory.choices[key] = rolled
+  return rolled
 }
 
 export interface BarContext {
@@ -19,6 +40,9 @@ export interface BarContext {
   count: number
   isLast: boolean
   plan: BarPlan
+  /** `plan.role` folded onto the seven roles the gesture tables are keyed by. */
+  role: BaseRoleId
+  character: CharacterId
   chord: ResolvedChord
   next?: ResolvedChord
   /** Melody / passing-tone pitch classes for this bar. */
@@ -76,7 +100,7 @@ export interface RhythmBank {
   close: number[][]
 }
 
-const BANK_FOR_ROLE: Record<BarRoleId, keyof RhythmBank> = {
+const BANK_FOR_ROLE: Record<BaseRoleId, keyof RhythmBank> = {
   statement: 'main',
   restatement: 'main',
   development: 'busy',
@@ -92,14 +116,17 @@ const BANK_FOR_ROLE: Record<BarRoleId, keyof RhythmBank> = {
  * is most of what makes a generated line read as a motif.
  */
 export function rhythmFor(bar: BarContext, bank: RhythmBank, memoryKey: string): number[] {
-  const role = bar.plan.role
-  if (bar.isLast) return choose(bank.close, bar.rand)
-  if (role === 'statement' || role === 'restatement') {
+  const remember = (rhythm: number[]) => (bar.memory.lastRhythms[memoryKey] = rhythm)
+  if (bar.isLast) return remember(choose(bank.close, bar.rand))
+  // A sequence or an echo IS the previous bar's figure on a new chord / at a new dynamic.
+  const previous = bar.memory.lastRhythms[memoryKey]
+  if ((bar.plan.role === 'sequence' || bar.plan.role === 'echo') && previous) return previous
+  if (bar.role === 'statement' || bar.role === 'restatement') {
     const remembered = bar.memory.rhythms[memoryKey]
-    if (remembered) return remembered
+    if (remembered) return remember(remembered)
     const fresh = choose(bank.main, bar.rand)
     bar.memory.rhythms[memoryKey] = fresh
-    return fresh
+    return remember(fresh)
   }
-  return choose(bank[BANK_FOR_ROLE[role]], bar.rand)
+  return remember(choose(bank[BANK_FOR_ROLE[bar.role]], bar.rand))
 }

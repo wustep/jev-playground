@@ -212,9 +212,6 @@ export function App() {
           <h1>
             Jev Playground <span className="muted">/ music</span>
           </h1>
-          <p className="lede">
-            Can a System One model steer music? The planner only picks <em>labels</em> — key, texture, chords, roles. Code writes every note.
-          </p>
         </div>
         <div className="masthead-side">
           <span className={`status-chip ${jev?.planner ? 'on' : ''}`} title={jev?.detail ?? 'Checking for a Jev key…'}>
@@ -321,6 +318,12 @@ export function App() {
         <span><b>3</b> Play / inspect</span>
       </p>
 
+      {busy && progress && progress.length > 0 && (
+        <p className="banner" role="status">
+          Planning… {progress.length} decisions so far — last: <code>{progress[progress.length - 1].field}</code> ={' '}
+          <code>{progress[progress.length - 1].choice}</code>
+        </p>
+      )}
       {generated?.notice && <p className="banner warn">{generated.notice}</p>}
       {error && <p className="banner warn">{error}</p>}
 
@@ -436,21 +439,6 @@ export function App() {
         </>
       )}
 
-      {busy && progress && progress.length > 0 && (
-        <p className="banner" role="status">
-          Planning… {progress.length} decisions so far — last: <code>{progress[progress.length - 1].field}</code> ={' '}
-          <code>{progress[progress.length - 1].choice}</code>
-        </p>
-      )}
-
-      <footer className="colophon">
-        <p>
-          <b>Split.</b> Jev (or the offline stub behind the same <code>Planner</code> interface) returns a <code>CompositionPlan</code> made only of fixed labels.{' '}
-          <code>renderPlan(plan, seed)</code> expands it into notes with tonal + small voice-leading helpers; VexFlow engraves, smplr plays through one AudioContext,
-          @tonejs/midi exports. Space bar plays/stops.
-        </p>
-        <p className="muted">{jev?.detail}</p>
-      </footer>
     </div>
   )
 }

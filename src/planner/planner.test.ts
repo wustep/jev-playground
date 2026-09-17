@@ -2,11 +2,15 @@ import { Midi } from '@tonejs/midi'
 import { describe, expect, it } from 'vitest'
 import { handleJev } from '../../server/jevHandler'
 import { scoreToMidi } from '../midi/exportMidi'
-import { CHORD_IDS, STYLE_IDS, parsePlan } from '../plan/schema'
+import { BAR_COUNT_VALUES, BAR_ROLE_IDS, CHARACTER_IDS, FORM_IDS, STYLE_IDS, parsePlan } from '../plan/schema'
+import { formRoles, formSlots } from '../plan/forms'
+import { STYLE_PROFILES } from '../plan/styles'
+import { keyInfo, resolveChord } from '../render/harmony'
 import { renderPlan, timeline } from '../render/renderPlan'
 import { HeuristicPlanner } from './HeuristicPlanner'
 import { JevPlanner, type JevTransport } from './JevPlanner'
-import { buildRequest, parseOp } from './jev/requests'
+import { buildRequest, chordOptionsFor, parseOp } from './jev/requests'
+import { pickFrom, rng, withNovelty } from './pick'
 import type { Answer, SystemOneRequest, SystemOneResponse } from './jev/systemOne'
 
 /**
@@ -31,6 +35,8 @@ function fakeJev(prefer: Record<string, string> = {}) {
           confidence: 0.8,
           probabilities: Object.fromEntries(options.map((option) => [option, option === favourite ? 0.8 : rest])),
         }
+      } else if (question.type === 'noul') {
+        answers[id] = { type: 'noul', noul: prefer[id] === 'yes' ? 0.95 : 0.2 }
       } else if (question.type === 'score') {
         answers[id] = { type: 'score', score: 1.6, legend: {}, probabilities: { '0': 0.05, '1': 0.3, '2': 0.65 }, confidence: 0.78 }
       }
@@ -42,28 +48,37 @@ function fakeJev(prefer: Record<string, string> = {}) {
 }
 
 describe('JevPlanner', () => {
-  it('assembles a valid plan from one fan-out plus one request per bar', async () => {
-    const { transport, seen } = fakeJev({ barCount: '8', texture: 'minimal_cells', key: 'A_minor', chord: 'bVI' })
+  it('assembles a valid plan from a character, one fan-out, and one request per bar', async () => {
+    const { transport, seen } = fakeJev({ character: 'hypnotic_pulse', writes_hypnotic_pulse: 'yes', form: 'additive_loop', barCount: '8', texture: 'minimal_cells', key: 'A_minor', chord: 'bVI' })
     const planner = new JevPlanner(transport)
     const { plan, trace } = await planner.plan({ style: 'glass', bars: 'auto', pick: 'argmax', seed: 1, brief: false })
 
     expect(parsePlan(plan)).toEqual(plan)
+    expect(plan.character).toBe('hypnotic_pulse')
     expect(plan.texture).toBe('minimal_cells')
     expect(plan.bars).toHaveLength(8)
     expect(plan.bars.every((bar) => bar.chord === 'bVI')).toBe(true)
-    expect(trace.requests).toBe(9)
+    // Roles are not asked of Jev: they are the chosen form, expanded by code.
+    expect(plan.bars.map((bar) => bar.role)).toEqual(formRoles('additive_loop', 8))
+    expect(trace.requests).toBe(10)
     expect(trace.model).toBe('jev-1.13.0')
-    expect(trace.inputTokens).toBe(900)
+    expect(trace.inputTokens).toBe(1000)
     expect(trace.exchanges.every((exchange) => exchange.sent && exchange.response)).toBe(true)
 
-    // Request 1 fans out globals + length + roles for all supported lengths.
-    expect(Object.keys(seen[0].questions)).toHaveLength(8 + 1 + 4 + 8 + 16 + 32)
-    // With the brief off, the style's name is all Jev gets.
+    // Request 1 asks only about character: which is most typical, plus one yes/no per character …
+    expect(Object.keys(seen[0].questions)).toHaveLength(1 + CHARACTER_IDS.length)
+    expect(Object.values(seen[0].questions).filter((question) => question.type === 'noul')).toHaveLength(CHARACTER_IDS.length)
+    // … and with the brief off, the style's name is all Jev gets.
     expect(seen[0].state).toMatchObject({ requested_style: { name: 'Philip Glass' } })
     expect(JSON.stringify(seen[0].state)).not.toContain('minimalism')
-    // Bar requests carry the progression so far and offer every chord label.
-    const fifth = seen[5]
-    expect(Object.keys(fifth.questions.chord.criteria as object)).toEqual(CHORD_IDS)
+    // Request 2 fans out form + the eight other globals + length, conditioned on that character.
+    expect(Object.keys(seen[1].questions)).toHaveLength(9 + 1)
+    expect(JSON.stringify(seen[1].state)).toContain('steady motoric pulse')
+    // Bar requests carry the progression so far and offer the chord labels that exist in this mode.
+    const fifth = seen[6]
+    expect(Object.keys(fifth.questions.chord.criteria as object)).toEqual(Object.keys(chordOptionsFor('A_minor')))
+    expect(Object.keys(chordOptionsFor('A_minor'))).not.toContain('Imaj9')
+    expect(Object.keys(chordOptionsFor('C_major'))).not.toContain('i64')
     expect(JSON.stringify(fifth.state)).toContain('"current_bar":5')
     expect((fifth.state as { bars: { chord: string }[] }).bars[3].chord).toContain('bVI')
     expect((fifth.state as { bars: { chord: string }[] }).bars[4].chord).toBe('(to be decided now)')
@@ -71,10 +86,29 @@ describe('JevPlanner', () => {
     renderPlan(plan, 1) // and the renderer accepts it
   })
 
+  it('keeps a sampled progression moving without touching what the trace reports', async () => {
+    // A Jev that answers "tonic" to every chord question, the way the live model does for restatements.
+    const { transport } = fakeJev({ barCount: '8', key: 'C_major', chord: 'I' })
+    const { plan, trace } = await new JevPlanner(transport).plan({ style: 'bach', bars: 8, pick: 'sample', seed: 4, brief: true })
+    const repeats = plan.bars.filter((bar, i) => i > 0 && bar.chord === plan.bars[i - 1].chord).length
+    expect(repeats).toBeLessThan(4)
+    expect(new Set(plan.bars.map((bar) => bar.chord)).size).toBeGreaterThan(2)
+    // The debug trace still shows Jev's own 80 % for "I", not the policy-adjusted number.
+    const first = trace.decisions.find((d) => d.field === 'bars[1].chord')!
+    expect(first.probabilities.I).toBeCloseTo(0.8)
+  })
+
   it('never names a composer in option descriptions', () => {
-    const request = buildRequest({ op: 'globals', style: 'debussy', brief: false }, 'jev-latest')
-    const criteria = JSON.stringify(Object.values(request.questions).map((q) => q.criteria))
-    for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Nahre', 'Fox']) expect(criteria).not.toContain(name)
+    const requests = [
+      buildRequest({ op: 'concept', style: 'debussy', brief: false }, 'jev-latest'),
+      buildRequest({ op: 'globals', style: 'debussy', brief: false, character: 'dreamy_haze' }, 'jev-latest'),
+    ]
+    const criteria = JSON.stringify(requests.flatMap((request) => Object.values(request.questions).map((q) => [q.criteria, q.instructions])))
+    const chords = JSON.stringify([chordOptionsFor('C_major'), chordOptionsFor('C_minor')])
+    for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Nahre', 'Fox', 'Chopin', 'Satie', 'Reich']) {
+      expect(criteria).not.toContain(name)
+      expect(chords).not.toContain(name)
+    }
   })
 
   it('maps Score answers to low / medium / high', async () => {
@@ -92,7 +126,7 @@ describe('HeuristicPlanner', () => {
   it('records the payloads Jev would have been sent, unsent', async () => {
     const { plan, trace } = await new HeuristicPlanner().plan({ style: 'elijah_fox', bars: 8, pick: 'sample', seed: 9, brief: true })
     expect(trace.requests).toBe(0)
-    expect(trace.exchanges).toHaveLength(1 + plan.bars.length)
+    expect(trace.exchanges).toHaveLength(2 + plan.bars.length)
     expect(trace.exchanges.every((exchange) => !exchange.sent && !exchange.response)).toBe(true)
     expect(trace.exchanges[0].request.model).toBe('jev-latest')
   })
@@ -108,6 +142,54 @@ describe('HeuristicPlanner', () => {
     }
   })
 
+  it('varies widely within a style across regenerations', async () => {
+    const planner = new HeuristicPlanner()
+    for (const style of STYLE_IDS) {
+      const progressions = new Set<string>()
+      const textures = new Set<string>()
+      const characters = new Set<string>()
+      const forms = new Set<string>()
+      for (let seed = 1; seed <= 60; seed++) {
+        const { plan } = await planner.plan({ style, bars: 8, pick: 'sample', seed, brief: true })
+        progressions.add(plan.bars.map((bar) => bar.chord).join(' '))
+        textures.add(plan.texture)
+        characters.add(plan.character)
+        forms.add(plan.form)
+      }
+      // Before the harmony grammar a style had 2–4 eight-bar progressions in total.
+      expect(progressions.size, `${style} progressions`).toBeGreaterThanOrEqual(40)
+      expect(textures.size, `${style} textures`).toBeGreaterThanOrEqual(5)
+      expect(characters.size, `${style} characters`).toBeGreaterThanOrEqual(4)
+      expect(forms.size, `${style} forms`).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('never falls into the four-chord pop loop', async () => {
+    // I–V–vi–IV and its rotations, and the minor-key spelling i–bVI–bIII–bVII, by chord root.
+    const loops = ['C G A F', 'G A F C', 'A F C G', 'F C G A', 'C Ab Eb Bb', 'Ab Eb Bb C', 'Eb Bb C Ab', 'Bb C Ab Eb']
+    const planner = new HeuristicPlanner()
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 80; seed++) {
+        const { plan } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const key = keyInfo(plan.key.endsWith('_minor') ? 'C_minor' : 'C_major')
+        const roots = plan.bars.map((bar) => resolveChord(key, bar.chord).root)
+        for (let i = 0; i + 4 <= roots.length; i++) {
+          expect(loops, `${style} seed ${seed} bars ${i + 1}–${i + 4}: ${plan.bars.slice(i, i + 4).map((bar) => bar.chord).join(' ')}`).not.toContain(roots.slice(i, i + 4).join(' '))
+        }
+      }
+    }
+  })
+
+  it('keeps each plan coherent with its character', async () => {
+    const planner = new HeuristicPlanner()
+    for (let seed = 1; seed <= 120; seed++) {
+      const { plan } = await planner.plan({ style: 'bach', bars: 'auto', pick: 'sample', seed, brief: true })
+      if (plan.character === 'solemn_hymn') expect(['presto', 'allegro']).not.toContain(plan.tempo)
+      if (plan.character === 'dance_lilt') expect(plan.meter).not.toBe('four_four')
+      if (plan.character === 'stormy_drama') expect(plan.key.endsWith('_minor')).toBe(true)
+    }
+  })
+
   it('scores its own style at least as high as the others', async () => {
     const planner = new HeuristicPlanner()
     const order = { low: 0, medium: 1, high: 2 }
@@ -117,6 +199,53 @@ describe('HeuristicPlanner', () => {
       expect(scores[style]!.match).toBe('high')
       for (const other of STYLE_IDS) expect(order[scores[other]!.match]).toBeLessThanOrEqual(order[scores[style]!.match])
     }
+  })
+})
+
+describe('forms', () => {
+  it('expand to exactly one role per bar, opening with a statement and ending with a cadence', () => {
+    for (const form of FORM_IDS) {
+      for (const bars of BAR_COUNT_VALUES) {
+        const roles = formRoles(form, bars)
+        expect(roles, `${form} × ${bars}`).toHaveLength(bars)
+        expect(formSlots(form, bars)).toHaveLength(bars / 4)
+        expect(roles[0]).toBe('statement')
+        expect(roles[roles.length - 1]).toBe('cadence')
+        for (const role of roles) expect(BAR_ROLE_IDS).toContain(role)
+      }
+    }
+  })
+
+  it('give every style something to build each phrase ending from', () => {
+    for (const style of STYLE_IDS) {
+      for (const mode of ['major', 'minor'] as const) {
+        const book = STYLE_PROFILES[style].harmony[mode]
+        expect(book.heads.length).toBeGreaterThan(2)
+        expect(book.seqs.length).toBeGreaterThan(2)
+        expect(book.loops.length).toBeGreaterThan(0)
+        expect(book.finals.length).toBeGreaterThan(0)
+        for (const end of ['open', 'half', 'closed'] as const) expect(book.tails[end].length, `${style} ${mode} ${end}`).toBeGreaterThan(0)
+      }
+    }
+  })
+})
+
+describe('pick policy', () => {
+  it('samples at face value but never from the long tail', () => {
+    const random = rng(11)
+    const counts: Record<string, number> = { a: 0, b: 0, c: 0, d: 0 }
+    for (let i = 0; i < 4000; i++) counts[pickFrom({ a: 0.5, b: 0.3, c: 0.17, d: 0.03 }, 'sample', random)]++
+    expect(counts.d).toBe(0) // beyond the 90 % nucleus
+    expect(counts.b / counts.a).toBeGreaterThan(0.5) // 0.3 : 0.5, not the 0.36 that squaring gave
+    expect(counts.c).toBeGreaterThan(400)
+    expect(pickFrom({ a: 0.5, b: 0.3, c: 0.17, d: 0.03 }, 'argmax', random)).toBe('a')
+  })
+
+  it('damps the option just used, and overused ones, then renormalises', () => {
+    const adjusted = withNovelty<string>({ I: 0.8, IV: 0.1, V: 0.1 }, ['V', 'I'])
+    expect(adjusted.I).toBeLessThan(0.6)
+    expect(adjusted.I + adjusted.IV + adjusted.V).toBeCloseTo(1)
+    expect(withNovelty<string>({ I: 0.5, V: 0.5 }, ['I', 'V', 'I', 'V', 'I', 'IV']).I).toBeLessThan(0.5)
   })
 })
 
@@ -141,7 +270,7 @@ describe('/api/jev handler', () => {
   })
 
   it('validates bar ops strictly', () => {
-    const globals = { key: 'C_major', meter: 'four_four', texture: 'chorale', palette: 'diatonic', tempo: 'andante', dynamics: 'mf', dynamicShape: 'steady', defaultInstrument: 'grand_piano' }
+    const globals = { character: 'solemn_hymn', form: 'period', key: 'C_major', meter: 'four_four', texture: 'chorale', palette: 'diatonic', tempo: 'andante', dynamics: 'mf', dynamicShape: 'steady', defaultInstrument: 'grand_piano' }
     const roles = ['statement', 'development', 'climax', 'cadence']
     expect(parseOp({ op: 'bar', style: 'bach', brief: true, globals, roles, chords: ['I'], index: 1 })).toMatchObject({ op: 'bar', index: 1 })
     expect(() => parseOp({ op: 'bar', style: 'bach', globals, roles, chords: [], index: 1 })).toThrow()

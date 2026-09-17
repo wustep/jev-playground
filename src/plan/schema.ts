@@ -38,10 +38,13 @@ export const KEYS = {
   Eb_major: 'E-flat major — three flats; heroic, broad',
   Ab_major: 'A-flat major — four flats; mellow, velvety',
   Db_major: 'D-flat major — five flats; hazy, dreamlike, black-key colour',
+  Gb_major: 'G-flat major — six flats; all black keys, soft and pentatonic-friendly',
+  B_major: 'B major — five sharps; bright but veiled, black-key colour on the sharp side',
   A_minor: 'A minor — no sharps or flats; plain, melancholy',
   E_minor: 'E minor — one sharp; restless, plaintive',
   B_minor: 'B minor — two sharps; solemn, devotional',
   Fs_minor: 'F-sharp minor — three sharps; dark, introspective',
+  Cs_minor: 'C-sharp minor — four sharps; nocturnal, veiled, quietly tragic',
   D_minor: 'D minor — one flat; grave, serious',
   G_minor: 'G minor — two flats; agitated, tragic',
   C_minor: 'C minor — three flats; stormy, fateful, heroic struggle',
@@ -49,6 +52,45 @@ export const KEYS = {
 } as const
 export type KeyId = keyof typeof KEYS
 export const KEY_IDS = keysOf<KeyId>(KEYS)
+
+// The piece's character is decided FIRST and then handed to every later
+// decision as context. It is what lets one style produce a hymn on one
+// generation and a toccata on the next while each plan stays coherent
+// (slow tempo with soft dynamics with a singing texture …).
+export const CHARACTERS = {
+  lyrical_song: 'A slow, singing melody over a simple accompaniment; tender and intimate',
+  stormy_drama: 'Turbulent and forceful: driving rhythm, sharp accents, minor-key tension',
+  flowing_perpetual: 'Continuous even figuration that never stops; a smooth stream of fast notes',
+  solemn_hymn: 'Grave, chordal and measured, like a hymn or a slow procession',
+  dance_lilt: 'A light, lilting dance in a swinging triple or compound meter',
+  playful_wit: 'Quick, witty and light on its feet: detached notes, surprises, off-beat accents',
+  meditative_stillness: 'Very slow and spare: long tones, silence and resonance; time almost stops',
+  hypnotic_pulse: 'A steady motoric pulse of small repeating patterns that change only gradually',
+  dreamy_haze: 'Soft, blurred and floating; veiled colours and no hard edges',
+  heroic_bright: 'Bright, confident and extroverted: major-key energy and strong rhythm',
+  warm_groove: 'A relaxed, warm groove with laid-back syncopation; unhurried and soulful',
+  restless_searching: 'Uneasy and searching: shifting harmonies, questions left unanswered',
+} as const
+export type CharacterId = keyof typeof CHARACTERS
+export const CHARACTER_IDS = keysOf<CharacterId>(CHARACTERS)
+
+// How the bars are laid out as phrases. Code expands a form into per-bar roles
+// (src/plan/forms.ts); the renderer only ever reads the roles.
+export const FORMS = {
+  period: 'Question and answer: a phrase that pauses on an open half cadence, then the same opening again, this time closing firmly',
+  sentence: 'A short idea, its immediate repetition, then fragments that accelerate into one single cadence',
+  spinning_out: 'An opening gesture spun out through sequences — one figure stepping through new harmonies — into a closing cadence',
+  binary_dance: 'Two balanced halves: the first travels away and pauses open, the second starts from the far point and works its way home',
+  arch_return: 'Statement, a contrasting middle in a new colour or register, then a return of the opening, often as a quieter echo',
+  additive_loop: 'A short chord loop repeated many times, each pass adding or changing one small thing; no real cadence until it simply stops',
+  mosaic_pairs: 'Short two-bar ideas, each immediately repeated and then set beside a new one like tiles; little development, a fading close',
+  layered_build: 'Starts bare and adds a layer every few bars, building to a peak near the end before a brief release',
+  vamp_and_tag: 'A relaxed vamp that circles with small variations and fills, then a short tag ending on a held colour chord',
+  call_and_response: 'A bold call answered each time by a softer or contrasting reply',
+  free_fantasia: 'Improvisatory and through-composed: gestures follow one another freely with pauses and surprises, no literal repeats',
+} as const
+export type FormId = keyof typeof FORMS
+export const FORM_IDS = keysOf<FormId>(FORMS)
 
 export const METERS = {
   four_four: '4/4 — four quarter-note beats; square, march- or song-like',
@@ -79,6 +121,30 @@ export const TEXTURES = {
     'Left-hand ostinato in 3+3+2 groupings under sparse syncopated right-hand stabs in open fourths and short motifs',
   lush_voicings:
     'Rolled rich extended chords (ninths, elevenths) held under gentle pentatonic melodic fills; laid-back, soulful',
+  aria_walking_bass:
+    'Ornamented singing right-hand line over a steadily walking left-hand bass in even eighth notes',
+  toccata_perpetual:
+    'Both hands in relentless sixteenths: a zig-zag figure pivoting around one chord tone and its lower neighbour, mirrored between the hands',
+  stride_dance:
+    'Dance accompaniment: a low bass note on the downbeat answered by mid-register chords on the other beats (waltz or stride), under a lilting tune',
+  rolling_nocturne:
+    'Slow rolling broken chords in the middle register over deep sustained bass octaves, with a sparse long-note melody ringing on top',
+  tremolo_storm:
+    'Left-hand broken-octave tremolo rumbling under rising detached right-hand chords and sudden scale rushes; agitated',
+  pulsing_chords:
+    'Repeated pulsing eighth-note chords, low and even, the harmony changing slowly, with short melodic fragments flickering above',
+  melody_over_ostinato:
+    'A small rocking left-hand figure repeated unchanged while a slow, sparse melody of long notes and rests floats above',
+  interlocking_hands:
+    'Hands overlapped in one register, alternating rapid notes in close seconds and clusters with shifting off-kilter accents',
+  displaced_arpeggio:
+    'Continuous sixteenth-note chord arpeggios whose accents fall in uneven groups (5+5+6, 7+5+4), a colour tone on top, over a plain bass',
+  chordal_melody:
+    'Melody carried as the top note of close mid-register chords while an inner voice slides by half-steps; sparse bass, intimate',
+  bell_organum:
+    'Hollow parallel fifths and octaves moving slowly in block chords, framed by bell-like octaves in the extreme registers, pedal held',
+  scherzo_staccato:
+    'Light detached chords and quick upbeat figures tossed between the hands, with rests, sudden accents and dynamic jokes',
 } as const
 export type TextureId = keyof typeof TEXTURES
 export const TEXTURE_IDS = keysOf<TextureId>(TEXTURES)
@@ -89,6 +155,8 @@ export const PALETTES = {
   pentatonic: 'Five-note scale with no semitones; open, folk-like or soulful, never tense',
   whole_tone: 'Six-note scale of equal whole steps; floating, rootless, augmented colour',
   modal: 'Bright raised-fourth (Lydian) colour in major keys, raised-sixth (Dorian) colour in minor keys',
+  modal_dark: 'Lowered-seventh (Mixolydian) colour in major keys, lowered-second (Phrygian) colour in minor keys; archaic, shadowed',
+  blues: 'Pentatonic with added blue notes (flattened third and fifth) leaned on and released; vocal, bittersweet',
 } as const
 export type PaletteId = keyof typeof PALETTES
 export const PALETTE_IDS = keysOf<PaletteId>(PALETTES)
@@ -130,6 +198,9 @@ export const DYNAMIC_SHAPES = {
   decrescendo: 'Fades steadily from start to end',
   arch: 'Swells gradually to a peak past the midpoint, then recedes',
   sudden_contrast: 'Violent unprepared jumps between soft and loud with sharp accents',
+  waves: 'Rises and falls again and again in short two-bar swells, like breathing',
+  late_surge: 'Stays hushed for most of the piece, then surges in the final third',
+  build_then_drop: 'A long crescendo that is suddenly cut off to soft at its peak',
 } as const
 export type DynamicShapeId = keyof typeof DYNAMIC_SHAPES
 export const DYNAMIC_SHAPE_IDS = keysOf<DynamicShapeId>(DYNAMIC_SHAPES)
@@ -166,9 +237,33 @@ export const BAR_ROLES = {
   climax: 'The peak: highest register, densest and loudest moment',
   half_cadence: 'Pauses, unresolved, breathing before the answer',
   cadence: 'Closes: comes to rest on a final long sonority',
+  sequence: 'Repeats the previous bar\'s figure exactly, moved onto a new harmony a step or a fifth away',
+  echo: 'Repeats the previous bar much more softly, like a distant reply',
+  surprise: 'An unexpected harmonic turn: a chord from outside the key, lit up for a moment',
+  dissolve: 'Thins out and fades: fewer notes, softer, the texture evaporating',
 } as const
 export type BarRoleId = keyof typeof BAR_ROLES
 export const BAR_ROLE_IDS = keysOf<BarRoleId>(BAR_ROLES)
+
+/**
+ * The four newer roles are inflections of an older one. Renderer gesture
+ * tables are keyed by the base role; the inflection (reuse the last bar's
+ * figure, drop the dynamic, thin the texture …) is applied on top.
+ */
+export type BaseRoleId = Exclude<BarRoleId, 'sequence' | 'echo' | 'surprise' | 'dissolve'>
+export const ROLE_BASE: Record<BarRoleId, BaseRoleId> = {
+  statement: 'statement',
+  restatement: 'restatement',
+  development: 'development',
+  contrast: 'contrast',
+  climax: 'climax',
+  half_cadence: 'half_cadence',
+  cadence: 'cadence',
+  sequence: 'development',
+  echo: 'restatement',
+  surprise: 'contrast',
+  dissolve: 'contrast',
+}
 
 export const CONTOURS = {
   rise: 'Melodic line climbs through the bar',
@@ -176,6 +271,10 @@ export const CONTOURS = {
   arch: 'Line rises to a mid-bar peak and returns',
   dip: 'Line sinks mid-bar and returns',
   static: 'Line hovers around one pitch',
+  wave: 'Line undulates: up, down and up again, like a turn figure written large',
+  leap_fall: 'Line opens with a leap upward, then falls back by step to fill the gap',
+  drop_rise: 'Line drops suddenly, then climbs back by step',
+  pendulum: 'Line swings between a high and a low register, implying two voices in one',
 } as const
 export type ContourId = keyof typeof CONTOURS
 export const CONTOUR_IDS = keysOf<ContourId>(CONTOURS)
@@ -184,6 +283,12 @@ export const CONTOUR_IDS = keysOf<ContourId>(CONTOURS)
 // lower-case = minor; a `b` prefix lowers the root relative to the MAJOR scale
 // in both modes (so the "VI" of a minor key is written bVI here). The renderer
 // resolves them to spelled pitches in src/render/harmony.ts.
+//
+// Inversions use classical figures (I6 = third in the bass, I64 = fifth,
+// V65 / V43 / V42 = the three inversions of V7). `X_of_Y` is a secondary
+// dominant; `X_over_I` sits on a held tonic bass. Without these the bass can
+// only leap from root to root, which is most of what made the Baroque and
+// Classical styles sound like pop songs.
 export const CHORDS = {
   I: 'Major triad on the tonic',
   i: 'Minor triad on the tonic',
@@ -235,6 +340,69 @@ export const CHORDS = {
   V7sus4: 'Dominant seventh with suspended fourth; soft unresolved dominant',
   V7alt: 'Altered dominant (raised ninth, lowered thirteenth); bluesy bite',
   bVImaj9: 'Major ninth chord on the lowered sixth degree; cinematic borrowed colour',
+
+  // ── inversions: the bass moves by step instead of leaping between roots ──
+  I6: 'Tonic major triad in first inversion (third in the bass); lighter than root position, keeps the bass moving',
+  i6: 'Tonic minor triad in first inversion (third in the bass)',
+  I64: 'Tonic major triad over the dominant in the bass (cadential six-four); leans into V',
+  i64: 'Tonic minor triad over the dominant in the bass (six-four); unsettled, rocking or cadential',
+  Imaj42: 'Tonic major seventh with the seventh in the bass; a passing step as the bass walks down from the tonic',
+  i42: 'Tonic minor seventh with the seventh in the bass; first step of a descending lament bass',
+  ii6: 'Supertonic minor triad in first inversion; the classic pre-dominant',
+  ii65: 'Supertonic seventh in first inversion; the standard approach chord to a cadence',
+  ii42: 'Supertonic seventh over a held tonic bass (third inversion); gentle tension above a pedal',
+  ii_dim6: 'Diminished supertonic triad in first inversion (minor-key pre-dominant)',
+  ii_half_dim65: 'Half-diminished supertonic seventh in first inversion (minor-key cadence approach)',
+  iii6: 'Mediant minor triad in first inversion; a link in a chain of parallel sixth chords',
+  iii64: 'Mediant minor triad over its fifth (the leading tone in the bass); rocks a semitone under the tonic',
+  IV6: 'Subdominant major triad in first inversion',
+  iv6: 'Minor subdominant in first inversion: bass a semitone above the dominant (Phrygian approach)',
+  IV64: 'Subdominant major triad over a held tonic bass (pedal six-four); plagal, settling',
+  iv64: 'Minor subdominant over a held tonic bass (pedal six-four)',
+  V6: 'Dominant triad in first inversion (leading tone in the bass)',
+  V65: 'Dominant seventh in first inversion (leading tone in the bass); pulls up to the tonic',
+  V43: 'Dominant seventh in second inversion (second degree in the bass); smooth passing dominant',
+  V42: 'Dominant seventh in third inversion (seventh in the bass); must fall to a first-inversion tonic',
+  v6: 'Minor dominant in first inversion; a step in a descending lament bass',
+  vi6: 'Submediant in first inversion: the tonic stays in the bass while the harmony slips away',
+  vii_dim6: 'Leading-tone diminished triad in first inversion; a light passing dominant',
+  bIII6: 'Lowered mediant major triad in first inversion; soft chromatic-mediant colour',
+  bII6: 'Major triad on the lowered second degree in first inversion (Neapolitan sixth) before the dominant',
+
+  // ── secondary dominants and chromatic passing chords ─────────────────────
+  V7_of_V: 'Dominant seventh of the dominant (major chord on the second degree with a seventh); brightens toward a half cadence',
+  V65_of_V: 'Dominant seventh of the dominant in first inversion: raised fourth degree in the bass, rising by semitone to V',
+  V7_of_IV: 'The tonic turned into a dominant seventh, pushing toward the subdominant',
+  V7_of_ii: 'Dominant seventh on the sixth degree, pulling to the supertonic (turnaround colour)',
+  V7_of_vi: 'Dominant seventh on the third degree, pulling to the relative minor',
+  vii_dim7_of_V: 'Diminished seventh on the raised fourth degree; sharp tension leaning into the dominant',
+  bVI7: 'Dominant-seventh sonority on the lowered sixth degree (augmented-sixth chord) sliding outward to the dominant',
+  sharp_i_dim7: 'Passing diminished seventh on the raised tonic, between I and ii',
+  sharp_iv_half_dim7: 'Half-diminished seventh on the raised fourth degree; start of a chromatic walk-down',
+  biii7: 'Minor seventh on the lowered third degree; chromatic passing step between iii and ii',
+  bII7: 'Dominant seventh with raised eleventh on the lowered second degree (tritone substitute) falling to the tonic',
+  V7b9: 'Dominant seventh with a lowered ninth; dark, urgent (minor-key and tango cadences)',
+  V9sus4: 'Dominant ninth with suspended fourth — the subdominant triad over the dominant bass; soft, open dominant',
+
+  // ── modal, mediant and mixture colours ───────────────────────────────────
+  II: 'Major triad on the second degree (raised fourth of the key); Lydian brightness left unresolved',
+  II_over_I: 'Major triad on the second degree over a tonic bass; luminous, almost bitonal Lydian shimmer',
+  III: 'Major triad on the third degree: a chromatic mediant, a sudden sharp-side glow',
+  VI: 'Major triad on the sixth degree: chromatic mediant, or the relative minor brightened',
+  IV7: 'Dominant seventh on the fourth degree; Dorian or bluesy colour that does not resolve',
+  bVII9: 'Dominant ninth on the lowered seventh degree; backdoor dominant, or a floating parallel ninth chord',
+  bVIImaj7: 'Major seventh chord on the lowered seventh degree; cool modal step below the tonic',
+  bVII_over_I: 'Subtonic major triad over a held tonic bass; modal, suspended',
+  V7_over_I: 'Dominant seventh over a held tonic bass; tension above a tonic pedal, typical of a coda',
+  iv_add6: 'Minor subdominant with added sixth; bittersweet borrowed colour in a major key',
+  Iadd6: 'Tonic major triad with added sixth; pentatonic glow, a restful non-cadence',
+  IVadd6: 'Subdominant major triad with added sixth; gentle, rocking away from the tonic',
+  Imaj7s5: 'Tonic major seventh with raised fifth; hovering, dreamlike, unresolved',
+  Imaj7s11: 'Tonic major seventh with raised eleventh; Lydian tonic, a held final colour',
+  i_maj7: 'Tonic minor triad with a major seventh; the second step of a chromatic inner-line descent',
+  i_add6: 'Tonic minor triad with added major sixth; Dorian warmth, a resting minor tonic',
+  i11: 'Tonic minor eleventh; stacked and open, a vamp chord',
+  iv9: 'Minor ninth chord on the fourth degree; pairs with a minor-ninth tonic a fifth away',
 } as const
 export type ChordId = keyof typeof CHORDS
 export const CHORD_IDS = keysOf<ChordId>(CHORDS)
@@ -250,6 +418,10 @@ export interface BarPlan {
 export interface CompositionPlan {
   version: 1
   style: StyleId
+  /** Decided first; every later decision is conditioned on it. */
+  character: CharacterId
+  /** Phrase layout. `bars[].role` is its expansion and is what the renderer reads. */
+  form: FormId
   key: KeyId
   meter: MeterId
   texture: TextureId
@@ -264,6 +436,8 @@ export interface CompositionPlan {
 
 /** The global (non-bar) fields, in the order planners decide them. */
 export const GLOBAL_FIELDS = {
+  character: CHARACTERS,
+  form: FORMS,
   key: KEYS,
   meter: METERS,
   texture: TEXTURES,
@@ -312,6 +486,8 @@ export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError(`${path}: expected an object`)
   const obj = raw as Record<string, unknown>
   return {
+    character: parseOption(CHARACTERS, obj.character, `${path}.character`),
+    form: parseOption(FORMS, obj.form, `${path}.form`),
     key: parseOption(KEYS, obj.key, `${path}.key`),
     meter: parseOption(METERS, obj.meter, `${path}.meter`),
     texture: parseOption(TEXTURES, obj.texture, `${path}.texture`),

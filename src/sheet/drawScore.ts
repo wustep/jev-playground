@@ -39,6 +39,8 @@ export interface BarLayout {
 export interface SheetLayout {
   width: number
   height: number
+  /** Engraving scale (< 1 on narrow screens). Layout numbers are already in CSS pixels. */
+  scale: number
   bars: BarLayout[]
 }
 
@@ -125,27 +127,42 @@ function chooseBarsPerSystem(score: Score, width: number, firstBarExtra: number)
   return [4, 2, 1].find((n) => n <= Math.max(1, fit)) ?? 1
 }
 
+/**
+ * Phones get the same engraving, drawn smaller: at full size a 16th-note bar
+ * needs ~350px, so a 360px screen would squeeze one cramped bar per system.
+ */
+export function sheetScale(width: number): number {
+  if (width >= 720) return 1
+  if (width <= 420) return 0.68
+  return 0.68 + ((width - 420) / 300) * 0.32
+}
+
 /** Wait for VexFlow's bundled music + text fonts before the first draw. */
 export async function sheetFontsReady(): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts) return
   await Promise.allSettled([document.fonts.load('30px Bravura'), document.fonts.load('16px Academico')])
 }
 
-export function drawScore(canvas: HTMLCanvasElement, score: Score, width: number, theme: SheetTheme): SheetLayout {
+export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: number, theme: SheetTheme): SheetLayout {
   const { meter } = score
+  // Everything below is laid out in "engraving pixels"; the canvas is scaled
+  // once, and the returned layout is converted back to CSS pixels at the end.
+  const scale = sheetScale(cssWidth)
+  const width = cssWidth / scale
   const signatureWidth = 54 + keySignatureWidth(score.keySignature)
   const barsPerSystem = chooseBarsPerSystem(score, width, signatureWidth + 30)
   const systemCount = Math.ceil(score.bars.length / barsPerSystem)
   const height = systemCount * SYSTEM_HEIGHT + 8
 
   const renderer = new Renderer(canvas, Renderer.Backends.CANVAS)
-  renderer.resize(width, height)
+  renderer.resize(cssWidth, Math.ceil(height * scale))
   const context = renderer.getContext()
+  context.scale(scale, scale)
   context.setFillStyle(theme.ink)
   context.setStrokeStyle(theme.ink)
   const pen = canvas.getContext('2d')!
 
-  const layout: SheetLayout = { width, height, bars: [] }
+  const layout: SheetLayout = { width: cssWidth, height: Math.ceil(height * scale), scale, bars: [] }
   let lastDynamic: string | undefined
 
   for (let system = 0; system < systemCount; system++) {
@@ -221,7 +238,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, width: number
       pen.fillText(bar.plan.chord, labelX + symbolWidth + 8, top - 5)
       pen.fillStyle = theme.muted
       pen.font = '500 10.5px "JetBrains Mono", ui-monospace, monospace'
-      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace('_', ' ')}`, labelX, top + STAFF_GAP + 134)
+      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace(/_/g, ' ')}`, labelX, top + STAFF_GAP + 134)
       if (bar.dynamic !== lastDynamic) {
         pen.fillStyle = theme.ink
         pen.font = 'italic 600 17px "Academico", "Fraunces", Georgia, serif'
@@ -233,6 +250,15 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, width: number
       x += staveWidth
     })
   }
+  if (scale !== 1) {
+    for (const bar of layout.bars) {
+      bar.x *= scale
+      bar.width *= scale
+      bar.top *= scale
+      bar.bottom *= scale
+      for (const anchor of bar.anchors) anchor.x *= scale
+    }
+  }
   return layout
 }
 
@@ -243,8 +269,8 @@ function prettyChord(symbol: string): string {
 
 function keySignatureWidth(signature: string): number {
   const SHARPS_OR_FLATS: Record<string, number> = {
-    C: 0, G: 1, D: 2, A: 3, E: 4, F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5,
-    Am: 0, Em: 1, Bm: 2, 'F#m': 3, Dm: 1, Gm: 2, Cm: 3, Fm: 4,
+    C: 0, G: 1, D: 2, A: 3, E: 4, B: 5, F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6,
+    Am: 0, Em: 1, Bm: 2, 'F#m': 3, 'C#m': 4, Dm: 1, Gm: 2, Cm: 3, Fm: 4,
   }
   return (SHARPS_OR_FLATS[signature] ?? 3) * 11 + 6
 }
