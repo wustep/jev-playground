@@ -18,8 +18,8 @@ Do not drop any item. Small commits; `git push` after each. When ALL are done: m
 - [x] Investigate perceived slowness (renderPlan was ~ms — check VexFlow/sheet path); ship cheap wins in this PR
 - [x] Routes: `/` landing (links to Music + Trolley), `/music/` = composer, `/trolley/` absurd editable cast trolley; SPA rewrites for refresh
 - [x] API: IP rate-limit `/api/jev` (429 + Retry-After); no key leak; allowlisted ops; extend for trolley as needed; tests
-- [ ] Merge PR #2 to main (Stephen asked for main + Vercel ready)
-- [ ] Confirm production Vercel deploy healthy
+- [x] Merge PR #2 to main (Stephen asked for main + Vercel ready)
+- [x] Confirm production Vercel deploy healthy
 
 ## Constraints
 - No force push. Prefer merge via `gh pr merge` when checklist complete.
@@ -33,3 +33,6 @@ Do not drop any item. Small commits; `git push` after each. When ALL are done: m
   per glyph, and `measureText`. Shipped: shallow-copy patch for the two Metrics getters (removes the clone
   cost), memoised pitch ladders in the renderer, and — what actually changes how it feels — the per-style
   cache + immediate loading feedback. Not done (not cheap): off-main-thread or incremental engraving.
+- Shipped: PR #2 merged as bc0a6d2. Production checked on https://jev-playground.vercel.app — `/`, `/music/`, `/trolley/`
+  (with and without the trailing slash) all 200; `GET /api/jev` → `{available:true}`; a non-allowlisted body → 400; `PUT` → 405;
+  live `trolley_judge` answered; a 3 s burst of 110 POSTs → 429 with `Retry-After` and `X-RateLimit-Remaining: 0`.
