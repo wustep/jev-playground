@@ -207,7 +207,7 @@ export const DYNAMIC_SHAPE_IDS = keysOf<DynamicShapeId>(DYNAMIC_SHAPES)
 
 export const INSTRUMENTS = {
   grand_piano: 'Acoustic concert grand piano',
-  electric_piano: 'Vintage electric piano with a soft bell-like bark',
+  electric_piano: 'Vintage electric piano',
   harpsichord: 'Harpsichord — plucked, bright, no touch dynamics',
   church_organ: 'Pipe organ — sustained, no decay',
   strings: 'Bowed string ensemble — sustained, swelling',
