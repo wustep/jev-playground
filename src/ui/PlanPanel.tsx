@@ -57,9 +57,11 @@ interface Props {
   /** True once the JSON was edited by hand: decisions no longer describe it. */
   edited: boolean
   onApply: (plan: CompositionPlan) => void
+  /** When false/omitted, hide the editable Plan JSON block. */
+  debug?: boolean
 }
 
-export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
+export function PlanPanel({ plan, score, decisions, edited, onApply, debug = false }: Props) {
   const byField = new Map(decisions.map((d) => [d.field, d]))
   const canonical = JSON.stringify(plan, null, 2)
   const [draft, setDraft] = useState(canonical)
@@ -120,6 +122,7 @@ export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
         })}
       </ol>
 
+      {debug && (
       <details className="plan-json" open>
         <summary>
           Plan JSON{' '}
@@ -156,6 +159,7 @@ export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
           </button>
         </div>
       </details>
+      )}
     </aside>
   )
 }
