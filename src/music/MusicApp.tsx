@@ -139,8 +139,9 @@ export default function MusicApp() {
     void generate({ planner: 'heuristic' })
   }, [generate])
 
-  // Prewarm: offline stub first (instant dial), then one live Jev plan per style
-  // when the proxy is up so the dial stays instant after the first load finishes.
+  // Prewarm offline stubs only (instant dial, no network). Live Jev is cached
+  // lazily on first Generate / dial miss — prewarming all six styles was ~108
+  // /api/jev calls and blew the 90/min rate limit on first paint.
   useEffect(() => {
     let cancelled = false
     const idle = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 300))
@@ -156,31 +157,6 @@ export default function MusicApp() {
       cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    const planner = jev?.planner
-    if (!planner) return
-    let cancelled = false
-    ;(async () => {
-      for (const id of STYLE_IDS) {
-        if (cancelled) break
-        const existing = cacheRef.current.get(id)
-        if (existing?.trace.planner === 'jev' && existing.input.bars === 16) continue
-        const input: PlanInput = { style: id, bars: 16, pick: 'sample', brief: true, seed: newSeed() }
-        try {
-          const result = await planner.plan(input)
-          if (cancelled) break
-          const made: Generated = { ...result, input, notice: null }
-          cacheRef.current.set(id, made)
-        } catch {
-          // Leave the stub entry in place if a live plan fails.
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [jev])
 
   /** Dial click: show the cached piece at once; only plan when there is none that fits. */
   const chooseStyle = (id: StyleId) => {
