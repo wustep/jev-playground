@@ -399,22 +399,7 @@ button.small {
   background: var(--panel);
 }
 
-.transport .icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 10px;
-}
-
-.transport .icon-button.is-saved {
-  color: var(--accent);
-}
-
 .transport .play {
-
   min-width: 108px;
   height: 40px;
   font-size: 14.5px;
@@ -430,9 +415,29 @@ button.small {
   content: '■ ';
 }
 
+.transport .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+  border-radius: 999px;
+  line-height: 0;
+}
+
+.transport .icon-button .icon-download,
+.transport .icon-button .icon-check {
+  display: block;
+}
+
+.transport .icon-button.is-saved {
+  color: var(--accent);
+}
+
 .transport .push-right {
   height: 40px;
-  font-weight: 600;
 }
 
 .push-right {
