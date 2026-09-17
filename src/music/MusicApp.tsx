@@ -74,6 +74,7 @@ export default function MusicApp() {
   // at once. Generate replaces the entry; a change of length or planner misses it.
   const cacheRef = useRef(new Map<StyleId, Generated>())
   const [pendingStyle, setPendingStyle] = useState<StyleId | null>(null)
+  const [planStatus, setPlanStatus] = useState<string | null>(null)
 
   const generate = useCallback(
     async (overrides: Partial<PlanInput> & { planner?: PlannerId } = {}) => {
@@ -88,11 +89,21 @@ export default function MusicApp() {
       setPlaying(false)
       setError(null)
       setProgress([])
+      setMatches(null)
       setPendingStyle(input.style)
+      setPlanStatus('Planning…')
+      const started = performance.now()
       let result: PlanResult
       let notice: string | null = null
       try {
-        result = await planner.plan(input, { signal: abort.signal, onProgress: setProgress })
+        result = await planner.plan(input, {
+          signal: abort.signal,
+          onProgress: (decisions) => {
+            setProgress(decisions)
+            const last = decisions[decisions.length - 1]
+            setPlanStatus(last ? `Planning… ${decisions.length} decisions` : 'Planning…')
+          },
+        })
       } catch (cause) {
         if (abort.signal.aborted) return
         if (planner === heuristicPlanner) {
@@ -108,12 +119,14 @@ export default function MusicApp() {
       if (abort.signal.aborted) return
       const made: Generated = { ...result, input, notice }
       cacheRef.current.set(input.style, made)
+      const seconds = Math.max(result.trace.latencyMs, performance.now() - started) / 1000
       setProgress(null)
       setPendingStyle(null)
       setEditedPlan(null)
       setMatches(null)
       setGenerated(made)
       setInstrument(result.plan.defaultInstrument)
+      setPlanStatus(`Generated plan and ${input.bars} bars in ${seconds.toFixed(2)}s`)
     },
     [style, bars, pick, brief, seed, plannerChoice, jev, engine],
   )
@@ -185,6 +198,7 @@ export default function MusicApp() {
       setSeed(cached.input.seed)
       setGenerated(cached)
       setInstrument(cached.plan.defaultInstrument)
+      setPlanStatus(`Generated plan and ${cached.input.bars} bars in ${(cached.trace.latencyMs / 1000).toFixed(2)}s`)
       // Prefer a cache hit that matches the active planner; otherwise plan (and replace the stub).
       if (cached.trace.planner === wanted) {
         setPendingStyle(null)
@@ -202,9 +216,9 @@ export default function MusicApp() {
   // Everything below this line (sheet, playback, MIDI) reads `score` only.
   const score = useMemo(() => (plan && generated ? renderPlan(plan, generated.input.seed) : null), [plan, generated])
 
-  // Optional style-match scoring, with whichever planner made the plan.
+  // Optional style-match scoring — skip while a plan is in flight so latency stays honest.
   useEffect(() => {
-    if (!plan || !generated) return
+    if (!plan || !generated || progress !== null) return
     const scorer = generated.trace.planner === 'jev' && jev?.planner?.score ? jev.planner : heuristicPlanner
     const abort = new AbortController()
     scorer
@@ -212,7 +226,7 @@ export default function MusicApp() {
       .then((result) => !abort.signal.aborted && setMatches(result))
       .catch(() => !abort.signal.aborted && setMatches(null))
     return () => abort.abort()
-  }, [plan, generated, jev])
+  }, [plan, generated, jev, progress])
 
   // ── transport ─────────────────────────────────────────────────────────────
 
@@ -311,10 +325,6 @@ export default function MusicApp() {
           </h1>
         </div>
         <div className="masthead-side">
-          <span className={`status-chip ${jev?.planner ? 'on' : ''}`} title={jev?.detail ?? 'Checking for a Jev key…'}>
-            <span className="dot" />
-            {jev === null ? 'Checking Jev…' : jev.planner ? 'Jev connected' : 'Jev offline · stub'}
-          </span>
           <label className="switch">
             <input type="checkbox" checked={debug} onChange={(event) => toggleDebug(event.target.checked)} />
             <span>Debug</span>
@@ -360,6 +370,11 @@ export default function MusicApp() {
             ))}
           </select>
         </label>
+        {planStatus && (
+          <span className="plan-status" role="status">
+            {planStatus}
+          </span>
+        )}
         <div className="controls-actions">
           <button
             type="button"
@@ -412,12 +427,6 @@ export default function MusicApp() {
         </form>
       )}
 
-      {busy && progress && progress.length > 0 && (
-        <p className="banner" role="status">
-          Planning… {progress.length} decisions so far — last: <code>{progress[progress.length - 1].field}</code> ={' '}
-          <code>{progress[progress.length - 1].choice}</code>
-        </p>
-      )}
       {generated?.notice && <p className="banner warn">{generated.notice}</p>}
       {error && <p className="banner warn">{error}</p>}
 
