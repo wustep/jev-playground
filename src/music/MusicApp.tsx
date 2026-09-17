@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { AudioEngine, type EngineStatus } from './audio/engine'
-import { downloadMidi } from './midi/exportMidi'
-import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from './plan/schema'
-import { detectJev, heuristicPlanner, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from './planner'
-import { shadowExchanges } from './planner/HeuristicPlanner'
-import { renderPlan, secondsPerTick } from './render/renderPlan'
-import { DebugPanel } from './ui/DebugPanel'
-import { Confidence, PlanPanel } from './ui/PlanPanel'
-import { SheetView } from './ui/SheetView'
-import { STYLE_THEME } from './ui/styleTheme'
+import { AudioEngine, type EngineStatus } from '../audio/engine'
+import { downloadMidi } from '../midi/exportMidi'
+import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from '../plan/schema'
+import { detectJev, heuristicPlanner, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from '../planner'
+import { shadowExchanges } from '../planner/HeuristicPlanner'
+import { renderPlan, secondsPerTick } from '../render/renderPlan'
+import { DebugPanel } from '../ui/DebugPanel'
+import { Confidence, PlanPanel } from '../ui/PlanPanel'
+import { SheetView } from '../ui/SheetView'
+import { STYLE_THEME } from '../ui/styleTheme'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
 
@@ -23,7 +23,7 @@ interface Generated extends PlanResult {
   notice: string | null
 }
 
-export function App() {
+export default function MusicApp() {
   const [style, setStyle] = useState<StyleId>('bach')
   const [plannerChoice, setPlannerChoice] = useState<PlannerId>('heuristic')
   const [jev, setJev] = useState<JevAvailability | null>(null)
@@ -283,7 +283,7 @@ export function App() {
       <header className="masthead">
         <div>
           <h1>
-            Jev Playground <span className="muted">/ music</span>
+            <a className="home-link" href="/">Jev Playground</a> <span className="muted">/ music</span>
           </h1>
         </div>
         <div className="masthead-side">
