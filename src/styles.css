@@ -842,13 +842,6 @@ button.small {
   text-underline-offset: 4px;
 }
 
-.route-loading {
-  padding: 48px 24px;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .landing {
   max-width: 880px;
 }
@@ -906,13 +899,6 @@ button.small {
 
 .trolley {
   max-width: 1080px;
-}
-
-.trolley-disclaimer {
-  margin: -6px 0 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
 }
 
 .dilemma {
@@ -1014,11 +1000,6 @@ button.small {
   font-weight: 500;
 }
 
-.tally {
-  margin: 4px 0 0;
-  font-size: 12px;
-}
-
 .tracks {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1030,8 +1011,63 @@ button.small {
   padding-bottom: 14px;
 }
 
-.track > .ghost {
-  margin: 0 14px;
+.track-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.custom-entity {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.custom-entity input {
+  height: 34px;
+  border: 1px solid var(--ink);
+  background: var(--sheet);
+  border-radius: 0;
+  flex: 1;
+}
+
+.emoji-picker {
+  position: relative;
+  flex: none;
+}
+
+.emoji-button {
+  width: 40px;
+  padding: 0;
+  font-size: 19px;
+}
+
+.emoji-palette {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(296px, 80vw);
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--ink);
+  background: var(--sheet);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.emoji-option {
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+}
+
+.emoji-option.selected {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .track-summary {
@@ -1077,6 +1113,202 @@ button.small {
 
 .trolley-controls select {
   min-width: 12rem;
+}
+
+/* ── loading: the pixel diamond ───────────────────────────────────────────── */
+
+.diamond {
+  width: 0.95em;
+  height: 0.95em;
+  vertical-align: -0.12em;
+  flex: none;
+}
+
+.diamond-lg {
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 4px;
+  color: var(--accent);
+}
+
+/* Loading never moves the page: what is there stays in place and dims. */
+.dilemma-text.is-stale,
+.verdict.is-stale .verdict-body {
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
+}
+
+.route-loading-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 2px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.route-loading-body .diamond {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+/* ── trolley: the outcome scene ───────────────────────────────────────────── */
+
+.outcome {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  background: var(--sheet);
+}
+
+.outcome-side {
+  padding: 12px 14px 12px;
+  min-width: 0;
+}
+
+.outcome-lost {
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.outcome h3 {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.outcome-lost h3 {
+  color: var(--accent);
+}
+
+.outcome-saved h3 {
+  color: #1f7a43;
+}
+
+.outcome-cast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-height: 40px;
+}
+
+.outcome-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.outcome-figure {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 26px;
+  line-height: 1;
+  opacity: 0;
+  animation: outcome-arrive 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.3) forwards;
+  animation-delay: calc(var(--i) * 45ms);
+}
+
+/* The cross: translucent, drawn in a beat after its figure lands. */
+.outcome-figure.is-lost::after {
+  content: '✕';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--sans);
+  font-size: 32px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 72%, transparent);
+  opacity: 0;
+  transform: scale(1.9) rotate(-14deg);
+  animation: outcome-cross 0.26s ease-out forwards;
+  animation-delay: calc(var(--i) * 45ms + 380ms);
+}
+
+/* The emoji (not its cross) greys out once the cross has landed. */
+.outcome-figure.is-lost .outcome-emoji {
+  animation: outcome-fade 0.4s ease forwards;
+  animation-delay: calc(var(--i) * 45ms + 420ms);
+}
+
+.outcome-figure.is-saved {
+  animation-name: outcome-arrive, outcome-cheer;
+  animation-duration: 0.34s, 0.5s;
+  animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.3), ease-in-out;
+  animation-fill-mode: forwards, none;
+  animation-delay: calc(var(--i) * 45ms), calc(var(--i) * 45ms + 360ms);
+}
+
+.outcome-more {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.outcome-caption,
+.outcome-empty {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: #3d3a34;
+}
+
+.outcome-empty {
+  font-style: italic;
+  color: var(--muted);
+}
+
+@keyframes outcome-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Lost figures settle back, greyed, under their cross. */
+@keyframes outcome-fade {
+  to {
+    filter: grayscale(1);
+    opacity: 0.55;
+  }
+}
+
+@keyframes outcome-cross {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes outcome-cheer {
+  40% {
+    transform: translateY(-7px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outcome-figure,
+  .outcome-figure.is-saved,
+  .outcome-figure.is-lost .outcome-emoji,
+  .outcome-figure.is-lost::after {
+    animation-duration: 0.01s;
+    animation-delay: 0s;
+  }
 }
 
 /* ── work in flight ───────────────────────────────────────────────────────── */
@@ -1136,6 +1368,12 @@ button.small {
 }
 
 @media (max-width: 760px) {
+  .outcome-figure {
+    width: 30px;
+    height: 30px;
+    font-size: 23px;
+  }
+
   .landing-cards,
   .tracks {
     grid-template-columns: minmax(0, 1fr);
@@ -1174,9 +1412,14 @@ button.small {
     grid-row: 2;
   }
 
-  .group-row button {
+  .group-row > button {
     grid-column: 3;
     grid-row: 1;
+  }
+
+  .custom-entity input,
+  .emoji-button {
+    height: 44px;
   }
 
   .group-row input,

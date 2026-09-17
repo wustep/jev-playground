@@ -5,22 +5,59 @@
 // over closed tables); code owns every sentence and every pixel.
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ABSURDITY_WORDS, DIFFICULTY_WORDS, entityEmoji, scenarioText, trackPhrase, verdictText } from './describe'
+import { ABSURDITY_WORDS, DIFFICULTY_WORDS, entityEmoji, groupEmoji, scenarioText, trackPhrase, verdictText } from './describe'
+import { Outcome } from './Outcome'
 import { castOffline, castWithJev, jevAvailable, judgeOffline, judgeWithJev, randomTheme, type Exchange, type Verdict } from './play'
 import { rng } from '../planner/pick'
-import { CLASSIC, ENTITIES, ENTITY_IDS, MAX_COUNT, MAX_GROUPS_PER_TRACK, THEMES, TRAITS, TRAIT_IDS, TWISTS, TWIST_IDS, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
+import { Diamond } from '../ui/Diamond'
+import { CLASSIC, ENTITIES, ENTITY_IDS, MAX_COUNT, MAX_CUSTOM_LABEL, MAX_GROUPS_PER_TRACK, THEMES, TRAITS, TRAIT_IDS, TWISTS, TWIST_IDS, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
 const ACCENT = '#b3261e'
 
 type TrackId = 'ahead' | 'siding'
 
+/** The picker's palette. A new custom entry starts on a random one of these. */
+const PALETTE = ['🦄', '🐙', '🦖', '🐧', '🦆', '🐝', '🦥', '🐢', '🦀', '🐸', '👻', '👽', '🤠', '🧙', '🧛', '🧜', '🥷', '👑', '🎻', '🎺', '🪩', '🧸', '🪆', '🎈', '🚀', '🛸', '🚲', '🛹', '⛵', '🏰', '🗿', '💎', '🧀', '🥐', '🌮', '🍩', '🧁', '☕', '🌵', '🌻', '🍄', '🔮', '🧲', '🪣', '📚', '💾', '☎️', '🧦']
+const randomEmoji = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]
+
+function EmojiPicker({ value, onChange }: { value: string; onChange: (emoji: string) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <span className="emoji-picker">
+      <button type="button" className="emoji-button" aria-label={`Emoji: ${value}. Change`} aria-expanded={open} onClick={() => setOpen(!open)}>
+        {value}
+      </button>
+      {open && (
+        <span className="emoji-palette" role="listbox" aria-label="Pick an emoji">
+          <button type="button" className="emoji-option" title="Surprise me" onClick={() => onChange(randomEmoji())}>
+            🎲
+          </button>
+          {PALETTE.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              role="option"
+              aria-selected={emoji === value}
+              className={`emoji-option ${emoji === value ? 'selected' : ''}`}
+              onClick={() => {
+                onChange(emoji)
+                setOpen(false)
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
 const initialDebug = () => {
   const value = new URLSearchParams(window.location.search).get('debug')
   return value !== null && value !== '0' && value !== 'false'
 }
-
-const short = (text: string) => text.split(/[:—,]/)[0]
 
 function TrackEditor({ id, title, hint, groups, onChange }: { id: TrackId; title: string; hint: string; groups: Group[]; onChange: (groups: Group[]) => void }) {
   const update = (index: number, patch: Partial<Group>) => onChange(groups.map((group, i) => (i === index ? { ...group, ...patch } : group)))
@@ -33,13 +70,13 @@ function TrackEditor({ id, title, hint, groups, onChange }: { id: TrackId; title
       </header>
       <p className="track-summary">
         <span className="track-emoji" aria-hidden="true">
-          {groups.length ? groups.map((group) => entityEmoji(group.entity).repeat(Math.min(group.count, 5))).join(' ') : '∅'}
+          {groups.length ? groups.map((group) => groupEmoji(group).repeat(Math.min(group.count, 5))).join(' ') : '∅'}
         </span>
         {trackPhrase(groups)}
       </p>
       <ul className="group-list">
         {groups.map((group, index) => (
-          <li key={index} className="group-row">
+          <li key={index} className={`group-row ${group.entity === 'custom' ? 'is-custom' : ''}`}>
             <input
               type="number"
               min={1}
@@ -48,17 +85,39 @@ function TrackEditor({ id, title, hint, groups, onChange }: { id: TrackId; title
               aria-label="How many"
               onChange={(event) => update(index, { count: Math.max(1, Math.min(MAX_COUNT, Math.round(Number(event.target.value)) || 1)) })}
             />
-            <select value={group.entity} aria-label="Who or what" onChange={(event) => update(index, { entity: event.target.value as EntityId })}>
+            {group.entity === 'custom' ? (
+              <span className="custom-entity">
+                <EmojiPicker value={group.custom?.emoji ?? '❓'} onChange={(emoji) => update(index, { custom: { label: group.custom?.label ?? '', emoji } })} />
+                <input
+                  type="text"
+                  value={group.custom?.label ?? ''}
+                  maxLength={MAX_CUSTOM_LABEL}
+                  placeholder="who or what?"
+                  aria-label="Your own entry"
+                  onChange={(event) => update(index, { custom: { emoji: group.custom?.emoji ?? randomEmoji(), label: event.target.value.replace(/[^\p{L}\p{N} '’\-.,&!?]/gu, '') } })}
+                />
+              </span>
+            ) : null}
+            <select
+              value={group.entity}
+              aria-label="Who or what"
+              className={group.entity === 'custom' ? 'sr-only' : undefined}
+              onChange={(event) => {
+                const entity = event.target.value as EntityId | 'custom'
+                update(index, entity === 'custom' ? { entity, custom: { label: '', emoji: randomEmoji() } } : { entity, custom: undefined })
+              }}
+            >
+              <option value="custom">✏️ Your own…</option>
               {ENTITY_IDS.map((entity) => (
                 <option key={entity} value={entity}>
-                  {entityEmoji(entity)} {short(ENTITIES[entity])}
+                  {entityEmoji(entity)} {ENTITIES[entity]}
                 </option>
               ))}
             </select>
             <select value={group.trait} aria-label="Detail" onChange={(event) => update(index, { trait: event.target.value as TraitId })}>
               {TRAIT_IDS.map((trait) => (
                 <option key={trait} value={trait}>
-                  {trait === 'plain' ? '— no detail —' : TRAITS[trait]}
+                  {TRAITS[trait]}
                 </option>
               ))}
             </select>
@@ -68,9 +127,19 @@ function TrackEditor({ id, title, hint, groups, onChange }: { id: TrackId; title
           </li>
         ))}
       </ul>
-      <button type="button" className="ghost" disabled={groups.length >= MAX_GROUPS_PER_TRACK} onClick={() => onChange([...groups, { entity: unused, count: 1, trait: 'plain' }])}>
-        + Add to this track
-      </button>
+      <div className="track-actions">
+        <button type="button" className="ghost" disabled={groups.length >= MAX_GROUPS_PER_TRACK} onClick={() => onChange([...groups, { entity: unused, count: 1, trait: 'plain' }])}>
+          + Add to this track
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          disabled={groups.length >= MAX_GROUPS_PER_TRACK}
+          onClick={() => onChange([...groups, { entity: 'custom', custom: { label: '', emoji: randomEmoji() }, count: 1, trait: 'plain' }])}
+        >
+          ✏️ Add your own
+        </button>
+      </div>
     </section>
   )
 }
@@ -107,7 +176,7 @@ export default function TrolleyApp() {
   const [castExchange, setCastExchange] = useState<Exchange | null>(null)
   const [busy, setBusy] = useState<'cast' | 'judge' | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [tally, setTally] = useState({ pulled: 0, spared: 0 })
+  const [verdictCount, setVerdictCount] = useState(0)
   const [debug, setDebug] = useState(initialDebug)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -171,7 +240,7 @@ export default function TrolleyApp() {
     }
     if (abort.signal.aborted) return
     setVerdict(result)
-    setTally((t) => (result.decision === 'pull_lever' ? { ...t, pulled: t.pulled + 1 } : { ...t, spared: t.spared + 1 }))
+    setVerdictCount((n) => n + 1)
     setBusy(null)
   }, [live, scenario])
 
@@ -183,6 +252,7 @@ export default function TrolleyApp() {
     window.history.replaceState(null, '', url)
   }
 
+  const incomplete = [...scenario.ahead, ...scenario.siding].some((group) => group.entity === 'custom' && !group.custom?.label.trim())
   const pullPercent = verdict ? Math.round(verdict.pull * 100) : null
 
   return (
@@ -205,19 +275,17 @@ export default function TrolleyApp() {
         </div>
       </header>
 
-      <p className="trolley-disclaimer">A cartoon thought experiment. Nobody here is real and nothing is ever harmed.</p>
-
-      <section className="panel dilemma" aria-live="polite">
-        <p className="dilemma-text">{scenarioText(scenario)}</p>
+      <section className="panel dilemma" aria-live="polite" aria-busy={busy === 'cast'}>
+        <p className={`dilemma-text ${busy === 'cast' ? 'is-stale' : ''}`}>{scenarioText(scenario)}</p>
         <div className="dilemma-actions">
           <button type="button" className="ghost" disabled={busy !== null} onClick={() => void randomize()}>
-            {busy === 'cast' ? 'Casting…' : '🎲 Randomize'}
+            {busy === 'cast' ? <><Diamond className="diamond" aria-label="Casting" /> Casting…</> : '🎲 Randomize'}
           </button>
           <button type="button" className="ghost" disabled={busy !== null} onClick={() => edit(CLASSIC)}>
             Classic
           </button>
-          <button type="button" className="primary" disabled={busy !== null} onClick={() => void judge()}>
-            {busy === 'judge' ? 'Asking…' : live ? 'What would Jev do?' : 'What would the stub do?'}
+          <button type="button" className="primary" disabled={busy !== null || incomplete} title={incomplete ? 'Name your own entry first' : undefined} onClick={() => void judge()}>
+            {busy === 'judge' ? <><Diamond className="diamond" aria-label="Asking" /> Asking…</> : live ? 'What would Jev do?' : 'What would the stub do?'}
           </button>
         </div>
         {theme && <p className="muted dilemma-theme">Premise drawn by code: {THEMES[theme]}.</p>}
@@ -225,8 +293,18 @@ export default function TrolleyApp() {
 
       {notice && <p className="banner warn">{notice}</p>}
 
+      {busy === 'judge' && !verdict && (
+        <section className="panel verdict verdict-pending" aria-busy="true">
+          <header className="panel-head">
+            <h2>
+              <Diamond className="diamond diamond-lg" /> {live ? 'Asking Jev…' : 'Working it out…'}
+            </h2>
+          </header>
+        </section>
+      )}
+
       {verdict && (
-        <section className={`panel verdict verdict-${verdict.decision}`} aria-live="polite">
+        <section className={`panel verdict ${busy === 'judge' ? 'is-stale' : ''} verdict-${verdict.decision}`} aria-live="polite">
           <header className="panel-head">
             <h2>{verdictText(verdict.decision, Math.max(verdict.pull, 1 - verdict.pull))}</h2>
             <span className={`tag ${verdict.source === 'jev' ? 'tag-live' : ''}`}>{verdict.source === 'jev' ? 'Jev' : 'offline stub'}</span>
@@ -242,9 +320,8 @@ export default function TrolleyApp() {
             <Meter label="How hard" value={verdict.difficulty} max={3} word={DIFFICULTY_WORDS[Math.round(Math.max(0, Math.min(3, verdict.difficulty)))]} />
             <Meter label="How absurd" value={verdict.absurdity} max={3} word={ABSURDITY_WORDS[Math.round(Math.max(0, Math.min(3, verdict.absurdity)))]} />
             <Meter label="Most people would pull" value={verdict.mostPeoplePull} max={1} word={`${Math.round(verdict.mostPeoplePull * 100)}%`} />
-            <p className="muted tally">
-              This session: lever pulled {tally.pulled}×, left alone {tally.spared}×.
-            </p>
+            {/* Keyed by the verdict so the little scene replays for every new decision. */}
+            <Outcome key={verdictCount} scenario={scenario} decision={verdict.decision} />
           </div>
         </section>
       )}
@@ -260,7 +337,7 @@ export default function TrolleyApp() {
           <select value={scenario.twist} onChange={(event) => edit({ ...scenario, twist: event.target.value as TwistId })}>
             {TWIST_IDS.map((twist) => (
               <option key={twist} value={twist}>
-                {short(TWISTS[twist])}
+                {TWISTS[twist]}
               </option>
             ))}
           </select>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { routeFor } from '../shell/route'
 import { groupPhrase, scenarioText, verdictText } from './describe'
 import { castOffline, judgeOffline } from './play'
-import { CLASSIC, THEME_IDS, parseScenario } from './schema'
+import { CLASSIC, ENTITIES, ENTITY_IDS, THEME_IDS, TWISTS, parseScenario } from './schema'
 
 describe('routes', () => {
   it('maps the three public paths, with or without a trailing slash', () => {
@@ -25,6 +25,21 @@ describe('trolley sentences are written by code', () => {
     expect(text).toContain('toward a stranger')
     expect(text).toContain('sticky')
     expect(verdictText('pull_lever', 0.9)).toMatch(/^Pull the lever/)
+  })
+
+  it('uses one set of words for the dropdown, the prose and what Jev is told', () => {
+    expect(ENTITIES.stranger).toBe('A stranger')
+    expect(ENTITIES.last_pizza).toBe('The last pizza on Earth')
+    expect(groupPhrase({ entity: 'last_pizza', count: 3, trait: 'plain' })).toBe('3 of the last pizzas on Earth')
+    for (const id of ENTITY_IDS) expect(groupPhrase({ entity: id, count: 1, trait: 'plain' })).toBe(ENTITIES[id].charAt(0).toLowerCase() + ENTITIES[id].slice(1))
+    expect(scenarioText({ ...CLASSIC, twist: 'livestreamed' })).toContain(TWISTS.livestreamed)
+  })
+
+  it('puts a visitor’s own entry into the prose', () => {
+    const own = { entity: 'custom' as const, custom: { label: 'rubber chicken', emoji: '🐔' }, trait: 'asleep' as const }
+    expect(groupPhrase({ ...own, count: 1 })).toBe('rubber chicken, fast asleep')
+    expect(groupPhrase({ ...own, count: 3 })).toBe('3 × rubber chicken, fast asleep')
+    expect(judgeOffline({ ...CLASSIC, siding: [{ ...own, count: 1 }] }).decision).toBe('pull_lever')
   })
 
   it('never describes harm', () => {
