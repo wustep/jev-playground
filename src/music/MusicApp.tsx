@@ -480,7 +480,7 @@ export default function MusicApp() {
               <SheetView score={score} engine={engine} playing={playing} accent={accent} onSeekBar={(index) => void seekBar(index)} />
             </section>
 
-            <PlanPanel plan={plan} score={score} decisions={generated.trace.decisions} edited={edited} onApply={setEditedPlan} />
+            <PlanPanel plan={plan} score={score} decisions={generated.trace.decisions} edited={edited} onApply={setEditedPlan} debug={debug} />
           </div>
 
           <section className="panel match-panel">
