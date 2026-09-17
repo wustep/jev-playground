@@ -126,9 +126,8 @@ export default function MusicApp() {
     void generate({ planner: 'heuristic' })
   }, [generate])
 
-  // Prewarm: once idle, plan one piece for every other style with the offline
-  // planner (milliseconds, no network) so the whole dial answers instantly.
-  // Live Jev is NOT prewarmed — six styles is ~110 requests per page load.
+  // Prewarm: offline stub first (instant dial), then one live Jev plan per style
+  // when the proxy is up so the dial stays instant after the first load finishes.
   useEffect(() => {
     let cancelled = false
     const idle = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 300))
@@ -144,6 +143,31 @@ export default function MusicApp() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    const planner = jev?.planner
+    if (!planner) return
+    let cancelled = false
+    ;(async () => {
+      for (const id of STYLE_IDS) {
+        if (cancelled) break
+        const existing = cacheRef.current.get(id)
+        if (existing?.trace.planner === 'jev' && existing.input.bars === 16) continue
+        const input: PlanInput = { style: id, bars: 16, pick: 'sample', brief: true, seed: newSeed() }
+        try {
+          const result = await planner.plan(input)
+          if (cancelled) break
+          const made: Generated = { ...result, input, notice: null }
+          cacheRef.current.set(id, made)
+        } catch {
+          // Leave the stub entry in place if a live plan fails.
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [jev])
 
   /** Dial click: show the cached piece at once; only plan when there is none that fits. */
   const chooseStyle = (id: StyleId) => {
@@ -161,7 +185,7 @@ export default function MusicApp() {
       setSeed(cached.input.seed)
       setGenerated(cached)
       setInstrument(cached.plan.defaultInstrument)
-      // The offline piece is on the stand; if Jev is the chosen planner, its version follows and replaces it.
+      // Prefer a cache hit that matches the active planner; otherwise plan (and replace the stub).
       if (cached.trace.planner === wanted) {
         setPendingStyle(null)
         return
@@ -405,25 +429,6 @@ export default function MusicApp() {
                 <button type="button" className={`primary play ${playing ? 'is-playing' : ''}`} onClick={() => (playing ? stop() : void play())} aria-pressed={playing}>
                   {playing ? 'Stop' : 'Play'}
                 </button>
-                <button
-                  type="button"
-                  className={`ghost icon-button ${saved ? 'is-saved' : ''}`}
-                  title={saved ? `Saved ${saved}` : 'Download MIDI'}
-                  aria-label={saved ? `Saved ${saved}` : 'Download MIDI'}
-                  onClick={() => {
-                    setSaved(downloadMidi(score, instrument))
-                    setTimeout(() => setSaved(null), 2500)
-                  }}
-                >
-                  {saved ? (
-                    <span aria-hidden="true">✓</span>
-                  ) : (
-                    <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true">
-                      <path d="M10 2.5a.75.75 0 0 1 .75.75v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V3.25A.75.75 0 0 1 10 2.5Z" />
-                      <path d="M3.5 13.25a.75.75 0 0 1 .75.75v1.5c0 .69.56 1.25 1.25 1.25h9c.69 0 1.25-.56 1.25-1.25v-1.5a.75.75 0 0 1 1.5 0v1.5A2.75 2.75 0 0 1 14.5 18h-9A2.75 2.75 0 0 1 2.75 15.5v-1.5a.75.75 0 0 1 .75-.75Z" />
-                    </svg>
-                  )}
-                </button>
                 <label className="switch">
                   <input type="checkbox" checked={loop} onChange={(event) => setLoop(event.target.checked)} />
                   <span>Loop</span>
@@ -442,6 +447,26 @@ export default function MusicApp() {
                 <span className={`audio-status ${audio.state}`} role="status">
                   {audioLabel}
                 </span>
+                <button
+                  type="button"
+                  className={`ghost icon-button push-right ${saved ? 'is-saved' : ''}`}
+                  title={saved ? `Saved ${saved}` : 'Download MIDI'}
+                  aria-label={saved ? `Saved ${saved}` : 'Download MIDI'}
+                  onClick={() => {
+                    setSaved(downloadMidi(score, instrument))
+                    setTimeout(() => setSaved(null), 2500)
+                  }}
+                >
+                  {saved ? (
+                    <span className="icon-check" aria-hidden="true">✓</span>
+                  ) : (
+                    <svg className="icon-download" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 3v12" />
+                      <path d="m7 10 5 5 5-5" />
+                      <path d="M5 21h14" />
+                    </svg>
+                  )}
+                </button>
               </div>
               <SheetView score={score} engine={engine} playing={playing} accent={accent} onSeekBar={(index) => void seekBar(index)} />
             </section>
