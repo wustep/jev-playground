@@ -1,30 +1,31 @@
 import type { MeterId } from '../../plan/schema'
-import { note, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
+import { note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from '../pitch'
 import type { Voice } from '../score'
+import { bassPartner, lowBass } from '../voiceLeading'
 
 // ── parallel planing ────────────────────────────────────────────────────────
 
 const FLOATING: Record<MeterId, RhythmBank> = {
   four_four: {
-    main: [[8, 4, 4], [6, 2, 8], [4, 4, 8]],
-    busy: [[4, 4, 4, 4], [4, 2, 2, 4, 4]],
-    sparse: [[8, 8], [12, 4]],
-    pause: [[4, 12]],
+    main: [[8, 4, 4], [6, 2, 8], [4, 4, 8], [-2, 6, 4, 4], [-2, 2, 4, 8]],
+    busy: [[4, 4, 4, 4], [4, 2, 2, 4, 4], [-2, 2, 2, 2, 4, 4]],
+    sparse: [[8, 8], [12, 4], [-4, 12]],
+    pause: [[4, 12], [-2, 14]],
     close: [[4, 12]],
   },
   three_four: {
-    main: [[8, 4], [4, 4, 4], [6, 2, 4]],
-    busy: [[4, 2, 2, 4], [2, 2, 4, 4]],
-    sparse: [[12], [8, 4]],
+    main: [[8, 4], [4, 4, 4], [6, 2, 4], [-2, 6, 4], [-2, 2, 4, 4]],
+    busy: [[4, 2, 2, 4], [2, 2, 4, 4], [-2, 2, 2, 2, 4]],
+    sparse: [[12], [8, 4], [-4, 8]],
     pause: [[4, 8]],
     close: [[4, 8]],
   },
   six_eight: {
-    main: [[6, 6], [4, 2, 6], [6, 4, 2]],
-    busy: [[4, 2, 4, 2], [2, 2, 2, 6]],
-    sparse: [[12], [6, 6]],
+    main: [[6, 6], [4, 2, 6], [6, 4, 2], [-2, 4, 6], [-2, 2, 2, 6]],
+    busy: [[4, 2, 4, 2], [2, 2, 2, 6], [-2, 2, 2, 4, 2]],
+    sparse: [[12], [6, 6], [-6, 6]],
     pause: [[6, 6]],
     close: [[6, 6]],
   },
@@ -39,20 +40,24 @@ export function parallelPlaning(bar: BarContext): BarNotes {
   // thirds stacked down through the palette scale — so the harmony slides in
   // parallel instead of resolving. On a whole-tone palette this yields
   // augmented triads for free; on a pentatonic one, open fourth-ish stacks.
+  // Which shape glides is a per-piece choice: stacked thirds (triads), a third
+  // with the octave (hollow "enriched unison"), or fourths (quartal).
+  const SHAPES = [[4, 2], [7, 2], [6, 3]]
+  const [lower, upper] = SHAPES[pieceChoice(bar, 'planing-shape', SHAPES.length)]
   const rungs = ladder(bar.scale, 40, 96)
   const right: Voice = slots.map((slot, k) => {
     const at = nearestIndex(rungs, midiOf(tops[k]))
-    const shape = [rungs[clamp(at - 4, 0, at)], rungs[clamp(at - 2, 0, at)], tops[k]]
+    const shape = [rungs[clamp(at - lower, 0, at)], rungs[clamp(at - upper, 0, at)], tops[k]]
     const unique = shape.filter((pitch, i) => shape.findIndex((other) => midiOf(other) === midiOf(pitch)) === i)
     return note(slot.start, slot.dur, unique, velocity + 2)
   })
 
   // Left hand: a deep open fifth that rings under the whole bar.
-  const register = bar.plan.role === 'contrast' ? 48 : 38
-  const root = nearestNote([bar.chord.root], bar.memory.bass ? midiOf(bar.memory.bass) : register, register - 6, register + 8)
+  const register = bar.role === 'contrast' ? 48 : 38
+  const root = lowBass(bar.chord, bar.memory.bass, register, register - 6, register + 8)
   bar.memory.bass = root
-  const fifth = nearestNote([bar.chord.core[2]], midiOf(root) + 7)
-  const pedalTone = bar.plan.role === 'climax' ? [root, fifth, nearestNote([bar.chord.root], midiOf(root) + 12)] : [root, fifth]
+  const fifth = bassPartner(bar.chord, root)
+  const pedalTone = bar.role === 'climax' ? [root, fifth, nearestNote([bar.chord.bass], midiOf(root) + 12)] : [root, fifth]
   const left: Voice = [note(0, meter.ticksPerBar, pedalTone, velocity - 8, { roll: true })]
   return { treble: [right], bass: [left] }
 }
@@ -66,17 +71,18 @@ export function washArpeggio(bar: BarContext): BarNotes {
 
   // Left hand opens the sweep with the classic wide spacing: root, fifth,
   // (octave,) tenth.
-  const root = nearestNote([bar.chord.root], bar.memory.bass ? midiOf(bar.memory.bass) : 40, 34, 46)
+  const root = lowBass(bar.chord, bar.memory.bass, 40, 34, 46)
   bar.memory.bass = root
   const [, third, fifth] = bar.chord.core
   const above = (pc: string, floor: number) => ladder([pc], floor + 1, floor + 13)[0] ?? nearestNote([pc], floor + 7)
-  const leftPitches = [root, above(fifth, midiOf(root))]
-  if (leftCount === 4) leftPitches.push(above(bar.chord.root, midiOf(leftPitches[1])))
-  leftPitches.push(above(third, midiOf(leftPitches[leftPitches.length - 1])))
+  const second = bar.chord.bass === fifth ? bar.chord.root : fifth
+  const leftPitches = [root, above(second, midiOf(root))]
+  if (leftCount === 4) leftPitches.push(above(bar.chord.bass, midiOf(leftPitches[1])))
+  leftPitches.push(above(third === bar.chord.bass ? fifth : third, midiOf(leftPitches[leftPitches.length - 1])))
 
   // Right hand carries on upward through every chord tone, colour tones included.
   const climb = ladder(bar.chord.pcs, midiOf(leftPitches[leftPitches.length - 1]) + 1, 100)
-  const busy = bar.plan.role === 'development' || bar.plan.role === 'climax'
+  const busy = bar.role === 'development' || bar.role === 'climax'
   const rightCount = half - leftCount
   const rising = climb.slice(0, rightCount)
 

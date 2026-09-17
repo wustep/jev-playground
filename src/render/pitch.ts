@@ -4,9 +4,14 @@
 
 import { Note } from 'tonal'
 
+const MIDI = new Map<string, number>()
+
 export function midiOf(note: string): number {
+  const known = MIDI.get(note)
+  if (known !== undefined) return known
   const midi = Note.midi(note)
   if (midi == null) throw new Error(`Not a pitch: ${note}`)
+  MIDI.set(note, midi)
   return midi
 }
 
@@ -20,8 +25,15 @@ export function tidyNote(note: string): string {
   return note.includes('##') || note.includes('bb') ? Note.simplify(note) : note
 }
 
+// Textures ask for the same few ladders thousands of times per piece; tonal's
+// name → MIDI parsing dominates the render otherwise.
+const LADDERS = new Map<string, readonly string[]>()
+
 /** Every note with one of `pcs` as pitch class within [lo, hi], ascending. */
 export function ladder(pcs: readonly string[], lo: number, hi: number): string[] {
+  const cacheKey = `${pcs.join(',')}|${lo}|${hi}`
+  const cached = LADDERS.get(cacheKey)
+  if (cached) return [...cached]
   const notes: { name: string; midi: number }[] = []
   for (const pc of pcs) {
     for (let octave = 0; octave <= 8; octave++) {
@@ -32,7 +44,10 @@ export function ladder(pcs: readonly string[], lo: number, hi: number): string[]
   }
   notes.sort((a, b) => a.midi - b.midi)
   // Enharmonic duplicates (B# / C) would stall stepwise motion; keep the first.
-  return notes.filter((n, i) => i === 0 || n.midi !== notes[i - 1].midi).map((n) => n.name)
+  const rungs = notes.filter((n, i) => i === 0 || n.midi !== notes[i - 1].midi).map((n) => n.name)
+  if (LADDERS.size > 4000) LADDERS.clear()
+  LADDERS.set(cacheKey, rungs)
+  return [...rungs]
 }
 
 /** Index of the ladder rung closest to `target` (ties resolve downward). */
@@ -53,6 +68,11 @@ export function nearestNote(pcs: readonly string[], target: number, lo = 0, hi =
   const rungs = ladder(pcs, lo, hi)
   if (rungs.length === 0) throw new Error(`No ${pcs.join('/')} between ${lo} and ${hi}`)
   return rungs[nearestIndex(rungs, target)]
+}
+
+/** Name a MIDI number for the page: sharps in sharp keys, flats otherwise. */
+export function spellMidi(midi: number, sharps: boolean): string {
+  return sharps ? Note.fromMidiSharps(midi) : Note.fromMidi(midi)
 }
 
 export const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value))

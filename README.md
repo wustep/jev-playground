@@ -1,13 +1,23 @@
-# Jev Playground / music
+# Jev Playground
 
 Can a **System One** model steer music across styles?
 
 [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) (TypeSafe's first System One model) doesn't generate text or notes — it makes fast, typed **classify / score / pick** decisions with calibrated probabilities. This playground tests whether that is enough to steer a composition:
 
-- **Jev** (or an offline stub behind the same interface) decides *only enum labels*: key, meter, texture, palette, tempo, dynamics, instrument, and per bar a chord, a phrase role and a melodic contour.
+- **Jev** (or an offline stub behind the same interface) decides *only enum labels*: the piece's character and form, key, meter, texture, palette, tempo, dynamics, instrument, and per bar a chord, a phrase role and a melodic contour.
 - **App code** expands that plan into notes, engraves it (VexFlow), plays it (smplr) and exports it (`.mid`).
 
 Styles on the dial: **Bach · Beethoven · Debussy · Philip Glass · Nahre Sol · Elijah Fox**.
+
+## Routes
+
+| Route | What |
+| --- | --- |
+| `/` | Landing page: links to the demos. |
+| `/music/` | The composer described below: Jev picks labels, code writes the notes. |
+| `/trolley/` | Absurd trolley problems. Put anyone or anything on either track (counts, traits, a twist), or **Randomize**; then ask what Jev would do. Jev makes typed decisions only — `trolley_cast` (Choices over closed tables, sampled by code) and `trolley_judge` (a decision Choice, difficulty and absurdity Scores, a “most people would pull” Noul). Every sentence is assembled by code (`src/trolley/describe.ts`). Clearly hypothetical; no harm is ever described. |
+
+One Vite entry; `src/main.tsx` switches on the path and lazy-loads each demo (the landing page and the trolley never download VexFlow). `vercel.json` rewrites `/music/*` and `/trolley/*` to `index.html` so direct visits and refreshes work. `?debug=1` works on both demos.
 
 ## Run
 
@@ -34,6 +44,13 @@ Copy `.env.example` → `.env.local`. **Nothing is required** — with no key th
 
 `/api/jev` is served by a Vercel function in production (`api/jev.ts`) and by a Vite middleware during `npm run dev` (`vite.config.ts`) — same handler (`server/jevHandler.ts`), so `TYPESAFE_API_KEY` in `.env.local` just works locally without `vercel dev`.
 
+### `/api/jev` hardening
+
+- **Allowlist, not a proxy.** The body must be one of six typed ops (music: `concept`, `globals`, `bar`, `score`; trolley: `trolley_cast`, `trolley_judge`), re-validated against the enums; the server builds the actual `state`/`questions`. Raw `state`/`questions` are rejected with 400.
+- **Rate limit.** 90 POSTs per minute per client IP (`JEV_RATE_LIMIT` overrides), keyed on `x-vercel-forwarded-for` / `x-real-ip` — headers Vercel's edge sets and a client can't forge. Over the limit: `429` + `Retry-After`. The counters are **in memory per function instance**, so on serverless this is best-effort: a cold start resets it and parallel instances count separately. That is enough to stop loops and casual abuse; a hard cap needs a shared store (Vercel KV / Upstash), which this project doesn't have configured.
+- **Nothing secret in responses.** The key is only ever sent upstream in the `Authorization` header. `GET` returns `{ available, model }` and no other env. Failed upstream calls return a generic message — never TypeSafe's response body; successful ones pass back only `model`, `answers`, `usage`.
+- 16 kB body cap, `GET`/`POST` only (`405` + `Allow`), `Cache-Control: no-store`. Covered by `server/jevHandler.test.ts`.
+
 On Vercel: `vercel env add TYPESAFE_API_KEY production`, then redeploy. The header chip flips from “Jev offline · stub” to “Jev connected”.
 
 ## Architecture: Jev vs renderer
@@ -57,7 +74,7 @@ On Vercel: `vercel env add TYPESAFE_API_KEY production`, then redeploy. The head
       └──▶ scoreToMidi()    @tonejs/midi                           midi/exportMidi.ts
 ```
 
-**Where plan JSON feeds the renderer:** one call, in `src/App.tsx`:
+**Where plan JSON feeds the renderer:** one call, in `src/music/MusicApp.tsx`:
 
 ```ts
 const score = useMemo(() => renderPlan(plan, generated.input.seed), [plan, generated])
@@ -71,19 +88,25 @@ const score = useMemo(() => renderPlan(plan, generated.input.seed), [plan, gener
 interface CompositionPlan {
   version: 1
   style: StyleId              // bach | beethoven | debussy | glass | nahre_sol | elijah_fox
-  key: KeyId                  // 18 keys, C_major … F_minor
+  character: CharacterId      // 12: lyrical_song, stormy_drama, dance_lilt, hypnotic_pulse … decided FIRST
+  form: FormId                // 11: period, sentence, spinning_out, additive_loop, mosaic_pairs …
+  key: KeyId                  // 21 keys, C_major … F_minor
   meter: MeterId              // four_four | three_four | six_eight
-  texture: TextureId          // 10 textures: chorale, two_voice_counterpoint, … lush_voicings
-  palette: PaletteId          // diatonic | chromatic_approach | pentatonic | whole_tone | modal
+  texture: TextureId          // 22 textures: chorale … toccata_perpetual, rolling_nocturne, bell_organum
+  palette: PaletteId          // diatonic | chromatic_approach | pentatonic | whole_tone | modal | modal_dark | blues
   tempo: TempoId              // largo … presto (bucketed bpm)
   dynamics: DynamicId         // pp … ff
-  dynamicShape: DynamicShapeId// steady | terraced | crescendo | decrescendo | arch | sudden_contrast
+  dynamicShape: DynamicShapeId// steady | terraced | crescendo | … | waves | late_surge | build_then_drop
   defaultInstrument: InstrumentId
-  bars: BarPlan[]             // 4 | 8 | 16 | 32 × { chord: ChordId (50 key-relative labels), role, contour }
+  bars: BarPlan[]             // 4 | 8 | 16 | 32 × { chord: ChordId (107 key-relative labels, inversions included), role (11), contour (9) }
 }
 ```
 
 Every option has a one-line musical description. The UI shows it; `JevPlanner` sends it as that option's Choice `criteria`. Descriptions never name a composer — connecting “Debussy” to `parallel_planing` is the judgment being tested (there's a unit test for that).
+
+`character` is what makes two generations of one style different *pieces* rather than reshuffles: it is decided first and every later decision is conditioned on it. `form` is a label for the phrase layout; code expands it into `bars[].role` (`src/plan/forms.ts`), and the roles are what the renderer reads.
+
+How each style's vocabulary was researched — scores, corpora, analyses, and for the two living pianists their own teaching — is in [`docs/STYLE_NOTES.md`](docs/STYLE_NOTES.md), as *learned → changed*.
 
 ### What Jev is asked (`src/planner/jev/requests.ts`)
 
@@ -91,21 +114,24 @@ Built against the public API (`POST https://api.typesafe.ai/v1/systemone`, [docs
 
 | # | Request | Questions | Why this shape |
 | --- | --- | --- | --- |
-| 1 | `globals` | 8 global Choices + bar count + bar roles for **both** 4-, 8-, 16-, and 32-bar forms (21 Choices) | Questions in one request run in parallel and can't see each other → fan out everything independent, speculatively; code reads the role set matching the chosen length. |
-| 2…N | `bar` ×4/8 | `chord` (50 options) + `contour` | Chords depend on each other, so they're asked sequentially with the progression-so-far in `state`. |
+| 1 | `concept` | `character` Choice (most typical) + one **Noul** per character (“is this a real part of their output?”) | Asked what is *most characteristic*, live Jev is — rightly — sure: Beethoven is C minor, block chords, allegro at 90–100 %, every time. Several characters apply at once, which is what Nouls are for; alone they are too flat, the Choice alone too peaked. Code combines them and draws one. |
+| 2 | `globals` | `form` + 8 global Choices + bar count, with the drawn character in `state` | Questions in one request run in parallel and can't see each other → fan out everything independent. Conditioning on one shared premise is what keeps the plan coherent (measured: Beethoven *lyrical song* → A♭ major, adagio, *p*; *playful wit* → 3/4 scherzo in D). |
+| 3…N | `bar` ×4/8/16/32 | `chord` (~85 labels valid in the key's mode) + `contour` | Chords depend on each other, so they're asked sequentially with the progression-so-far in `state`. |
 | opt. | `score` | one **Score** per style, levels low / medium / high | “How well does this plan match style X?” → `StyleMatchScore { match, confidence, raw }`. The plan's own `style` label is withheld from state. |
 
-Jev returns a full probability distribution per Choice. **Code owns the policy** (`src/planner/pick.ts`): `argmax`, or seeded `sample` from the (sharpened) distribution — so “Generate” gives variety without asking Jev to be random. (Bar roles are always argmax: they're asked in parallel, so their distributions are independent marginals, and sampling eight of those separately scrambles the phrase.) The *Style brief* toggle sends either just the style's name, or name + a prose description, to separate what Jev knows from what we told it.
+Bar roles are **not** asked. An earlier version asked one role Choice per bar, in parallel; each answer was a marginal that knew nothing of its neighbours and the argmax came back as “statement, development, half cadence ×4, cadence”. One `form` Choice, expanded by code, is coherent by construction and cut the fan-out from ~16k to ~3.7k input tokens.
+
+Jev returns a full probability distribution per Choice. **Code owns the policy** (`src/planner/pick.ts`): `argmax`, or seeded `sample` — nucleus sampling (the top 90 % of the mass, at face value) so “Generate” gives variety without asking Jev to be random and without a 1 % option hijacking the piece. Two more policies apply when sampling: a novelty weight keeps a progression moving (Jev likes to sit on the tonic through every restatement), and the final bar is always argmax (a piece that ends on V7 because a 40 % option came up just sounds broken). The debug trace always shows Jev's own numbers, not the policy-adjusted ones. The *Style brief* toggle sends either just the style's name, or name + a prose description, to separate what Jev knows from what we told it.
 
 The browser never posts raw state/questions to the proxy. It posts a small typed `JevOp`; the server re-validates it against the enums and rebuilds the request with the same pure functions, so `/api/jev` can't be used as an open relay for the key.
 
 ### The offline stub (`src/planner/HeuristicPlanner.ts`)
 
-Same interface, no network: samples hand-written per-style priors and progression/form templates (`src/plan/styles.ts`). It's the demo default and a baseline to compare Jev's choices against. If a live Jev call fails, the UI says so and shows the stub's plan — it never passes a stub plan off as Jev's.
+Same interface, no network, same order of decisions: a character (one of the style's archetypes — prelude, invention, chorale, sarabande, gigue, toccata for Bach), then globals from that archetype's priors, then bars. Harmony is assembled from a per-style grammar — two-bar heads, travelling units and tails, four-bar phrases lifted from real pieces, chord cycles, pedals, codas — by the chosen form's phrase slots, so eight bars come out of hundreds of combinations rather than three templates, and a returning `a` phrase really does return. A guard re-rolls anything whose roots spell I–V–vi–IV in any rotation. It's the demo default and a baseline to compare Jev's choices against. If a live Jev call fails, the UI says so and shows the stub's plan — it never passes a stub plan off as Jev's.
 
 ### The renderer (`src/render/`)
 
-`harmony.ts` resolves key-relative chord labels to spelled pitch classes via **tonal**; `voiceLeading.ts` (nearest-inversion voicings, inversion-aware bass, essential-tone selection) and `melody.ts` (contour-driven lines that snap to chord tones on strong positions and the palette scale on weak ones, stepwise runs, chromatic approach tones, motif-rhythm memory for restatements) are the small helpers; `textures/*` are the ten texture generators. `renderPlan.test.ts` renders every style × many seeds and every texture × meter with random labels, and asserts the output is always engravable.
+`harmony.ts` resolves key-relative chord labels to spelled pitch classes via **tonal** — including the bass note an inversion or pedal label dictates — and bends the melody scale toward chromatic chord tones; `voiceLeading.ts` (nearest-inversion voicings, bass handling, essential-tone selection) and `melody.ts` (contour-driven lines that snap to chord tones on strong positions and the palette scale on weak ones, stepwise runs, chromatic approach tones, and motif memory: a restatement over the statement's chord replays its tune; a `sequence` or `echo` bar reuses the previous bar's figure) are the small helpers; `textures/*` are the 22 texture generators, most of which pick one of several figures per piece from the seed. `renderPlan` then phrases each bar — a hairpin toward the next bar's level, metric accent and touch scaled by the piece's character. `renderPlan.test.ts` renders every style × many seeds and every texture × meter with random labels, and asserts the output is always engravable.
 
 ### Audio (`src/audio/engine.ts`)
 
@@ -124,19 +150,24 @@ One `AudioContext`, created on the first user gesture. Every instrument and the 
 
 ```
 api/jev.ts              Vercel function → server/jevHandler.ts
-server/jevHandler.ts    validate JevOp → build request → TypeSafe (key stays here)
+server/jevHandler.ts    rate limit → validate op (allowlist) → build request → TypeSafe (key stays here)
+server/rateLimit.ts     per-IP fixed window, in memory (best-effort on serverless)
+src/main.tsx            path switch: / · /music/ · /trolley/ (lazy chunks)
+src/landing/ src/shell/ landing page · route helper
+src/music/MusicApp.tsx  the composer page
+src/trolley/            schema (closed tables) · requests (typed ops) · describe (all sentences) · play (Jev + stub) · page
 src/plan/               schema (enums, plan, validation) · style briefs + stub priors
 src/planner/            Planner interface · HeuristicPlanner · JevPlanner · pick policy · jev/
 src/render/             renderPlan (the seam) · harmony · melody · voiceLeading · textures/
 src/sheet/              notation splitting (ticks → tied note values) · VexFlow drawing
 src/audio/ src/midi/    playback engine · MIDI export
-src/ui/ src/App.tsx     dial, transport, plan panel (editable JSON), match row, debug panel
+src/ui/                 sheet view, plan panel (editable JSON), debug panel
 ```
 
 Files imported by the serverless function use explicit `.js` import extensions (Node ESM); everything else is extensionless.
 
 ## Known limits (v0)
 
-- One harmony per bar; no modulation, pickups, tuplets or cross-bar ties.
-- Jev has not been exercised against a live key from this repo yet — request/response handling is tested against the documented contract with a fake transport, and the proxy path is verified up to TypeSafe's 401. Expect to tune question wording and the sampling temperature once real distributions are visible in the debug panel.
+- One harmony per bar; no modulation, pickups, tuplets or cross-bar ties. Three meters only — 2/4, 9/8 and 12/8 are the biggest gaps (see the end of `docs/STYLE_NOTES.md`).
+- Question wording and sampling policy were tuned against live Jev distributions for six styles on one afternoon; they are a starting point, not a calibration.
 - The stub's style-match score can only agree with its own priors; it's a plumbing baseline, not a judge.

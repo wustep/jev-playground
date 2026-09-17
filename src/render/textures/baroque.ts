@@ -1,6 +1,6 @@
 import { Note } from 'tonal'
 import type { MeterId } from '../../plan/schema'
-import { note, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank, type Slot } from '../context'
+import { note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank, type Slot } from '../context'
 import { MIRRORED, melodyPitches, stepwiseRun } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from '../pitch'
 import type { Voice } from '../score'
@@ -10,10 +10,10 @@ import { bassFor, essentialTones, leadVoicing, sortAscending } from '../voiceLea
 
 const SOPRANO: Record<MeterId, RhythmBank> = {
   four_four: {
-    main: [[4, 4, 4, 4], [4, 2, 2, 4, 4], [4, 4, 2, 2, 4]],
-    busy: [[2, 2, 2, 2, 4, 4], [4, 2, 2, 2, 2, 4]],
-    sparse: [[8, 4, 4], [4, 4, 8]],
-    pause: [[4, 4, 8]],
+    main: [[4, 4, 4, 4], [4, 2, 2, 4, 4], [4, 4, 2, 2, 4], [6, 2, 4, 4], [4, 4, 6, 2]],
+    busy: [[2, 2, 2, 2, 4, 4], [4, 2, 2, 2, 2, 4], [2, 2, 4, 2, 2, 4], [6, 2, 2, 2, 4]],
+    sparse: [[8, 4, 4], [4, 4, 8], [8, 8]],
+    pause: [[4, 4, 8], [6, 2, 8]],
     close: [[16]],
   },
   three_four: {
@@ -165,12 +165,15 @@ export function twoVoiceCounterpoint(bar: BarContext): BarNotes {
   }
 
   const asVoice = (pitches: string[], v: number): Voice => pitches.map((pitch, k) => note(k, 1, pitch, v))
-  if (bar.plan.role === 'climax') {
+  if (bar.role === 'climax') {
     const upper = runningLine(bar, RH.lo, RH.hi, 'upper', false)
     return { treble: [asVoice(upper, velocity + 4)], bass: [asVoice(parallelBelow(bar, upper, 9), velocity)] }
   }
-  // Hands trade the running figure every bar, like an invention's subject and answer.
-  const rightRuns = bar.index % 2 === 0
+  // Hands trade the running figure like an invention's subject and answer:
+  // every bar, or every two bars, starting in either hand (fixed per piece).
+  const every = pieceChoice(bar, 'invention-span', 2) + 1
+  const leftStarts = pieceChoice(bar, 'invention-start', 3) === 0
+  const rightRuns = (Math.floor(bar.index / every) % 2 === 0) !== leftStarts
   return rightRuns
     ? { treble: [asVoice(runningLine(bar, RH.lo, RH.hi, 'upper', false), velocity + 2)], bass: [walkingEighths(bar, LH.lo, LH.hi, 'lower', true)] }
     : { treble: [walkingEighths(bar, RH.lo + 4, RH.hi - 4, 'upper', false)], bass: [asVoice(runningLine(bar, LH.lo, LH.hi + 2, 'lower', true), velocity + 2)] }
@@ -178,16 +181,21 @@ export function twoVoiceCounterpoint(bar: BarContext): BarNotes {
 
 // ── broken-chord prelude ────────────────────────────────────────────────────
 
-const PRELUDE_GROUPS: Record<MeterId, { length: number; pattern: number[] }> = {
-  // indices: 0 bass · 1 tenor · 2–4 upper voices
-  four_four: { length: 8, pattern: [0, 1, 2, 3, 4, 2, 3, 4] },
-  three_four: { length: 12, pattern: [0, 1, 2, 3, 4, 3, 2, 3, 4, 3, 2, 3] },
-  six_eight: { length: 6, pattern: [0, 1, 2, 3, 4, 3] },
+/**
+ * indices: 0 bass · 1 tenor · 2–4 upper voices. The first 4/4 pattern is the
+ * C-major prelude's own (1-2-3-4-5-3-4-5, checked against the Mutopia
+ * encoding of BWV 846); the others are sibling figures so not every prelude
+ * is that prelude.
+ */
+const PRELUDE_GROUPS: Record<MeterId, { length: number; patterns: number[][] }> = {
+  four_four: { length: 8, patterns: [[0, 1, 2, 3, 4, 2, 3, 4], [0, 1, 2, 3, 4, 3, 2, 3], [0, 2, 1, 3, 2, 4, 3, 2], [0, 1, 4, 3, 2, 3, 4, 3]] },
+  three_four: { length: 12, patterns: [[0, 1, 2, 3, 4, 3, 2, 3, 4, 3, 2, 3], [0, 1, 2, 3, 4, 2, 3, 4, 2, 3, 4, 3]] },
+  six_eight: { length: 6, patterns: [[0, 1, 2, 3, 4, 3], [0, 2, 3, 4, 3, 2], [0, 1, 3, 2, 4, 3]] },
 }
 
 export function brokenChordPrelude(bar: BarContext): BarNotes {
   const { meter, velocity } = bar
-  const center = bar.plan.role === 'climax' ? 72 : bar.plan.role === 'contrast' ? 62 : 67
+  const center = bar.role === 'climax' ? 72 : bar.role === 'contrast' ? 62 : 67
   const upper = sortAscending(leadVoicing(essentialTones(bar.chord, 3), bar.memory.voicings.upper, center))
   bar.memory.voicings.upper = upper
   const low = bassFor(bar.chord, bar.memory.bass, { lo: 36, hi: 52, allowInversion: bar.index > 0 && !bar.isLast })
@@ -203,7 +211,10 @@ export function brokenChordPrelude(bar: BarContext): BarNotes {
   }
 
   const tones = [low, tenor, ...upper]
-  const { length, pattern } = PRELUDE_GROUPS[meter.id]
+  const { length, patterns } = PRELUDE_GROUPS[meter.id]
+  // The bar before the end breaks the figure into one free sweep, as the model does.
+  const sweep = bar.index === bar.count - 2 && bar.count > 4
+  const pattern = sweep ? Array.from({ length }, (_, k) => [0, 1, 2, 3, 4, 3, 2, 1][k % 8]) : patterns[pieceChoice(bar, 'prelude', patterns.length)]
   const treble: Voice = []
   const held: Voice = []
   const bassLine: Voice = []

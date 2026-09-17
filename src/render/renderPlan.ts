@@ -6,9 +6,9 @@
 //
 // Pure and deterministic: the same (plan, seed) always yields the same notes.
 
-import { DYNAMIC_IDS, TEMPO_BPM, type BarRoleId, type CompositionPlan, type DynamicId, type DynamicShapeId } from '../plan/schema'
+import { DYNAMIC_IDS, ROLE_BASE, TEMPO_BPM, type BarRoleId, type CharacterId, type CompositionPlan, type DynamicId, type DynamicShapeId } from '../plan/schema'
 import { rng } from '../planner/pick'
-import type { BarContext, RenderMemory } from './context'
+import { newMemory, type BarContext } from './context'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { clamp, midiOf } from './pitch'
 import { METER_INFO, type Bar, type Note, type Score, type TimedNote, type Voice } from './score'
@@ -32,8 +32,46 @@ function shapeOffset(shape: DynamicShapeId, index: number, count: number, role: 
       // Two-bar blocks: statement, then its echo a level down.
       return Math.floor(index / 2) % 2 === 0 ? 4 : -14
     case 'sudden_contrast':
-      return role === 'climax' || role === 'statement' ? 18 : role === 'cadence' ? 10 : -16
+      return role === 'climax' || role === 'statement' || role === 'surprise' ? 18 : role === 'cadence' ? 10 : -16
+    case 'waves':
+      // Two-bar breaths: in, out. The within-bar hairpin below joins them up.
+      return index % 2 === 0 ? -6 : 9
+    case 'late_surge':
+      return t < 0.62 ? -12 : -12 + ((t - 0.62) / 0.38) * 30
+    case 'build_then_drop':
+      return t < 0.75 ? -12 + (t / 0.75) * 30 : -16
   }
+}
+
+/** Dynamic inflection a role adds on top of the shape. */
+const ROLE_VELOCITY: Partial<Record<BarRoleId, number>> = { climax: 8, echo: -18, dissolve: -14, surprise: 6 }
+
+/**
+ * How a character is *played*, independent of which notes are written:
+ * how hard the metre is leaned on, how long short notes are held, and how
+ * even the touch is. Small numbers — this is feel, not composition.
+ */
+interface Feel {
+  /** Scales the metric accent (downbeat up, off-beats down). */
+  accent: number
+  /** Fraction of a short note's written length that sounds when the pedal is up. */
+  articulation: number
+  /** Peak random velocity deviation, in MIDI units. */
+  humanize: number
+}
+const FEEL: Record<CharacterId, Feel> = {
+  lyrical_song: { accent: 0.7, articulation: 1, humanize: 3 },
+  stormy_drama: { accent: 1.5, articulation: 0.9, humanize: 3 },
+  flowing_perpetual: { accent: 0.8, articulation: 0.96, humanize: 2 },
+  solemn_hymn: { accent: 0.6, articulation: 1, humanize: 2 },
+  dance_lilt: { accent: 1.6, articulation: 0.8, humanize: 3 },
+  playful_wit: { accent: 1.4, articulation: 0.55, humanize: 4 },
+  meditative_stillness: { accent: 0.3, articulation: 1, humanize: 3 },
+  hypnotic_pulse: { accent: 0.9, articulation: 0.92, humanize: 1 },
+  dreamy_haze: { accent: 0.4, articulation: 1, humanize: 4 },
+  heroic_bright: { accent: 1.4, articulation: 0.85, humanize: 2 },
+  warm_groove: { accent: 1.1, articulation: 0.9, humanize: 5 },
+  restless_searching: { accent: 1, articulation: 0.92, humanize: 4 },
 }
 
 function nearestDynamic(velocity: number): DynamicId {
@@ -66,22 +104,37 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   const key = keyInfo(plan.key)
   const texture = TEXTURE_RENDERERS[plan.texture]
   const rand = rng(seed ^ 0x9e3779b9)
-  const memory: RenderMemory = { lines: {}, voicings: {}, rhythms: {} }
+  // A second stream for touch, so adding expression never reshuffles the notes.
+  const touch = rng(seed ^ 0x51ed270b)
+  const feel = FEEL[plan.character]
+  const memory = newMemory()
   const chords = plan.bars.map((bar) => resolveChord(key, bar.chord))
   const baseVelocity = DYNAMIC_VELOCITY[plan.dynamics]
+  const velocities = plan.bars.map((barPlan, index) =>
+    clamp(baseVelocity + shapeOffset(plan.dynamicShape, index, plan.bars.length, barPlan.role) + (ROLE_VELOCITY[barPlan.role] ?? 0), 24, 118),
+  )
+
+  /** Phrase the bar: lean toward the next bar's level, lean on the metre, and never play two notes identically. */
+  const shape = (voice: Voice, index: number): Voice => {
+    const towards = (velocities[index + 1] ?? velocities[index]) - velocities[index]
+    return voice.map((n) => {
+      const onBeat = n.start % meter.beatTicks === 0
+      const metric = (n.start === 0 ? 3 : onBeat ? 1 : -2) * feel.accent
+      const hairpin = towards * (n.start / meter.ticksPerBar) * 0.6
+      const jitter = (touch() * 2 - 1) * feel.humanize
+      return { ...n, velocity: clamp(Math.round(n.velocity + metric + hairpin + jitter), 1, 127) }
+    })
+  }
 
   const bars: Bar[] = plan.bars.map((barPlan, index) => {
-    const role = barPlan.role
-    const velocity = clamp(
-      baseVelocity + shapeOffset(plan.dynamicShape, index, plan.bars.length, role) + (role === 'climax' ? 8 : 0),
-      24,
-      118,
-    )
+    const velocity = velocities[index]
     const context: BarContext = {
       index,
       count: plan.bars.length,
       isLast: index === plan.bars.length - 1,
       plan: barPlan,
+      role: ROLE_BASE[barPlan.role],
+      character: plan.character,
       chord: chords[index],
       next: chords[index + 1],
       scale: scaleFor(key, plan.palette, chords[index]),
@@ -97,8 +150,8 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       index,
       plan: barPlan,
       chordSymbol: chords[index].symbol,
-      treble: notes.treble.map((voice) => cleanVoice(voice, meter.ticksPerBar)).filter((voice) => voice.length > 0),
-      bass: notes.bass.map((voice) => cleanVoice(voice, meter.ticksPerBar)).filter((voice) => voice.length > 0),
+      treble: notes.treble.map((voice) => shape(cleanVoice(voice, meter.ticksPerBar), index)).filter((voice) => voice.length > 0),
+      bass: notes.bass.map((voice) => shape(cleanVoice(voice, meter.ticksPerBar), index)).filter((voice) => voice.length > 0),
       dynamic: nearestDynamic(velocity),
     }
   })
@@ -111,6 +164,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     bpm: TEMPO_BPM[plan.tempo],
     bars,
     pedal: PEDALLED.has(plan.texture),
+    articulation: feel.articulation,
   }
 }
 
@@ -143,7 +197,9 @@ export function timeline(score: Score, options: { sustain?: boolean } = {}): Tim
       for (const n of voice) {
         n.pitches.forEach((pitch, k) => {
           const time = barStart + n.start * tick + (n.roll ? k * ROLL_SPREAD : 0)
-          const written = n.dur * tick * 0.96
+          // Character touch: short notes are clipped (staccato wit) or held (legato song); long ones always sing.
+          const held = n.dur <= score.meter.beatTicks / 2 ? score.articulation : Math.max(score.articulation, 0.9)
+          const written = n.dur * tick * 0.96 * held
           const duration = sustain ? Math.max(written, barEnd - time + 0.15) : written
           out.push({ midi: midiOf(pitch), time, duration, velocity: n.velocity, bar: bar.index, hand })
         })

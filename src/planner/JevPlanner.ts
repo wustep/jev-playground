@@ -1,25 +1,33 @@
 // Live planner: every field of the CompositionPlan is a Jev Choice answer.
 //
-//   request 1      globals + bar count + speculative bar roles   (one fan-out)
-//   requests 2..N  one per bar: chord + contour, with the progression so far
+//   request 1      the CHARACTER of the piece: most typical (Choice) + which ones
+//                  this composer writes at all (one Noul each); code combines them
+//   request 2      form + globals, given that character            (fan-out)
+//   requests 3..N  one per bar: chord + contour, with the progression so far
 //                  in state, because chords must see each other
 //   score()        one request, one Score question per style
+//
+// Bar roles are not asked: they are the chosen form, expanded by code
+// (src/plan/forms.ts).
 //
 // Jev returns a full probability distribution for every Choice; `pick.ts`
 // decides (argmax or seeded sampling) — code owns the policy, Jev the judgment.
 
 import {
-  BAR_COUNTS,
-  BAR_ROLES,
+  BAR_ROLE_IDS,
+  CHARACTERS,
+  CHARACTER_IDS,
   CHORDS,
   CONTOURS,
   GLOBAL_FIELDS,
   GLOBAL_FIELD_IDS,
   MATCH_LEVELS,
   parseOption,
+  type BarCount,
   type BarPlan,
-  type BarRoleId,
+  type CharacterId,
   type ChordId,
+  type FormId,
   type CompositionPlan,
   type GlobalField,
   type OptionTable,
@@ -27,10 +35,16 @@ import {
   type StyleId,
   type StyleMatchScore,
 } from '../plan/schema'
+import { formRoles } from '../plan/forms'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
-import { pickFrom, rng } from './pick'
-import { buildRequest, roleQuestionId, scoreQuestionId, type JevOp } from './jev/requests'
+import { marginConfidence, normalize, pickFrom, rng, withNovelty } from './pick'
+import { buildRequest, characterQuestionId, scoreQuestionId, type JevOp } from './jev/requests'
 import { callSystemOne, DEFAULT_MODEL, type Answer, type ChoiceAnswer, type SystemOneResponse } from './jev/systemOne'
+
+/** noul ** this: 0.95 → 0.81, 0.75 → 0.32, 0.5 → 0.06, 0.2 → 0.002. */
+const PLAUSIBILITY_SHARPNESS = 4
+/** Added to the Choice probability, so that characters Jev did not name "most typical" still get drawn. */
+const TYPICALITY_FLOOR = 0.5
 
 /** Sends one op to Jev, however it gets there. */
 export type JevTransport = (op: JevOp, signal?: AbortSignal) => Promise<SystemOneResponse>
@@ -103,32 +117,54 @@ export class JevPlanner implements Planner {
       id: string,
       field: string,
       table: OptionTable<K>,
+      /** Code-side policy applied to Jev's distribution before the draw (sampling only). */
+      adjust?: (probabilities: Record<K, number>) => Record<K, number>,
       policy: PlanInput['pick'] = input.pick,
     ): K => {
       const answer = choiceAnswer(answers, id)
-      const picked = parseOption(table, pickFrom(answer.probabilities, policy, random), `jev.${id}`)
+      const given = answer.probabilities as Record<K, number>
+      const used = adjust && policy === 'sample' ? adjust(given) : given
+      const picked = parseOption(table, pickFrom(used, policy, random), `jev.${id}`)
+      // The trace always shows what Jev said, not what policy made of it.
       decisions.push({ field, choice: picked, confidence: answer.confidence, probabilities: answer.probabilities })
       options?.onProgress?.([...decisions])
       return picked
     }
 
-    // 1 ─ globals, length and roles in a single fan-out
-    const first = await ask('globals + roles', { op: 'globals', style: input.style, brief: input.brief })
-    const globals = {} as Record<GlobalField, string>
-    for (const field of GLOBAL_FIELD_IDS) {
-      globals[field] = decide(first, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
-    }
-    const barCount = input.bars === 'auto' ? (Number(decide(first, 'barCount', 'barCount', BAR_COUNTS)) as 4 | 8 | 16 | 32) : input.bars
-    // Roles were asked in parallel, so each distribution is a marginal that
-    // knows nothing of its neighbours. Sampling eight of those independently
-    // scrambles the phrase (a cadence in bar 2); take the argmax form and let
-    // the variety come from the globals and the sequential chords instead.
-    const roles: BarRoleId[] = []
-    for (let i = 0; i < barCount; i++) {
-      roles.push(decide(first, roleQuestionId(barCount, i), `bars[${i}].role`, BAR_ROLES, 'argmax'))
-    }
+    // 1 ─ what kind of piece. Jev says which character is most typical (a Choice) and, separately,
+    // which characters this composer writes at all (a Noul each). Policy, in code: a character's
+    // weight is its plausibility, sharpened, times its typicality plus a constant — so the signature
+    // character leads without monopolising, and a foreign one (noul ≈ 0.2) all but never comes up.
+    const concept = await ask('character', { op: 'concept', style: input.style, brief: input.brief })
+    const typical = choiceAnswer(concept, 'character').probabilities
+    const plausibility = normalize(
+      Object.fromEntries(
+        CHARACTER_IDS.map((id) => {
+          const answer = concept[characterQuestionId(id)]
+          if (!answer || answer.type !== 'noul') throw new Error(`Jev response is missing noul answer "${characterQuestionId(id)}"`)
+          return [id, answer.noul ** PLAUSIBILITY_SHARPNESS * ((typical[id] ?? 0) + TYPICALITY_FLOOR)]
+        }),
+      ) as Record<CharacterId, number>,
+    )
+    const character = parseOption(CHARACTERS, pickFrom(plausibility, input.pick, random), 'jev.character')
+    decisions.push({ field: 'character', choice: character, confidence: marginConfidence(plausibility), probabilities: plausibility })
+    options?.onProgress?.([...decisions])
 
-    // 2 ─ chords, sequentially: each bar sees the ones before it
+    // 2 ─ form and globals in a single fan-out, all conditioned on that character
+    const second = await ask('globals + form', { op: 'globals', style: input.style, brief: input.brief, character })
+    const globals = { character } as Record<GlobalField, string>
+    for (const field of GLOBAL_FIELD_IDS) {
+      if (field === 'character') continue
+      globals[field] = decide(second, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
+    }
+    const barCount: BarCount = input.bars
+    // Roles are the form, expanded by code: coherent by construction.
+    const roles = formRoles(globals.form as FormId, barCount)
+    roles.forEach((role, i) => {
+      decisions.push({ field: `bars[${i}].role`, choice: role, confidence: 1, probabilities: normalize(Object.fromEntries(BAR_ROLE_IDS.map((id) => [id, id === role ? 1 : 0]))) })
+    })
+
+    // 3 ─ chords, sequentially: each bar sees the ones before it
     const chords: ChordId[] = []
     const bars: BarPlan[] = []
     for (let index = 0; index < barCount; index++) {
@@ -141,7 +177,12 @@ export class JevPlanner implements Planner {
         chords: [...chords],
         index,
       })
-      const chord = decide(answers, 'chord', `bars[${index}].chord`, CHORDS)
+      // Policy: keep a sampled progression moving (Jev likes to sit on the tonic through
+      // every restatement) — except where sitting still IS the point: the close, an echo.
+      const isLast = index === barCount - 1
+      const settles = isLast || roles[index] === 'cadence' || roles[index] === 'echo'
+      // The last chord is never a dice roll: a piece that ends on V7 because a 40 % option came up just sounds broken.
+      const chord = decide(answers, 'chord', `bars[${index}].chord`, CHORDS, settles ? undefined : (given) => withNovelty(given, chords), isLast ? 'argmax' : input.pick)
       const contour = decide(answers, 'contour', `bars[${index}].contour`, CONTOURS)
       chords.push(chord)
       bars.push({ chord, role: roles[index], contour })

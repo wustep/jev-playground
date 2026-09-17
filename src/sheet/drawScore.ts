@@ -12,6 +12,7 @@ import {
   Beam,
   Dot,
   Formatter,
+  Metrics,
   Modifier,
   Renderer,
   Stave,
@@ -39,6 +40,8 @@ export interface BarLayout {
 export interface SheetLayout {
   width: number
   height: number
+  /** Engraving scale (< 1 on narrow screens). Layout numbers are already in CSS pixels. */
+  scale: number
   bars: BarLayout[]
 }
 
@@ -48,7 +51,28 @@ export interface SheetTheme {
   accent: string
 }
 
-const MARGIN_X = 14
+/** Side margin, in engraving pixels: generous on a desk, tighter where every pixel is a note. */
+const marginX = (width: number) => (width >= 720 ? 34 : 20)
+
+// VexFlow deep-clones (structuredClone) a small flat style / font record for
+// every element it creates — the single largest self-time in a profile of the
+// generate → sheet path (~10 % of engraving). A shallow copy is equivalent for
+// these flat records and an order of magnitude cheaper.
+{
+  const fonts = new Map<string, object>()
+  const styles = new Map<string, object>()
+  const fontInfo = Metrics.getFontInfo.bind(Metrics)
+  const style = Metrics.getStyle.bind(Metrics)
+  const copy = <T extends object>(cache: Map<string, object>, key: string, load: (key: string) => T): T => {
+    let value = cache.get(key) as T | undefined
+    if (!value) cache.set(key, (value = load(key)))
+    const out = { ...value } as Record<string, unknown>
+    for (const [k, v] of Object.entries(out)) if (Array.isArray(v)) out[k] = [...v]
+    return out as T
+  }
+  Metrics.getFontInfo = (key: string) => copy(fonts, key, fontInfo)
+  Metrics.getStyle = (key: string) => copy(styles, key, style)
+}
 const SYSTEM_TOP = 46 // room above the treble staff for chord symbols
 const STAFF_GAP = 96
 const SYSTEM_HEIGHT = 292
@@ -121,8 +145,18 @@ function barDensity(bar: Bar, meter: MeterInfo): number {
 function chooseBarsPerSystem(score: Score, width: number, firstBarExtra: number): number {
   const busiest = Math.max(...score.bars.map((bar) => barDensity(bar, score.meter)))
   const minBarWidth = Math.min(360, Math.max(150, busiest * 19 + 44))
-  const fit = Math.floor((width - MARGIN_X * 2 - firstBarExtra) / minBarWidth)
+  const fit = Math.floor((width - marginX(width) * 2 - firstBarExtra) / minBarWidth)
   return [4, 2, 1].find((n) => n <= Math.max(1, fit)) ?? 1
+}
+
+/**
+ * Phones get the same engraving, drawn smaller: at full size a 16th-note bar
+ * needs ~350px, so a 360px screen would squeeze one cramped bar per system.
+ */
+export function sheetScale(width: number): number {
+  if (width >= 720) return 1
+  if (width <= 420) return 0.68
+  return 0.68 + ((width - 420) / 300) * 0.32
 }
 
 /** Wait for VexFlow's bundled music + text fonts before the first draw. */
@@ -131,29 +165,34 @@ export async function sheetFontsReady(): Promise<void> {
   await Promise.allSettled([document.fonts.load('30px Bravura'), document.fonts.load('16px Academico')])
 }
 
-export function drawScore(canvas: HTMLCanvasElement, score: Score, width: number, theme: SheetTheme): SheetLayout {
+export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: number, theme: SheetTheme): SheetLayout {
   const { meter } = score
+  // Everything below is laid out in "engraving pixels"; the canvas is scaled
+  // once, and the returned layout is converted back to CSS pixels at the end.
+  const scale = sheetScale(cssWidth)
+  const width = cssWidth / scale
   const signatureWidth = 54 + keySignatureWidth(score.keySignature)
   const barsPerSystem = chooseBarsPerSystem(score, width, signatureWidth + 30)
   const systemCount = Math.ceil(score.bars.length / barsPerSystem)
   const height = systemCount * SYSTEM_HEIGHT + 8
 
   const renderer = new Renderer(canvas, Renderer.Backends.CANVAS)
-  renderer.resize(width, height)
+  renderer.resize(cssWidth, Math.ceil(height * scale))
   const context = renderer.getContext()
+  context.scale(scale, scale)
   context.setFillStyle(theme.ink)
   context.setStrokeStyle(theme.ink)
   const pen = canvas.getContext('2d')!
 
-  const layout: SheetLayout = { width, height, bars: [] }
+  const layout: SheetLayout = { width: cssWidth, height: Math.ceil(height * scale), scale, bars: [] }
   let lastDynamic: string | undefined
 
   for (let system = 0; system < systemCount; system++) {
     const bars = score.bars.slice(system * barsPerSystem, (system + 1) * barsPerSystem)
     const top = system * SYSTEM_HEIGHT + SYSTEM_TOP
     const lead = signatureWidth + (system === 0 ? 30 : 0)
-    const barWidth = (width - MARGIN_X * 2 - lead) / barsPerSystem
-    let x = MARGIN_X
+    const barWidth = (width - marginX(width) * 2 - lead) / barsPerSystem
+    let x = marginX(width)
 
     bars.forEach((bar, column) => {
       const first = column === 0
@@ -221,7 +260,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, width: number
       pen.fillText(bar.plan.chord, labelX + symbolWidth + 8, top - 5)
       pen.fillStyle = theme.muted
       pen.font = '500 10.5px "JetBrains Mono", ui-monospace, monospace'
-      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace('_', ' ')}`, labelX, top + STAFF_GAP + 134)
+      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace(/_/g, ' ')}`, labelX, top + STAFF_GAP + 134)
       if (bar.dynamic !== lastDynamic) {
         pen.fillStyle = theme.ink
         pen.font = 'italic 600 17px "Academico", "Fraunces", Georgia, serif'
@@ -233,6 +272,15 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, width: number
       x += staveWidth
     })
   }
+  if (scale !== 1) {
+    for (const bar of layout.bars) {
+      bar.x *= scale
+      bar.width *= scale
+      bar.top *= scale
+      bar.bottom *= scale
+      for (const anchor of bar.anchors) anchor.x *= scale
+    }
+  }
   return layout
 }
 
@@ -243,10 +291,15 @@ function prettyChord(symbol: string): string {
 
 function keySignatureWidth(signature: string): number {
   const SHARPS_OR_FLATS: Record<string, number> = {
-    C: 0, G: 1, D: 2, A: 3, E: 4, F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5,
-    Am: 0, Em: 1, Bm: 2, 'F#m': 3, Dm: 1, Gm: 2, Cm: 3, Fm: 4,
+    C: 0, G: 1, D: 2, A: 3, E: 4, B: 5, F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6,
+    Am: 0, Em: 1, Bm: 2, 'F#m': 3, 'C#m': 4, Dm: 1, Gm: 2, Cm: 3, Fm: 4,
   }
   return (SHARPS_OR_FLATS[signature] ?? 3) * 11 + 6
+}
+
+/** The bar whose box contains a point (CSS pixels within the sheet), if any. */
+export function barAt(layout: SheetLayout, x: number, y: number): BarLayout | undefined {
+  return layout.bars.find((bar) => x >= bar.x && x <= bar.x + bar.width && y >= bar.top && y <= bar.bottom)
 }
 
 /** x position of the playhead for a tick offset inside a bar. */

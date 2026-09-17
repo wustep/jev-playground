@@ -5,7 +5,7 @@
 import { Note } from 'tonal'
 import type { ContourId } from '../plan/schema'
 import type { BarContext, Slot } from './context'
-import { clamp, ladder, midiOf, nearestIndex, nearestNote, tidyNote } from './pitch'
+import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 
 export interface MelodyOptions {
   lo: number
@@ -20,7 +20,20 @@ export interface MelodyOptions {
   contour?: ContourId
 }
 
-export const MIRRORED: Record<ContourId, ContourId> = { rise: 'fall', fall: 'rise', arch: 'dip', dip: 'arch', static: 'static' }
+export const MIRRORED: Record<ContourId, ContourId> = {
+  rise: 'fall',
+  fall: 'rise',
+  arch: 'dip',
+  dip: 'arch',
+  static: 'static',
+  wave: 'wave',
+  leap_fall: 'drop_rise',
+  drop_rise: 'leap_fall',
+  pendulum: 'pendulum',
+}
+
+/** Default semitone span of each contour (a climax bar stretches it). */
+const CONTOUR_SPAN: Record<ContourId, number> = { rise: 7, fall: 7, arch: 7, dip: 7, static: 2, wave: 6, leap_fall: 10, drop_rise: 10, pendulum: 10 }
 
 function contourOffset(contour: ContourId, t: number, span: number, k: number): number {
   switch (contour) {
@@ -34,6 +47,16 @@ function contourOffset(contour: ContourId, t: number, span: number, k: number): 
       return (0.35 - Math.sin(Math.PI * t)) * span
     case 'static':
       return k % 2 === 0 ? 0 : 2
+    case 'wave':
+      return Math.sin(2 * Math.PI * t) * span * 0.5
+    case 'leap_fall':
+      // Gap-fill: start low, leap, then walk back down through the gap.
+      return k === 0 ? -0.3 * span : (0.6 - t * 0.85) * span
+    case 'drop_rise':
+      return k === 0 ? 0.3 * span : (t * 0.85 - 0.6) * span
+    case 'pendulum':
+      // Compound melody: an upper and a lower voice taken turns, both drifting down a little.
+      return (k % 2 === 0 ? 0.45 : -0.45) * span - t * 2
   }
 }
 
@@ -42,7 +65,7 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
   const { lo, hi } = options
   const line = options.line ?? 'melody'
   const strongEvery = options.strongEvery ?? bar.meter.beatTicks
-  const role = bar.plan.role
+  const role = bar.role
   const contour = options.contour ?? bar.plan.contour
 
   const middle = (lo + hi) / 2 + (role === 'climax' ? 5 : role === 'contrast' ? -4 : 0)
@@ -50,15 +73,21 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
   // Continue from where the line left off, but drift back toward the middle
   // of the register so eight rising bars don't climb off the staff.
   const reference = last == null ? middle : last * 0.55 + middle * 0.45
-  const span = options.span ?? (contour === 'static' ? 2 : role === 'climax' ? 10 : 7)
+  const span = options.span ?? CONTOUR_SPAN[contour] + (role === 'climax' && contour !== 'static' ? 3 : 0)
 
   const chordRungs = ladder(bar.chord.core, lo, hi)
   const scaleRungs = ladder(bar.scale, lo, hi)
   const isStrong = (slot: Slot) => slot.start % strongEvery === 0 || slot.dur >= bar.meter.beatTicks
 
-  const pitches: string[] = []
+  // Thematic return: a restatement over the statement's own chord replays its
+  // pitches (the rhythm already matches — see rhythmFor), so the tune comes
+  // back instead of a second, unrelated line with the same shape.
+  const motif = bar.memory.motifs[line]
+  const recalled = bar.plan.role === 'restatement' && motif && motif.chord === bar.chord.id && motif.pitches.length === slots.length && options.contour == null
+
+  const pitches: string[] = recalled ? [...motif.pitches] : []
   let previousDesired = reference
-  slots.forEach((slot, k) => {
+  if (!recalled) slots.forEach((slot, k) => {
     const t = slots.length === 1 ? 0.5 : slot.start / bar.meter.ticksPerBar
     const desired = clamp(reference + contourOffset(contour, t, span, k), lo, hi)
     const rungs = isStrong(slot) ? chordRungs : scaleRungs
@@ -72,12 +101,15 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
     pitches.push(rungs[index])
     previousDesired = desired
   })
+  if (bar.plan.role === 'statement' && !motif && options.contour == null) bar.memory.motifs[line] = { chord: bar.chord.id, pitches: [...pitches] }
 
   // Closing bars land where the ear expects: the tonic if the chord has it.
   if ((role === 'cadence' || bar.isLast) && pitches.length > 0) {
     const tonic = bar.chord.pcs.find((pc) => Note.chroma(pc) === Note.chroma(bar.key.tonic))
     const around = midiOf(pitches[pitches.length - 2] ?? pitches[pitches.length - 1])
-    pitches[pitches.length - 1] = nearestNote([tonic ?? bar.chord.root], around, lo, hi)
+    // A register narrower than an octave may not contain the tonic at all; then the line stays where it is.
+    const landing = ladder([tonic ?? bar.chord.root], lo, hi)
+    if (landing.length > 0) pitches[pitches.length - 1] = landing[nearestIndex(landing, around)]
   }
 
   if (bar.palette === 'chromatic_approach') {

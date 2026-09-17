@@ -5,6 +5,7 @@ import {
   PlanValidationError,
   parsePlan,
   type CompositionPlan,
+  type ContourId,
   type GlobalField,
 } from '../plan/schema'
 import type { Decision } from '../planner'
@@ -12,6 +13,8 @@ import { keyInfo } from '../render/harmony'
 import type { Score } from '../render/score'
 
 const FIELD_LABEL: Record<GlobalField, string> = {
+  character: 'Character',
+  form: 'Form',
   key: 'Key',
   meter: 'Meter',
   texture: 'Texture',
@@ -100,7 +103,8 @@ export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
         })}
       </dl>
 
-      <ol className="bar-strip" data-cols={String(plan.bars.length <= 4 ? plan.bars.length : plan.bars.length <= 8 ? 4 : 8)} style={{ gridTemplateColumns: `repeat(${plan.bars.length <= 4 ? plan.bars.length : plan.bars.length <= 8 ? 4 : 8}, 1fr)` }}>
+      {/* Column count lives in CSS (4, or 8 for long plans on wide screens) so narrow screens can override it. */}
+      <ol className="bar-strip" data-cols={plan.bars.length <= 8 ? '4' : '8'}>
         {plan.bars.map((bar, i) => {
           const decision = edited ? undefined : byField.get(`bars[${i}].chord`)
           return (
@@ -108,7 +112,7 @@ export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
               <span className="bar-number">{i + 1}</span>
               <span className="bar-chord">{bar.chord}</span>
               <span className="bar-symbol">{score.bars[i]?.chordSymbol}</span>
-              <span className="bar-role">{bar.role.replace('_', ' ')}</span>
+              <span className="bar-role">{bar.role.replace(/_/g, ' ')}</span>
               <span className="bar-contour">{CONTOUR_GLYPH[bar.contour]}</span>
               <Confidence value={decision?.confidence} />
             </li>
@@ -118,7 +122,10 @@ export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
 
       <details className="plan-json" open>
         <summary>
-          Plan JSON <span className="muted">— this object is all the renderer sees. Edit it and apply.</span>
+          Plan JSON{' '}
+          <span className="muted">
+            — this object is all the renderer sees. Edit it and apply. (<code>form</code> is the planner’s label for the layout; the renderer reads each bar’s <code>role</code>.)
+          </span>
         </summary>
         <textarea
           value={draft}
@@ -153,4 +160,4 @@ export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
   )
 }
 
-const CONTOUR_GLYPH = { rise: '↗', fall: '↘', arch: '∩', dip: '∪', static: '→' } as const
+const CONTOUR_GLYPH: Record<ContourId, string> = { rise: '↗', fall: '↘', arch: '∩', dip: '∪', static: '→', wave: '∿', leap_fall: '⤴↘', drop_rise: '⤵↗', pendulum: '⇅' }

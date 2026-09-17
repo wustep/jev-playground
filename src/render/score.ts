@@ -60,6 +60,8 @@ export interface Score {
   bars: Bar[]
   /** Hold the sustain pedal through each bar (playback + MIDI CC64). */
   pedal: boolean
+  /** 0–1: how much of a short note's written length sounds (the character's touch). */
+  articulation: number
 }
 
 /** A sounding note with absolute timing, for playback and MIDI export. */

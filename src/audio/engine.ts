@@ -72,6 +72,12 @@ interface Playback {
   onEnd: () => void
 }
 
+/** Index of the first note sounding at or after `seconds` (notes are sorted by time). */
+function firstNoteAt(notes: readonly TimedNote[], seconds: number): number {
+  const index = notes.findIndex((n) => n.time >= seconds - 1e-6)
+  return index === -1 ? notes.length : index
+}
+
 export class AudioEngine {
   private context?: AudioContext
   private master?: GainNode
@@ -183,16 +189,19 @@ export class AudioEngine {
 
   // ── transport ─────────────────────────────────────────────────────────────
 
-  async play(score: Score, instrument: InstrumentId, options: { loop: boolean; onEnd: () => void }): Promise<void> {
+  /** `from` = seconds into the piece to start at (a bar the listener clicked). */
+  async play(score: Score, instrument: InstrumentId, options: { loop: boolean; onEnd: () => void; from?: number }): Promise<void> {
     this.stop()
     await this.setInstrument(instrument)
     const context = this.context
     if (!context || this.disposed) return
     if (context.state === 'suspended') await context.resume()
+    const notes = timeline(score)
+    const from = Math.max(0, Math.min(options.from ?? 0, scoreDuration(score) - 0.01))
     this.playback = {
-      notes: timeline(score),
-      cursor: 0,
-      startedAt: context.currentTime + START_DELAY,
+      notes,
+      cursor: firstNoteAt(notes, from),
+      startedAt: context.currentTime + START_DELAY - from,
       duration: scoreDuration(score),
       loop: options.loop,
       laps: 0,
@@ -200,6 +209,25 @@ export class AudioEngine {
     }
     this.timer = setInterval(() => this.pump(), WAKE_MS)
     this.pump()
+  }
+
+  /** Jump to `seconds` into the piece while playing. Returns false when nothing is playing. */
+  seek(seconds: number): boolean {
+    const { context, playback } = this
+    if (!context || !playback) return false
+    const to = Math.max(0, Math.min(seconds, playback.duration - 0.01))
+    // Nothing is queued beyond LOOKAHEAD, so silencing the voices clears the old position.
+    for (const sampler of this.samplers.values()) {
+      try {
+        sampler.stop()
+      } catch {
+        /* already disposed */
+      }
+    }
+    playback.cursor = firstNoteAt(playback.notes, to)
+    playback.startedAt = context.currentTime + START_DELAY - to
+    this.pump()
+    return true
   }
 
   setLoop(loop: boolean) {

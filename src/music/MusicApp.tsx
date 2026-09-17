@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { AudioEngine, type EngineStatus } from './audio/engine'
-import { downloadMidi } from './midi/exportMidi'
-import { INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type CompositionPlan, type InstrumentId, type StyleId } from './plan/schema'
-import { detectJev, heuristicPlanner, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from './planner'
-import { shadowExchanges } from './planner/HeuristicPlanner'
-import { renderPlan, scoreDuration } from './render/renderPlan'
-import { DebugPanel } from './ui/DebugPanel'
-import { Confidence, PlanPanel } from './ui/PlanPanel'
-import { SheetView } from './ui/SheetView'
-import { STYLE_THEME } from './ui/styleTheme'
+import { AudioEngine, type EngineStatus } from '../audio/engine'
+import { downloadMidi } from '../midi/exportMidi'
+import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from '../plan/schema'
+import { detectJev, heuristicPlanner, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from '../planner'
+import { shadowExchanges } from '../planner/HeuristicPlanner'
+import { renderPlan, secondsPerTick } from '../render/renderPlan'
+import { DebugPanel } from '../ui/DebugPanel'
+import { Confidence, PlanPanel } from '../ui/PlanPanel'
+import { SheetView } from '../ui/SheetView'
+import { STYLE_THEME } from '../ui/styleTheme'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
 
@@ -23,11 +23,11 @@ interface Generated extends PlanResult {
   notice: string | null
 }
 
-export function App() {
+export default function MusicApp() {
   const [style, setStyle] = useState<StyleId>('bach')
   const [plannerChoice, setPlannerChoice] = useState<PlannerId>('heuristic')
   const [jev, setJev] = useState<JevAvailability | null>(null)
-  const [bars, setBars] = useState<PlanInput['bars']>('auto')
+  const [bars, setBars] = useState<BarCount>(16)
   const [pick, setPick] = useState<PlanInput['pick']>('sample')
   const [brief, setBrief] = useState(true)
   const [seed, setSeed] = useState(newSeed)
@@ -70,6 +70,10 @@ export function App() {
   }, [])
 
   const abortRef = useRef<AbortController | null>(null)
+  // One finished piece per style, in memory: clicking through the dial shows it
+  // at once. Generate replaces the entry; a change of length or planner misses it.
+  const cacheRef = useRef(new Map<StyleId, Generated>())
+  const [pendingStyle, setPendingStyle] = useState<StyleId | null>(null)
 
   const generate = useCallback(
     async (overrides: Partial<PlanInput> & { planner?: PlannerId } = {}) => {
@@ -84,6 +88,7 @@ export function App() {
       setPlaying(false)
       setError(null)
       setProgress([])
+      setPendingStyle(input.style)
       let result: PlanResult
       let notice: string | null = null
       try {
@@ -92,6 +97,7 @@ export function App() {
         if (abort.signal.aborted) return
         if (planner === heuristicPlanner) {
           setProgress(null)
+          setPendingStyle(null)
           setError(cause instanceof Error ? cause.message : String(cause))
           return
         }
@@ -100,10 +106,13 @@ export function App() {
         result = await heuristicPlanner.plan(input)
       }
       if (abort.signal.aborted) return
+      const made: Generated = { ...result, input, notice }
+      cacheRef.current.set(input.style, made)
       setProgress(null)
+      setPendingStyle(null)
       setEditedPlan(null)
       setMatches(null)
-      setGenerated({ ...result, input, notice })
+      setGenerated(made)
       setInstrument(result.plan.defaultInstrument)
     },
     [style, bars, pick, brief, seed, plannerChoice, jev, engine],
@@ -116,6 +125,52 @@ export function App() {
     bootedRef.current = true
     void generate({ planner: 'heuristic' })
   }, [generate])
+
+  // Prewarm: once idle, plan one piece for every other style with the offline
+  // planner (milliseconds, no network) so the whole dial answers instantly.
+  // Live Jev is NOT prewarmed — six styles is ~110 requests per page load.
+  useEffect(() => {
+    let cancelled = false
+    const idle = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 300))
+    idle(async () => {
+      for (const id of STYLE_IDS) {
+        if (cancelled || cacheRef.current.has(id)) continue
+        const input: PlanInput = { style: id, bars: 16, pick: 'sample', brief: true, seed: newSeed() }
+        const result = await heuristicPlanner.plan(input)
+        if (!cancelled && !cacheRef.current.has(id)) cacheRef.current.set(id, { ...result, input, notice: null })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  /** Dial click: show the cached piece at once; only plan when there is none that fits. */
+  const chooseStyle = (id: StyleId) => {
+    setStyle(id)
+    const wanted = plannerChoice === 'jev' && jev?.planner ? 'jev' : 'heuristic'
+    const cached = cacheRef.current.get(id)
+    if (cached && cached.input.bars === bars) {
+      abortRef.current?.abort()
+      engine.stop()
+      setPlaying(false)
+      setProgress(null)
+      setError(null)
+      setEditedPlan(null)
+      setMatches(null)
+      setSeed(cached.input.seed)
+      setGenerated(cached)
+      setInstrument(cached.plan.defaultInstrument)
+      // The offline piece is on the stand; if Jev is the chosen planner, its version follows and replaces it.
+      if (cached.trace.planner === wanted) {
+        setPendingStyle(null)
+        return
+      }
+    }
+    const next = newSeed()
+    setSeed(next)
+    void generate({ style: id, seed: next })
+  }
 
   const plan = editedPlan ?? generated?.plan ?? null
 
@@ -146,6 +201,22 @@ export function App() {
       setPlaying(false)
     }
   }, [engine, score, instrument, loop])
+
+  /** A click on bar N: jump there if sounding, otherwise start playing from there. */
+  const seekBar = useCallback(
+    async (index: number) => {
+      if (!score) return
+      const from = index * score.meter.ticksPerBar * secondsPerTick(score)
+      if (engine.seek(from)) return
+      setPlaying(true)
+      try {
+        await engine.play(score, instrument, { loop, from, onEnd: () => setPlaying(false) })
+      } catch {
+        setPlaying(false)
+      }
+    },
+    [engine, score, instrument, loop],
+  )
 
   const stop = useCallback(() => {
     engine.stop()
@@ -190,6 +261,8 @@ export function App() {
 
   const accent = STYLE_THEME[plan?.style ?? style].accent
   const busy = progress !== null
+  // Decisions landed so far over the number a plan of this length makes (character + 9 globals + role/chord/contour per bar).
+  const planProgress = busy ? Math.min(1, (progress?.length ?? 0) / (10 + bars * 3)) : 0
   const edited = editedPlan !== null
   const exchanges = useMemo(
     () => (generated && plan ? (edited ? shadowExchanges(plan, generated.input.brief) : generated.trace.exchanges) : []),
@@ -210,11 +283,8 @@ export function App() {
       <header className="masthead">
         <div>
           <h1>
-            Jev Playground <span className="muted">/ music</span>
+            <a className="home-link" href="/">Jev Playground</a> <span className="muted">/ music</span>
           </h1>
-          <p className="lede">
-            Can a System One model steer music? The planner only picks <em>labels</em> — key, texture, chords, roles. Code writes every note.
-          </p>
         </div>
         <div className="masthead-side">
           <span className={`status-chip ${jev?.planner ? 'on' : ''}`} title={jev?.detail ?? 'Checking for a Jev key…'}>
@@ -235,28 +305,18 @@ export function App() {
             type="button"
             role="radio"
             aria-checked={style === id}
-            className={`dial-stop ${style === id ? 'selected' : ''}`}
-            style={{ '--stop': STYLE_THEME[id].accent } as CSSProperties}
-            onClick={() => {
-              const next = newSeed()
-              setStyle(id)
-              setSeed(next)
-              void generate({ style: id, seed: next })
-            }}
+            className={`dial-stop ${style === id ? 'selected' : ''} ${pendingStyle === id ? 'is-loading' : ''}`}
+            style={{ '--stop': STYLE_THEME[id].accent, '--progress': pendingStyle === id ? planProgress : 0 } as CSSProperties}
+            aria-busy={pendingStyle === id}
+            onClick={() => chooseStyle(id)}
           >
             <span className="dial-name">{STYLE_LABELS[id]}</span>
-            <span className="dial-tag">{STYLE_THEME[id].tagline}</span>
+            <span className="dial-tag">{pendingStyle === id ? (plannerChoice === 'jev' && jev?.planner ? `asking Jev… ${Math.round(planProgress * 100)}%` : 'planning…') : STYLE_THEME[id].tagline}</span>
           </button>
         ))}
       </div>
 
-      <form
-        className="controls"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void generate()
-        }}
-      >
+      <div className="controls">
         <label>
           Planner
           <select value={plannerChoice} onChange={(event) => setPlannerChoice(event.target.value as PlannerId)}>
@@ -268,96 +328,79 @@ export function App() {
         </label>
         <label className="control-bars">
           Bars
-          <select value={String(bars)} onChange={(event) => setBars(event.target.value === 'auto' ? 'auto' : (Number(event.target.value) as 4 | 8 | 16 | 32))}>
-            <option value="auto">planner decides</option>
-            <option value="4">4</option>
-            <option value="8">8</option>
-            <option value="16">16</option>
-            <option value="32">32</option>
+          <select value={bars} onChange={(event) => setBars(Number(event.target.value) as BarCount)}>
+            {BAR_COUNT_VALUES.map((count) => (
+              <option key={count} value={count}>
+                {count}
+              </option>
+            ))}
           </select>
-        </label>
-        <label title="argmax: always the most probable option. sample: draw from the returned distribution with the seed.">
-          Decide by
-          <select value={pick} onChange={(event) => setPick(event.target.value as PlanInput['pick'])}>
-            <option value="sample">sampling the distribution</option>
-            <option value="argmax">argmax</option>
-          </select>
-        </label>
-        <label title="Jev only: include a prose description of the style in state, or send just the name.">
-          Style brief
-          <select value={brief ? 'on' : 'off'} onChange={(event) => setBrief(event.target.value === 'on')}>
-            <option value="on">name + description</option>
-            <option value="off">name only</option>
-          </select>
-        </label>
-        <label>
-          Seed
-          <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
         </label>
         <div className="controls-actions">
-          <button type="submit" className="ghost" disabled={busy} title="Generate with exactly this seed">
-            Use seed
-          </button>
           <button
             type="button"
             className="primary"
             disabled={busy}
+            title="A new piece in this style (new seed)"
             onClick={() => {
               const next = newSeed()
               setSeed(next)
               void generate({ seed: next })
             }}
           >
-            {busy ? 'Planning…' : 'Generate plan'}
+            {busy ? 'Generating…' : 'Generate'}
           </button>
         </div>
-      </form>
+      </div>
 
-      <p className="flow-hint" aria-hidden={false}>
-        <span><b>1</b> Pick a style</span>
-        <span className="flow-arrow">→</span>
-        <span><b>2</b> Generate</span>
-        <span className="flow-arrow">→</span>
-        <span><b>3</b> Play / inspect</span>
-      </p>
+      {debug && (
+        <form
+          className="controls controls-advanced"
+          aria-label="Planner policy (debug)"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void generate()
+          }}
+        >
+          <label title="Both planners return a distribution per decision. argmax: always the most probable option. sample: draw from it with the seed.">
+            Decide by
+            <select value={pick} onChange={(event) => setPick(event.target.value as PlanInput['pick'])}>
+              <option value="sample">sampling the distribution</option>
+              <option value="argmax">argmax</option>
+            </select>
+          </label>
+          <label title="Jev only: include a prose description of the style in state, or send just the name.">
+            Style brief
+            <select value={brief ? 'on' : 'off'} onChange={(event) => setBrief(event.target.value === 'on')}>
+              <option value="on">name + description</option>
+              <option value="off">name only</option>
+            </select>
+          </label>
+          <label>
+            Seed
+            <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
+          </label>
+          <div className="controls-actions">
+            <button type="submit" className="ghost" disabled={busy} title="Regenerate with exactly this seed and these settings">
+              Re-run this seed
+            </button>
+          </div>
+        </form>
+      )}
 
+      {busy && progress && progress.length > 0 && (
+        <p className="banner" role="status">
+          Planning… {progress.length} decisions so far — last: <code>{progress[progress.length - 1].field}</code> ={' '}
+          <code>{progress[progress.length - 1].choice}</code>
+        </p>
+      )}
       {generated?.notice && <p className="banner warn">{generated.notice}</p>}
       {error && <p className="banner warn">{error}</p>}
 
       {generated && plan && score && (
         <>
-          <ol className="pipeline" aria-label="How this piece was made">
-            <li>
-              <b>“{STYLE_LABELS[plan.style]}”</b>
-              <span>style string</span>
-            </li>
-            <li>
-              <b>{generated.trace.planner === 'jev' ? 'Jev' : 'Heuristic stub'}</b>
-              <span>
-                {generated.trace.planner === 'jev'
-                  ? `${generated.trace.requests} requests · ${(generated.trace.latencyMs / 1000).toFixed(2)} s · ${generated.trace.inputTokens ?? 0} tok`
-                  : `offline · ${generated.trace.latencyMs.toFixed(1)} ms`}
-              </span>
-            </li>
-            <li>
-              <b>CompositionPlan</b>
-              <span>{generated.trace.decisions.length} enum decisions{edited ? ' · edited' : ''}</span>
-            </li>
-            <li>
-              <b>renderPlan()</b>
-              <span>
-                {score.bars.reduce((sum, bar) => sum + [...bar.treble, ...bar.bass].flat().reduce((n, note) => n + note.pitches.length, 0), 0)} notes ·{' '}
-                {scoreDuration(score).toFixed(1)} s
-              </span>
-            </li>
-            <li>
-              <b>Sheet · Audio · MIDI</b>
-              <span>VexFlow · smplr · @tonejs/midi</span>
-            </li>
-          </ol>
-
           <div className="workbench">
-            <section className="panel sheet-panel">
+            <section className={`panel sheet-panel ${busy ? 'is-stale' : ''}`} aria-busy={busy}>
               <div className="transport">
                 <button type="button" className={`primary play ${playing ? 'is-playing' : ''}`} onClick={() => (playing ? stop() : void play())} aria-pressed={playing}>
                   {playing ? 'Stop' : 'Play'}
@@ -391,7 +434,7 @@ export function App() {
                   {saved ? `Saved ${saved}` : 'Download MIDI'}
                 </button>
               </div>
-              <SheetView score={score} engine={engine} playing={playing} accent={accent} />
+              <SheetView score={score} engine={engine} playing={playing} accent={accent} onSeekBar={(index) => void seekBar(index)} />
             </section>
 
             <PlanPanel plan={plan} score={score} decisions={generated.trace.decisions} edited={edited} onApply={setEditedPlan} />
@@ -436,21 +479,6 @@ export function App() {
         </>
       )}
 
-      {busy && progress && progress.length > 0 && (
-        <p className="banner" role="status">
-          Planning… {progress.length} decisions so far — last: <code>{progress[progress.length - 1].field}</code> ={' '}
-          <code>{progress[progress.length - 1].choice}</code>
-        </p>
-      )}
-
-      <footer className="colophon">
-        <p>
-          <b>Split.</b> Jev (or the offline stub behind the same <code>Planner</code> interface) returns a <code>CompositionPlan</code> made only of fixed labels.{' '}
-          <code>renderPlan(plan, seed)</code> expands it into notes with tonal + small voice-leading helpers; VexFlow engraves, smplr plays through one AudioContext,
-          @tonejs/midi exports. Space bar plays/stops.
-        </p>
-        <p className="muted">{jev?.detail}</p>
-      </footer>
     </div>
   )
 }

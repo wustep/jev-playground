@@ -99,17 +99,6 @@ code {
   border-bottom: 2px solid var(--ink);
 }
 
-.lede {
-  margin: 8px 0 0;
-  max-width: 62ch;
-  color: #3d3a34;
-}
-
-.lede em {
-  font-family: var(--serif);
-  color: var(--accent);
-  font-style: italic;
-}
 
 .masthead-side {
   display: flex;
@@ -258,10 +247,11 @@ button.small {
 
 .dial-stop {
   height: auto;
+  min-height: 64px;
   border: 0;
   border-right: 1px solid var(--ink);
   border-top: 4px solid transparent;
-  padding: 12px 12px 13px;
+  padding: 14px 12px 15px;
   text-align: left;
   display: grid;
   gap: 2px;
@@ -283,7 +273,7 @@ button.small {
 
 .dial-name {
   font-family: var(--serif);
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 600;
 }
 
@@ -333,6 +323,20 @@ button.small {
   margin-left: auto;
 }
 
+.controls-actions .primary {
+  min-width: 132px;
+  height: 40px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+/* Policy knobs (decide-by, style brief, seed): only with Debug on. */
+.controls-advanced {
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+
 .banner {
   margin: 0;
   padding: 9px 12px;
@@ -347,58 +351,12 @@ button.small {
   background: color-mix(in srgb, var(--warn) 6%, var(--sheet));
 }
 
-/* ── pipeline strip ───────────────────────────────────────────────────────── */
-
-.pipeline {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-
-.pipeline li {
-  position: relative;
-  padding: 8px 14px 9px 20px;
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.pipeline li + li::before {
-  content: '→';
-  position: absolute;
-  left: -6px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.pipeline b {
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pipeline span {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ── panels ───────────────────────────────────────────────────────────────── */
 
 .workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 372px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 360px);
+  gap: 20px;
   align-items: start;
 }
 
@@ -442,7 +400,24 @@ button.small {
 }
 
 .transport .play {
-  min-width: 96px;
+  min-width: 108px;
+  height: 40px;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.transport .play:not(.is-playing)::before {
+  content: '▶ ';
+}
+
+.transport .play.is-playing::before {
+  content: '■ ';
+}
+
+.transport .push-right {
+  height: 40px;
+  font-weight: 600;
 }
 
 .push-right {
@@ -461,6 +436,10 @@ button.small {
 
 .audio-status.error {
   color: var(--warn);
+}
+
+.sheet-panel {
+  min-height: 320px;
 }
 
 .sheet-frame {
@@ -558,7 +537,12 @@ button.small {
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-bottom: 1px solid var(--ink);
+}
+
+.bar-strip[data-cols='8'] {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
 }
 
 .bar-cell {
@@ -571,7 +555,8 @@ button.small {
   min-width: 0;
 }
 
-.bar-cell:nth-child(4n) {
+.bar-strip:not([data-cols='8']) .bar-cell:nth-child(4n),
+.bar-strip[data-cols='8'] .bar-cell:nth-child(8n) {
   border-right: 0;
 }
 
@@ -637,6 +622,10 @@ button.small {
   min-height: 220px;
   max-height: 420px;
   resize: vertical;
+  font-family: var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
   border: 1px solid var(--line);
   background: #fff;
   padding: 8px 10px;
@@ -824,7 +813,11 @@ button.small {
   margin: 0;
   padding: 10px 12px;
   max-height: 380px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Long criteria strings wrap instead of forcing a sideways scroll. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   line-height: 1.5;
   background: #fff;
 }
@@ -836,21 +829,305 @@ button.small {
   font-size: 12px;
 }
 
-/* ── colophon ─────────────────────────────────────────────────────────────── */
+/* ── shell: landing, links ────────────────────────────────────────────────── */
 
-.colophon {
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-  font-size: 12.5px;
-  color: #3d3a34;
-  max-width: 96ch;
+.home-link {
+  color: inherit;
+  text-decoration: none;
 }
 
-.colophon p {
-  margin: 0 0 6px;
+.home-link:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.route-loading {
+  padding: 48px 24px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.landing {
+  max-width: 880px;
+}
+
+.landing-lede {
+  margin: 0;
+  max-width: 62ch;
+  color: #3d3a34;
+}
+
+.landing-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.landing-card {
+  display: grid;
+  gap: 8px;
+  padding: 20px 20px 18px;
+  border: 1px solid var(--ink);
+  border-top: 4px solid var(--stop);
+  background: var(--sheet);
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.12s ease, transform 0.06s ease;
+}
+
+.landing-card:hover {
+  background: color-mix(in srgb, var(--stop) 9%, var(--sheet));
+}
+
+.landing-card:active {
+  transform: translateY(1px);
+}
+
+.landing-card-name {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--stop);
+}
+
+.landing-card-blurb {
+  color: #3d3a34;
+}
+
+.landing-card-go {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--stop);
+}
+
+/* ── trolley ──────────────────────────────────────────────────────────────── */
+
+.trolley {
+  max-width: 1080px;
+}
+
+.trolley-disclaimer {
+  margin: -6px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dilemma {
+  padding: 18px 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.dilemma-text {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(18px, 2.4vw, 23px);
+  line-height: 1.4;
+}
+
+.dilemma-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dilemma-actions .primary {
+  margin-left: auto;
+  height: 40px;
+  font-weight: 600;
+}
+
+.dilemma-theme {
+  margin: 0;
+  font-size: 12px;
+}
+
+.verdict-body {
+  padding: 14px 16px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.verdict .panel-head h2 {
+  font-size: 20px;
+}
+
+.lever-bar {
+  display: flex;
+  height: 30px;
+  border: 1px solid var(--ink);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  overflow: hidden;
+}
+
+.lever-pull,
+.lever-stay {
+  display: grid;
+  place-items: center;
+  white-space: nowrap;
+  transition: width 0.3s ease;
+}
+
+.lever-pull {
+  background: var(--accent);
+  color: var(--paper);
+}
+
+.lever-stay {
+  flex: 1;
+  background: var(--panel);
+}
+
+.meter {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.meter-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.meter-bar {
+  height: 6px;
+  background: var(--line);
+}
+
+.meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.meter-word {
+  font-weight: 500;
+}
+
+.tally {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.tracks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.track {
+  padding-bottom: 14px;
+}
+
+.track > .ghost {
+  margin: 0 14px;
+}
+
+.track-summary {
+  margin: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.track-emoji {
+  display: block;
+  font-size: 22px;
+  line-height: 1.3;
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+.group-list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.group-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.group-row input,
+.group-row select {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+  padding: 0 8px;
+}
+
+.group-row .small {
+  height: 34px;
+}
+
+.trolley-controls select {
+  min-width: 12rem;
+}
+
+/* ── work in flight ───────────────────────────────────────────────────────── */
+
+.dial-stop {
+  position: relative;
+  overflow: hidden;
+}
+
+/* A bar along the bottom of the stop being planned: determinate for Jev, a sweep for the instant stub. */
+.dial-stop.is-loading::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: max(12%, calc(var(--progress, 0) * 100%));
+  background: var(--stop);
+  transition: width 0.25s ease;
+  animation: dial-pulse 1s ease-in-out infinite;
+}
+
+.dial-stop.is-loading .dial-tag {
+  color: var(--stop);
+}
+
+@keyframes dial-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* The piece on the stand is about to be replaced. */
+.sheet-panel.is-stale .sheet-frame {
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dial-stop.is-loading::after {
+    animation: none;
+  }
 }
 
 /* ── narrow screens ───────────────────────────────────────────────────────── */
+/* Keep these last: they have to win over every base rule above. */
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 @media (max-width: 1080px) {
   .workbench {
@@ -859,8 +1136,102 @@ button.small {
 }
 
 @media (max-width: 760px) {
+  .landing-cards,
+  .tracks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dilemma {
+    padding: 14px;
+  }
+
+  .dilemma-actions .primary {
+    margin-left: 0;
+    flex: 1 1 100%;
+    height: 48px;
+    font-size: 16px;
+  }
+
+  .dilemma-actions .ghost {
+    flex: 1 1 0;
+  }
+
+  .meter {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .meter-bar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .group-row {
+    grid-template-columns: 76px minmax(0, 1fr) auto;
+  }
+
+  .group-row select:nth-of-type(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .group-row button {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .group-row input,
+  .group-row select {
+    font-size: 16px;
+  }
+
+  .group-row .small {
+    height: 44px;
+    min-width: 44px;
+  }
+
+  .trolley-controls select {
+    min-width: 0;
+  }
+
+  .app {
+    padding: 16px 12px 40px;
+    gap: 14px;
+  }
+
+  .masthead {
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+
+  /* Touch targets, and 16px form text so iOS doesn't zoom the page on focus. */
+  button,
+  select,
+  input[type='number'] {
+    height: 44px;
+  }
+
+  button.small {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 11.5px;
+  }
+
+  select,
+  input[type='number'],
+  .controls select,
+  .controls input,
+  .plan-json textarea {
+    font-size: 16px;
+  }
+
   .dial {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dial-stop {
+    min-height: 56px;
+    padding: 10px 8px 11px;
   }
 
   .dial-stop:nth-child(3n) {
@@ -871,124 +1242,229 @@ button.small {
     border-bottom: 1px solid var(--ink);
   }
 
-  .pipeline {
-    grid-template-columns: 1fr;
+  .dial-name {
+    font-size: 16px;
+    line-height: 1.15;
   }
 
-  .pipeline li + li::before {
-    content: '↓';
-    left: 6px;
+  .dial-tag {
+    font-size: 9.5px;
+    line-height: 1.25;
+  }
+
+  /* Controls: a two-column grid of full-width fields, then one big Generate. */
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .controls label {
+    min-width: 0;
+  }
+
+  .controls select,
+  .controls input[type='number'] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .control-bars select {
+    min-width: 0;
+  }
+
+  .controls-actions {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .controls-actions .primary {
+    height: 48px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .controls-actions .ghost {
+    height: 48px;
+  }
+
+
+
+  /* Transport: Play is the whole first row; everything else wraps beneath it. */
+  .transport {
+    position: sticky;
     top: 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    padding: 10px;
+  }
+
+  .transport .play {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 52px;
+    font-size: 17px;
+  }
+
+  .transport label:not(.switch) {
+    min-width: 0;
+  }
+
+  .transport select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .transport .switch {
+    grid-row: 2;
+    grid-column: 2;
+    min-height: 44px;
+    padding: 0 4px;
+  }
+
+  .transport .audio-status {
+    grid-column: 1 / -1;
+    line-height: 1.3;
+  }
+
+  .transport .push-right {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    height: 44px;
+  }
+
+  /* The sheet scrolls inside its own frame and follows the playhead, so a
+     32-bar piece doesn't push Play and the plan thousands of pixels apart. */
+  .sheet-panel {
+    min-height: 0;
+  }
+
+  .sheet-frame {
+    max-height: min(68vh, 620px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .panel-head {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+  }
+
+  .plan-field {
+    padding: 8px 12px;
+  }
+
+  .bar-strip[data-cols='8'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .bar-strip[data-cols='8'] .bar-cell:nth-child(8n) {
+    border-right: 1px solid var(--line);
+  }
+
+  .bar-strip[data-cols='8'] .bar-cell:nth-child(4n) {
+    border-right: 0;
+  }
+
+  .plan-json {
+    padding: 10px 12px 12px;
+  }
+
+  .plan-json textarea {
+    min-height: 180px;
+    max-height: 50vh;
+    line-height: 1.35;
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .row button {
+    flex: 1 1 auto;
   }
 
   .match-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .match {
+    padding: 9px 10px 11px;
+  }
+
   .match:nth-child(3n) {
     border-right: 0;
+  }
+
+  .match:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .match-level {
+    font-size: 17px;
+  }
+
+  /* Debug: single column, tables scroll sideways inside .table-scroll. */
+  .debug-panel h3,
+  .debug-panel .exchanges,
+  .debug-grid {
+    margin-left: 12px;
+    margin-right: 12px;
   }
 
   .debug-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .controls-actions {
+  .debug-grid > div {
+    min-width: 0;
+  }
+
+  .grid-table {
+    min-width: 440px;
+  }
+
+  .kv td {
+    overflow-wrap: anywhere;
+  }
+
+  .exchange summary {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 10px;
+  }
+
+  .exchange summary .tag {
     margin-left: 0;
   }
+
+  .json-head {
+    gap: 8px;
+  }
+
+  .json-block pre {
+    max-height: 300px;
+    font-size: 11px;
+  }
+
 }
 
+@media (max-width: 400px) {
+  .dial-tag {
+    display: none;
+  }
 
-/* ── flow hint (generate → hear → inspect) ───────────────────────────────── */
+  .dial-stop {
+    min-height: 48px;
+    align-content: center;
+  }
 
-.flow-hint {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  margin: -4px 0 0;
-  padding: 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-
-.flow-hint b {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 4px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.flow-arrow {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.control-bars select {
-  min-width: 7.5rem;
-  font-weight: 600;
-}
-
-/* Clearer transport */
-.transport .play {
-  min-width: 108px;
-  height: 40px;
-  font-size: 14.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.transport .play:not(.is-playing)::before {
-  content: '▶ ';
-}
-
-.transport .play.is-playing::before {
-  content: '■ ';
-}
-
-.transport .push-right,
-.transport .ghost.push-right {
-  height: 40px;
-  font-weight: 600;
-}
-
-/* Dial: easier to scan & click */
-.dial-stop {
-  padding: 14px 12px 15px;
-  min-height: 64px;
-}
-
-.dial-name {
-  font-size: 19px;
-}
-
-/* Sheet + plan: less cramped */
-.workbench {
-  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 360px);
-  gap: 20px;
-}
-
-.sheet-panel {
-  min-height: 320px;
-}
-
-.sheet-panel .sheet,
-.sheet-panel canvas {
-  min-height: 280px;
-}
-
-.bar-strip {
-  overflow-x: auto;
-}
-
-.bar-strip[data-cols="8"] .bar-cell:nth-child(8n) {
-  border-right: 0;
+  .controls-actions .ghost {
+    padding: 0 10px;
+  }
 }

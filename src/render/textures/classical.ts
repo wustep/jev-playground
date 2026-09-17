@@ -1,5 +1,5 @@
-import type { BarRoleId, MeterId } from '../../plan/schema'
-import { note, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
+import type { BaseRoleId, MeterId } from '../../plan/schema'
+import { note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches } from '../melody'
 import { ladder, midiOf, nearestNote } from '../pitch'
 import type { Voice } from '../score'
@@ -31,11 +31,27 @@ const CANTABILE: Record<MeterId, RhythmBank> = {
   },
 }
 
-/** Eighth-note accompaniment figures as indices into [low, middle, high]. */
-const ALBERTI: Record<MeterId, number[]> = {
-  four_four: [0, 2, 1, 2, 0, 2, 1, 2],
-  three_four: [0, 2, 1, 2, 1, 2],
-  six_eight: [0, 1, 2, 0, 1, 2],
+/**
+ * Eighth-note accompaniment figures as indices into [low, middle, high].
+ * One is chosen per piece: the textbook low–high–middle–high, a rising
+ * broken chord, or a rocking bass-and-dyad murmur.
+ */
+const ALBERTI: Record<MeterId, number[][]> = {
+  four_four: [
+    [0, 2, 1, 2, 0, 2, 1, 2],
+    [0, 1, 2, 1, 0, 1, 2, 1],
+    [0, 2, 1, 2, 1, 2, 1, 2],
+  ],
+  three_four: [
+    [0, 2, 1, 2, 1, 2],
+    [0, 1, 2, 1, 2, 1],
+    [0, 1, 2, 2, 1, 2],
+  ],
+  six_eight: [
+    [0, 1, 2, 0, 1, 2],
+    [0, 2, 1, 0, 2, 1],
+    [0, 1, 2, 2, 1, 2],
+  ],
 }
 
 export function albertiMelody(bar: BarContext): BarNotes {
@@ -44,10 +60,17 @@ export function albertiMelody(bar: BarContext): BarNotes {
   const pitches = melodyPitches(bar, slots, { lo: 64, hi: 86 })
   const melody: Voice = slots.map((slot, k) => note(slot.start, slot.dur, pitches[k], velocity + 8))
 
-  const triad = sortAscending(leadVoicing(threeForAlberti(bar), bar.memory.voicings.alberti, 53))
-  bar.memory.voicings.alberti = triad
+  const [bassPc, ...upperPcs] = threeForAlberti(bar)
+  const bassNote = nearestNote([bassPc], bar.memory.bass ? midiOf(bar.memory.bass) : 48, 41, 55)
+  bar.memory.bass = bassNote
+  const uppers = sortAscending(leadVoicing(upperPcs, bar.memory.voicings.alberti, midiOf(bassNote) + 9)).map((pitch) =>
+    midiOf(pitch) <= midiOf(bassNote) ? nearestNote([pitch.replace(/-?\d+$/, '')], midiOf(pitch) + 12) : pitch,
+  )
+  bar.memory.voicings.alberti = uppers
+  const triad = sortAscending([bassNote, ...uppers])
 
-  const figure = ALBERTI[meter.id]
+  const figures = ALBERTI[meter.id]
+  const figure = figures[pieceChoice(bar, 'alberti', figures.length)]
   const left: Voice = []
   // The final bar stops the motor on a beat and lets the chord stand.
   const motorLength = !bar.isLast ? figure.length : meter.id === 'three_four' ? 4 : figure.length / 2
@@ -56,10 +79,11 @@ export function albertiMelody(bar: BarContext): BarNotes {
   return { treble: [melody], bass: [left] }
 }
 
-/** Root, third and the seventh if there is one (else the fifth). */
+/** Bass, third and the seventh if there is one (else the fifth) — never the bass note twice. */
 function threeForAlberti(bar: BarContext): string[] {
   const [root, third, fifth, seventh] = bar.chord.core
-  return [root, third, seventh ?? fifth]
+  const tones = [bar.chord.bass, ...[third, seventh ?? fifth, fifth, root].filter((pc) => pc && pc !== bar.chord.bass)]
+  return tones.slice(0, 3)
 }
 
 // ── dramatic chords ─────────────────────────────────────────────────────────
@@ -77,7 +101,7 @@ interface Gesture {
 
 const eighths = (ticks: number) => Array<number>(ticks / 2).fill(2)
 
-const GESTURES: Record<MeterId, Record<BarRoleId, Gesture>> = {
+const GESTURES: Record<MeterId, Record<BaseRoleId, Gesture>> = {
   four_four: {
     statement: { right: [-2, 2, 2, 2, 8], left: [-2, 2, 2, 2, 8], accents: [3] },
     restatement: { right: [-2, 2, 2, 2, 8], left: [-2, 2, 2, 2, 8], accents: [3] },
@@ -109,7 +133,7 @@ const GESTURES: Record<MeterId, Record<BarRoleId, Gesture>> = {
 
 export function dramaticChords(bar: BarContext): BarNotes {
   const { meter, velocity } = bar
-  const role: BarRoleId = bar.isLast ? 'cadence' : bar.plan.role
+  const role: BaseRoleId = bar.isLast ? 'cadence' : bar.role
   const gesture = GESTURES[meter.id][role]
   const base = velocity - (gesture.soft ? 18 : 0)
 
@@ -124,10 +148,10 @@ export function dramaticChords(bar: BarContext): BarNotes {
     return note(slot.start, slot.dur, [...under, tops[k]], base + swell + (accent ? 16 : 0), accent ? { accent: true } : {})
   })
 
-  // Left hand: octaves on the root; in the climax they break into a tremolo.
-  const low = nearestNote([bar.chord.root], bar.memory.bass ? midiOf(bar.memory.bass) : 40, 35, 46)
+  // Left hand: octaves on the bass; in the climax they break into a tremolo.
+  const low = nearestNote([bar.chord.bass], bar.memory.bass ? midiOf(bar.memory.bass) : 40, 35, 46)
   bar.memory.bass = low
-  const high = nearestNote([bar.chord.root], midiOf(low) + 12)
+  const high = nearestNote([bar.chord.bass], midiOf(low) + 12)
   const leftSlots = slotsFrom(gesture.left)
   const tremolo = role === 'climax'
   const left: Voice = leftSlots.map((slot, k) => {

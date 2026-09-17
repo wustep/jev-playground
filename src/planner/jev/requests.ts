@@ -5,20 +5,34 @@
 // with these same functions. That keeps /api/jev from being an open relay for
 // whoever finds the URL.
 //
-// Design notes (from docs.typesafe.ai):
+// Design notes (from docs.typesafe.ai, and from watching live distributions):
 //  • Questions in one request run in parallel and cannot see each other, so
-//    everything independent is fanned out in ONE call (globals + the bar roles
-//    for all supported lengths, speculatively).
+//    everything independent is fanned out in ONE call (all the globals).
+//  • Asked "what is most characteristic of Beethoven?", Jev is — rightly —
+//    sure: C minor, block chords, allegro, every time. So the first request
+//    asks only about the CHARACTER of the piece, two ways at once: a Choice
+//    (which is most typical — 95 % "stormy" for Beethoven) and one Noul per
+//    character (is this a real part of their output — yes for stormy, lyrical,
+//    heroic, playful, solemn; no for "warm groove"). Several characters apply
+//    at once, which is what Nouls are for; alone they are too flat, and the
+//    Choice alone too peaked. Code combines the two (JevPlanner) and draws
+//    one; every later question is conditioned on it. Variety comes from the
+//    composer's range, coherence from one shared premise in state.
+//  • Phrase layout is ONE Choice between whole forms (src/plan/forms.ts), not
+//    a role question per bar: parallel per-bar marginals can't see each other
+//    and came back as "half cadence" four bars running.
 //  • Chords DO depend on each other, so they are asked one bar at a time with
 //    the progression-so-far in state ("respond to changing state").
 //  • Choice criteria are the enum descriptions from schema.ts; Score levels
 //    describe standalone situations because the model never sees the ordering.
 
 import {
-  BAR_COUNTS,
   BAR_ROLES,
+  CHARACTERS,
+  CHARACTER_IDS,
   CHORDS,
   CONTOURS,
+  FORMS,
   GLOBAL_FIELDS,
   GLOBAL_FIELD_IDS,
   KEYS,
@@ -37,17 +51,20 @@ import {
   parsePlan,
   parseStyle,
   type BarRoleId,
+  type CharacterId,
   type ChordId,
   type CompositionPlan,
   type GlobalField,
+  type KeyId,
   type PlanGlobals,
   type StyleId,
 } from '../../plan/schema.js'
 import { STYLE_PROFILES } from '../../plan/styles.js'
-import type { ChoiceQuestion, Json, Question, ScoreQuestion, SystemOneRequest } from './systemOne.js'
+import type { ChoiceQuestion, Json, NoulQuestion, Question, ScoreQuestion, SystemOneRequest } from './systemOne.js'
 
 export type JevOp =
-  | { op: 'globals'; style: StyleId; brief: boolean }
+  | { op: 'concept'; style: StyleId; brief: boolean }
+  | { op: 'globals'; style: StyleId; brief: boolean; character: CharacterId }
   | {
       op: 'bar'
       style: StyleId
@@ -71,6 +88,8 @@ function styleState(style: StyleId, brief: boolean): Json {
 /** Enum ids mean nothing to the model; state always carries the descriptions. */
 function describeGlobals(globals: PlanGlobals): Json {
   return {
+    character: CHARACTERS[globals.character],
+    phrase_layout: FORMS[globals.form],
     key: KEYS[globals.key],
     meter: METERS[globals.meter],
     texture: TEXTURES[globals.texture],
@@ -83,19 +102,37 @@ function describeGlobals(globals: PlanGlobals): Json {
 }
 
 const TASK =
-  'Plan a short piece for solo keyboard in the requested style. Software will expand the plan into notes, so every decision should be the option most characteristic of that style.'
+  'Plan a short piece for solo keyboard in the requested style. A composer writes many kinds of piece; this one has the character given in `piece_character`. Software will expand the plan into notes, so choose what that composer would plausibly write for a piece of this character.'
+
+const CONCEPT_TASK = 'Plan a short piece for solo keyboard in the requested style. First decide what kind of piece it is.'
 
 // ── Question wording ────────────────────────────────────────────────────────
 
-const GLOBAL_INSTRUCTIONS: Record<GlobalField, string> = {
-  key: 'Which key is most characteristic for a short keyboard piece in the style of `requested_style.name`?',
-  meter: 'Which meter is most characteristic for a short keyboard piece in the style of `requested_style.name`?',
-  texture: 'Which keyboard texture would most immediately sound like `requested_style.name` to a listener?',
-  palette: 'Which pool of melody and passing notes best fits the style of `requested_style.name`?',
-  tempo: 'Which tempo best suits a characteristic short keyboard piece in the style of `requested_style.name`?',
-  dynamics: 'Which overall dynamic level best suits a characteristic short piece in the style of `requested_style.name`?',
-  dynamicShape: 'How do dynamics typically behave over a phrase in the style of `requested_style.name`?',
-  defaultInstrument: 'Which of these instruments is most closely associated with the style of `requested_style.name`?',
+const CHARACTER_INSTRUCTIONS =
+  'Which character is most typical of a short keyboard piece in the style of `requested_style.name`?'
+
+/** Question ids of the character fan-out, e.g. `writes_dance_lilt`. */
+export const characterQuestionId = (character: CharacterId) => `writes_${character}`
+
+const characterQuestion = (character: CharacterId): NoulQuestion => ({
+  type: 'noul',
+  instructions: `A composer writes pieces of many different characters, not only the one they are most famous for. Is a short keyboard piece with the following character a recognisable part of what \`requested_style.name\` wrote or plays? Character: ${CHARACTERS[character]}`,
+  criteria: {
+    true: 'Yes — pieces of this character are a real part of that musician\'s output, even if not the most famous part',
+    false: 'No — this character is foreign to that musician\'s music',
+  },
+})
+
+const GLOBAL_INSTRUCTIONS: Record<Exclude<GlobalField, 'character'>, string> = {
+  form: 'How would `requested_style.name` most plausibly lay out the phrases of a short piece with the character in `piece_character`?',
+  key: 'Which key would `requested_style.name` plausibly choose for a piece with the character in `piece_character`?',
+  meter: 'Which meter suits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
+  texture: 'Which keyboard texture best realises the character in `piece_character` the way `requested_style.name` would write it?',
+  palette: 'Which pool of melody and passing notes fits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
+  tempo: 'Which tempo suits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
+  dynamics: 'Which overall dynamic level suits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
+  dynamicShape: 'How would the dynamics behave over a piece with the character in `piece_character`, in the style of `requested_style.name`?',
+  defaultInstrument: 'Which of these instruments would `requested_style.name` most plausibly use for a piece with the character in `piece_character`?',
 }
 
 const choice = (instructions: string, criteria: Record<string, string>): ChoiceQuestion => ({
@@ -104,29 +141,42 @@ const choice = (instructions: string, criteria: Record<string, string>): ChoiceQ
   criteria,
 })
 
-/** Question ids for the speculative role fan-out, e.g. `role8_3`. */
-export const roleQuestionId = (length: 4 | 8 | 16 | 32, index: number) => `role${length}_${index}`
+function conceptRequest(op: Extract<JevOp, { op: 'concept' }>, model: string): SystemOneRequest {
+  return {
+    model,
+    state: { task: CONCEPT_TASK, requested_style: styleState(op.style, op.brief) },
+    questions: {
+      character: choice(CHARACTER_INSTRUCTIONS, CHARACTERS),
+      ...Object.fromEntries(CHARACTER_IDS.map((character) => [characterQuestionId(character), characterQuestion(character)])),
+    },
+  }
+}
 
 function globalsRequest(op: Extract<JevOp, { op: 'globals' }>, model: string): SystemOneRequest {
   const questions: Record<string, Question> = {}
   for (const field of GLOBAL_FIELD_IDS) {
+    if (field === 'character') continue
     questions[field] = choice(GLOBAL_INSTRUCTIONS[field], GLOBAL_FIELDS[field])
   }
-  questions.barCount = choice(
-    'How long should a characteristic musical idea in the style of `requested_style.name` be?',
-    BAR_COUNTS,
-  )
-  // Speculative fan-out: ask the phrase role of every bar under all supported
-  // lengths. Code reads only the set matching the chosen length.
-  for (const length of [4, 8, 16, 32] as const) {
-    for (let i = 0; i < length; i++) {
-      questions[roleQuestionId(length, i)] = choice(
-        `Suppose the piece is exactly ${length} bars long. What role should bar ${i + 1} of ${length} play in a phrase shaped the way \`requested_style.name\` typically shapes phrases? The first bar normally presents the idea and the last bar normally closes.`,
-        BAR_ROLES,
-      )
-    }
+  return {
+    model,
+    state: { task: TASK, requested_style: styleState(op.style, op.brief), piece_character: CHARACTERS[op.character] },
+    questions,
   }
-  return { model, state: { task: TASK, requested_style: styleState(op.style, op.brief) }, questions }
+}
+
+// Labels that only make sense in one mode are not offered in the other: the
+// model can't pick what it isn't shown, and ~25 fewer options is ~25 fewer
+// ways to go wrong. The root-position tonic triads of BOTH modes stay in
+// (Picardy thirds, mode flips), as do the borrowed chords that are the point
+// of modal mixture.
+const MAJOR_ONLY: ReadonlySet<ChordId> = new Set<ChordId>(['I6', 'I64', 'iii', 'iii6', 'iii64', 'iii7', 'iii9', 'vi', 'vi6', 'vi7', 'vi9', 'vi11', 'Imaj42', 'ii6', 'ii65', 'ii42', 'ii7', 'ii9', 'V7_of_ii', 'V7_of_vi', 'sharp_i_dim7', 'biii7', 'I6_9', 'Imaj9', 'Iadd9', 'Iadd6', 'Imaj7s5', 'Imaj7s11', 'II_over_I', 'IVmaj7s11'])
+const MINOR_ONLY: ReadonlySet<ChordId> = new Set<ChordId>(['i6', 'i64', 'i42', 'i9', 'i11', 'i_add9', 'i_maj7', 'i_add6', 'ii_dim', 'ii_dim6', 'ii_half_dim65', 'iv64', 'v6', 'iv9'])
+
+/** The chord labels offered to Jev in `key`. */
+export function chordOptionsFor(key: KeyId): Record<string, string> {
+  const hidden = key.endsWith('_minor') ? MAJOR_ONLY : MINOR_ONLY
+  return Object.fromEntries(Object.entries(CHORDS).filter(([id]) => !hidden.has(id as ChordId)))
 }
 
 function barRequest(op: Extract<JevOp, { op: 'bar' }>, model: string): SystemOneRequest {
@@ -152,8 +202,8 @@ function barRequest(op: Extract<JevOp, { op: 'bar' }>, model: string): SystemOne
     state,
     questions: {
       chord: choice(
-        'Which chord should bar `current_bar` use so that the progression in `bars` continues the way `requested_style.name` would most characteristically write it? Chords are roman numerals relative to the key in `piece.key`; take the role of the current bar and the chords already chosen into account.',
-        CHORDS,
+        'Which chord should bar `current_bar` use so that the progression in `bars` continues the way `requested_style.name` would write a piece of this character? Chords are roman numerals relative to the key in `piece.key`. Take the role of the current bar and the chords already chosen into account; a restated idea may be reharmonised, and the bass may move by step through inverted chords.',
+        chordOptionsFor(op.globals.key),
       ),
       contour: choice(
         'Which melodic shape should bar `current_bar` have, given its role in `bars` and the way `requested_style.name` typically shapes lines?',
@@ -206,6 +256,8 @@ function scoreRequest(op: Extract<JevOp, { op: 'score' }>, model: string): Syste
 
 export function buildRequest(op: JevOp, model: string): SystemOneRequest {
   switch (op.op) {
+    case 'concept':
+      return conceptRequest(op, model)
     case 'globals':
       return globalsRequest(op, model)
     case 'bar':
@@ -221,8 +273,10 @@ export function parseOp(raw: unknown): JevOp {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError('op: expected an object')
   const obj = raw as Record<string, unknown>
   switch (obj.op) {
+    case 'concept':
+      return { op: 'concept', style: parseStyle(obj.style), brief: obj.brief === true }
     case 'globals':
-      return { op: 'globals', style: parseStyle(obj.style), brief: obj.brief === true }
+      return { op: 'globals', style: parseStyle(obj.style), brief: obj.brief === true, character: parseOption(CHARACTERS, obj.character, 'op.character') }
     case 'bar': {
       const roles = Array.isArray(obj.roles) ? obj.roles : []
       if (![4, 8, 16, 32].includes(roles.length)) throw new PlanValidationError('op.roles: expected 4, 8, 16 or 32 roles')
@@ -249,6 +303,6 @@ export function parseOp(raw: unknown): JevOp {
       return { op: 'score', plan: parsePlan(obj.plan), styles: unique }
     }
     default:
-      throw new PlanValidationError('op.op: expected "globals", "bar" or "score"')
+      throw new PlanValidationError('op.op: expected "concept", "globals", "bar" or "score"')
   }
 }
