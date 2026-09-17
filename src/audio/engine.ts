@@ -270,7 +270,8 @@ export class AudioEngine {
     // The scheduler moves `startedAt` to the next lap LOOKAHEAD early; until the
     // clock catches up we are still audibly at the end of the previous lap.
     if (elapsed < 0 && this.playback.laps > 0) return elapsed + this.playback.duration
-    return Math.max(0, elapsed)
+    // Past the last note (the short tail before onEnd fires) the position is the end — never a wrap to the start.
+    return Math.min(Math.max(0, elapsed), this.playback.duration)
   }
 
   get isPlaying(): boolean {

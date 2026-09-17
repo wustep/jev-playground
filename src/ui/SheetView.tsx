@@ -86,7 +86,9 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
       const position = engine.position()
       clear()
       if (!layout || position == null) return
-      const tick = (position / tickSeconds) % totalTicks
+      // No modulo: when looping the engine already reports a wrapped position, and
+      // when not, the end of the piece must stay the end (it used to snap back to bar 1).
+      const tick = Math.min(position / tickSeconds, totalTicks - 0.001)
       const bar = layout.bars[Math.min(layout.bars.length - 1, Math.floor(tick / score.meter.ticksPerBar))]
       if (!bar) return
       // On phones the frame is a capped scroll box: keep the sounding system in view.
