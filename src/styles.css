@@ -1079,6 +1079,163 @@ button.small {
   min-width: 12rem;
 }
 
+/* ── trolley: the outcome scene ───────────────────────────────────────────── */
+
+.outcome {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  background: var(--sheet);
+}
+
+.outcome-side {
+  padding: 12px 14px 12px;
+  min-width: 0;
+}
+
+.outcome-lost {
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.outcome h3 {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.outcome-lost h3 {
+  color: var(--accent);
+}
+
+.outcome-saved h3 {
+  color: #1f7a43;
+}
+
+.outcome-cast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-height: 40px;
+}
+
+.outcome-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.outcome-figure {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 26px;
+  line-height: 1;
+  opacity: 0;
+  animation: outcome-arrive 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.3) forwards;
+  animation-delay: calc(var(--i) * 45ms);
+}
+
+/* The cross: translucent, drawn in a beat after its figure lands. */
+.outcome-figure.is-lost::after {
+  content: '✕';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--sans);
+  font-size: 32px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 72%, transparent);
+  opacity: 0;
+  transform: scale(1.9) rotate(-14deg);
+  animation: outcome-cross 0.26s ease-out forwards;
+  animation-delay: calc(var(--i) * 45ms + 380ms);
+}
+
+/* The emoji (not its cross) greys out once the cross has landed. */
+.outcome-figure.is-lost .outcome-emoji {
+  animation: outcome-fade 0.4s ease forwards;
+  animation-delay: calc(var(--i) * 45ms + 420ms);
+}
+
+.outcome-figure.is-saved {
+  animation-name: outcome-arrive, outcome-cheer;
+  animation-duration: 0.34s, 0.5s;
+  animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.3), ease-in-out;
+  animation-fill-mode: forwards, none;
+  animation-delay: calc(var(--i) * 45ms), calc(var(--i) * 45ms + 360ms);
+}
+
+.outcome-more {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.outcome-caption,
+.outcome-empty {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: #3d3a34;
+}
+
+.outcome-empty {
+  font-style: italic;
+  color: var(--muted);
+}
+
+@keyframes outcome-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Lost figures settle back, greyed, under their cross. */
+@keyframes outcome-fade {
+  to {
+    filter: grayscale(1);
+    opacity: 0.55;
+  }
+}
+
+@keyframes outcome-cross {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes outcome-cheer {
+  40% {
+    transform: translateY(-7px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outcome-figure,
+  .outcome-figure.is-saved,
+  .outcome-figure.is-lost .outcome-emoji,
+  .outcome-figure.is-lost::after {
+    animation-duration: 0.01s;
+    animation-delay: 0s;
+  }
+}
+
 /* ── work in flight ───────────────────────────────────────────────────────── */
 
 .dial-stop {
@@ -1136,6 +1293,12 @@ button.small {
 }
 
 @media (max-width: 760px) {
+  .outcome-figure {
+    width: 30px;
+    height: 30px;
+    font-size: 23px;
+  }
+
   .landing-cards,
   .tracks {
     grid-template-columns: minmax(0, 1fr);

@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ABSURDITY_WORDS, DIFFICULTY_WORDS, entityEmoji, scenarioText, trackPhrase, verdictText } from './describe'
+import { Outcome } from './Outcome'
 import { castOffline, castWithJev, jevAvailable, judgeOffline, judgeWithJev, randomTheme, type Exchange, type Verdict } from './play'
 import { rng } from '../planner/pick'
 import { CLASSIC, ENTITIES, ENTITY_IDS, MAX_COUNT, MAX_GROUPS_PER_TRACK, THEMES, TRAITS, TRAIT_IDS, TWISTS, TWIST_IDS, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
@@ -242,6 +243,8 @@ export default function TrolleyApp() {
             <Meter label="How hard" value={verdict.difficulty} max={3} word={DIFFICULTY_WORDS[Math.round(Math.max(0, Math.min(3, verdict.difficulty)))]} />
             <Meter label="How absurd" value={verdict.absurdity} max={3} word={ABSURDITY_WORDS[Math.round(Math.max(0, Math.min(3, verdict.absurdity)))]} />
             <Meter label="Most people would pull" value={verdict.mostPeoplePull} max={1} word={`${Math.round(verdict.mostPeoplePull * 100)}%`} />
+            {/* Keyed by the verdict so the little scene replays for every new decision. */}
+            <Outcome key={`${verdict.decision}-${tally.pulled + tally.spared}`} scenario={scenario} decision={verdict.decision} />
             <p className="muted tally">
               This session: lever pulled {tally.pulled}×, left alone {tally.spared}×.
             </p>
