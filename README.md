@@ -95,7 +95,7 @@ Built against the public API (`POST https://api.typesafe.ai/v1/systemone`, [docs
 | 2…N | `bar` ×4/8 | `chord` (50 options) + `contour` | Chords depend on each other, so they're asked sequentially with the progression-so-far in `state`. |
 | opt. | `score` | one **Score** per style, levels low / medium / high | “How well does this plan match style X?” → `StyleMatchScore { match, confidence, raw }`. The plan's own `style` label is withheld from state. |
 
-Jev returns a full probability distribution per Choice. **Code owns the policy** (`src/planner/pick.ts`): `argmax`, or seeded `sample` from the (sharpened) distribution — so “Generate” gives variety without asking Jev to be random. The *Style brief* toggle sends either just the style's name, or name + a prose description, to separate what Jev knows from what we told it.
+Jev returns a full probability distribution per Choice. **Code owns the policy** (`src/planner/pick.ts`): `argmax`, or seeded `sample` from the (sharpened) distribution — so “Generate” gives variety without asking Jev to be random. (Bar roles are always argmax: they're asked in parallel, so their distributions are independent marginals, and sampling eight of those separately scrambles the phrase.) The *Style brief* toggle sends either just the style's name, or name + a prose description, to separate what Jev knows from what we told it.
 
 The browser never posts raw state/questions to the proxy. It posts a small typed `JevOp`; the server re-validates it against the enums and rebuilds the request with the same pure functions, so `/api/jev` can't be used as an open relay for the key.
 

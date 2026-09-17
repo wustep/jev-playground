@@ -103,9 +103,10 @@ export class JevPlanner implements Planner {
       id: string,
       field: string,
       table: OptionTable<K>,
+      policy: PlanInput['pick'] = input.pick,
     ): K => {
       const answer = choiceAnswer(answers, id)
-      const picked = parseOption(table, pickFrom(answer.probabilities, input.pick, random), `jev.${id}`)
+      const picked = parseOption(table, pickFrom(answer.probabilities, policy, random), `jev.${id}`)
       decisions.push({ field, choice: picked, confidence: answer.confidence, probabilities: answer.probabilities })
       options?.onProgress?.([...decisions])
       return picked
@@ -118,9 +119,13 @@ export class JevPlanner implements Planner {
       globals[field] = decide(first, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
     }
     const barCount = input.bars === 'auto' ? (Number(decide(first, 'barCount', 'barCount', BAR_COUNTS)) as 4 | 8) : input.bars
+    // Roles were asked in parallel, so each distribution is a marginal that
+    // knows nothing of its neighbours. Sampling eight of those independently
+    // scrambles the phrase (a cadence in bar 2); take the argmax form and let
+    // the variety come from the globals and the sequential chords instead.
     const roles: BarRoleId[] = []
     for (let i = 0; i < barCount; i++) {
-      roles.push(decide(first, roleQuestionId(barCount, i), `bars[${i}].role`, BAR_ROLES))
+      roles.push(decide(first, roleQuestionId(barCount, i), `bars[${i}].role`, BAR_ROLES, 'argmax'))
     }
 
     // 2 ─ chords, sequentially: each bar sees the ones before it
