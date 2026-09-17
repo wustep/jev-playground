@@ -40,13 +40,13 @@ export interface StylePriors {
   contour: Weights<ContourId>
 }
 
-type ByLength = { 4: ChordId[][]; 8: ChordId[][] }
+type ByLength = { 4: ChordId[][]; 8: ChordId[][]; 16: ChordId[][]; 32: ChordId[][] }
 
 export interface StyleProfile {
   brief: string
   priors: StylePriors
   progressions: { major: ByLength; minor: ByLength }
-  forms: { 4: BarRoleId[][]; 8: BarRoleId[][] }
+  forms: { 4: BarRoleId[][]; 8: BarRoleId[][]; 16: BarRoleId[][]; 32: BarRoleId[][] }
 }
 
 export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
@@ -62,7 +62,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { mf: 50, mp: 20, f: 30 },
       dynamicShape: { terraced: 60, steady: 40 },
       defaultInstrument: { harpsichord: 45, church_organ: 30, grand_piano: 25 },
-      barCount: { '8': 70, '4': 30 },
+      barCount: { '8': 49, '4': 30, '16': 14, '32': 7 },
       contour: { rise: 30, fall: 30, arch: 25, dip: 10, static: 5 },
     },
     progressions: {
@@ -78,6 +78,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['I', 'ii7', 'V7', 'I', 'vi', 'IV', 'V7', 'I'],
           ['I', 'V', 'vi', 'iii', 'IV', 'ii7', 'V7', 'I'],
         ],
+
+        16: [
+
+          ['I', 'IV', 'vii_dim', 'I', 'vi', 'ii7', 'V7', 'I', 'I', 'vi', 'ii7', 'V7', 'I', 'IV', 'V7', 'I'],
+
+          ['I', 'vi', 'ii7', 'V7', 'I', 'IV', 'V7', 'I', 'I', 'IV', 'vii_dim', 'I', 'vi', 'ii7', 'V7', 'I'],
+
+        ],
+
+        32: [
+
+          ['I', 'IV', 'vii_dim', 'I', 'vi', 'ii7', 'V7', 'I', 'I', 'vi', 'ii7', 'V7', 'I', 'IV', 'V7', 'I', 'I', 'vi', 'ii7', 'V7', 'I', 'IV', 'V7', 'I', 'I', 'IV', 'vii_dim', 'I', 'vi', 'ii7', 'V7', 'I'],
+
+          ['I', 'IV', 'vii_dim', 'I', 'vi', 'ii7', 'V7', 'I', 'I', 'IV', 'vii_dim', 'I', 'vi', 'ii7', 'V7', 'I', 'I', 'vi', 'ii7', 'V7', 'I', 'IV', 'V7', 'I', 'I', 'vi', 'ii7', 'V7', 'I', 'IV', 'V7', 'I'],
+
+        ],
       },
       minor: {
         4: [
@@ -90,6 +106,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['i', 'iv', 'V7', 'i', 'bVI', 'ii_half_dim7', 'V7', 'i'],
           ['i', 'ii_half_dim7', 'V7', 'i', 'bIII', 'iv', 'V7', 'i'],
         ],
+
+        16: [
+
+          ['i', 'iv', 'bVII', 'bIII', 'bVI', 'ii_half_dim7', 'V7', 'i', 'i', 'iv', 'V7', 'i', 'bVI', 'ii_half_dim7', 'V7', 'i'],
+
+          ['i', 'iv', 'V7', 'i', 'bVI', 'ii_half_dim7', 'V7', 'i', 'i', 'iv', 'bVII', 'bIII', 'bVI', 'ii_half_dim7', 'V7', 'i'],
+
+        ],
+
+        32: [
+
+          ['i', 'iv', 'bVII', 'bIII', 'bVI', 'ii_half_dim7', 'V7', 'i', 'i', 'iv', 'V7', 'i', 'bVI', 'ii_half_dim7', 'V7', 'i', 'i', 'iv', 'V7', 'i', 'bVI', 'ii_half_dim7', 'V7', 'i', 'i', 'iv', 'bVII', 'bIII', 'bVI', 'ii_half_dim7', 'V7', 'i'],
+
+          ['i', 'iv', 'bVII', 'bIII', 'bVI', 'ii_half_dim7', 'V7', 'i', 'i', 'iv', 'bVII', 'bIII', 'bVI', 'ii_half_dim7', 'V7', 'i', 'i', 'iv', 'V7', 'i', 'bVI', 'ii_half_dim7', 'V7', 'i', 'i', 'iv', 'V7', 'i', 'bVI', 'ii_half_dim7', 'V7', 'i'],
+
+        ],
       },
     },
     forms: {
@@ -100,6 +132,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       8: [
         ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence'],
         ['statement', 'development', 'development', 'half_cadence', 'restatement', 'development', 'climax', 'cadence'],
+      ],
+
+      16: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'development', 'half_cadence', 'restatement', 'contrast', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence'],
+
+      ],
+
+      32: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence', 'statement', 'restatement', 'development', 'half_cadence', 'contrast', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'contrast', 'half_cadence', 'restatement', 'development', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence', 'restatement', 'contrast', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'development', 'restatement', 'contrast', 'development', 'development', 'climax', 'half_cadence', 'cadence'],
+
       ],
     },
   },
@@ -116,7 +164,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { f: 35, ff: 20, p: 25, mf: 20 },
       dynamicShape: { sudden_contrast: 55, crescendo: 25, arch: 10, steady: 10 },
       defaultInstrument: { grand_piano: 85, strings: 15 },
-      barCount: { '8': 75, '4': 25 },
+      barCount: { '8': 53, '4': 25, '16': 15, '32': 7 },
       contour: { rise: 35, fall: 25, arch: 25, dip: 5, static: 10 },
     },
     progressions: {
@@ -130,6 +178,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['I', 'I', 'V7', 'V7', 'vi', 'IV', 'V7', 'I'],
           ['I', 'IV', 'I', 'V', 'vi', 'ii', 'V7', 'I'],
         ],
+
+        16: [
+
+          ['I', 'V7', 'I', 'IV', 'I', 'ii', 'V7', 'I', 'I', 'I', 'V7', 'V7', 'vi', 'IV', 'V7', 'I'],
+
+          ['I', 'I', 'V7', 'V7', 'vi', 'IV', 'V7', 'I', 'I', 'V7', 'I', 'IV', 'I', 'ii', 'V7', 'I'],
+
+        ],
+
+        32: [
+
+          ['I', 'V7', 'I', 'IV', 'I', 'ii', 'V7', 'I', 'I', 'I', 'V7', 'V7', 'vi', 'IV', 'V7', 'I', 'I', 'I', 'V7', 'V7', 'vi', 'IV', 'V7', 'I', 'I', 'V7', 'I', 'IV', 'I', 'ii', 'V7', 'I'],
+
+          ['I', 'V7', 'I', 'IV', 'I', 'ii', 'V7', 'I', 'I', 'V7', 'I', 'IV', 'I', 'ii', 'V7', 'I', 'I', 'I', 'V7', 'V7', 'vi', 'IV', 'V7', 'I', 'I', 'I', 'V7', 'V7', 'vi', 'IV', 'V7', 'I'],
+
+        ],
       },
       minor: {
         4: [
@@ -141,6 +205,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['i', 'i', 'V7', 'V7', 'bVI', 'iv', 'V7', 'i'],
           ['i', 'vii_dim7', 'i', 'bVI', 'iv', 'ii_half_dim7', 'V7', 'i'],
         ],
+
+        16: [
+
+          ['i', 'V7', 'i', 'vii_dim7', 'i', 'iv', 'V7', 'i', 'i', 'i', 'V7', 'V7', 'bVI', 'iv', 'V7', 'i'],
+
+          ['i', 'i', 'V7', 'V7', 'bVI', 'iv', 'V7', 'i', 'i', 'V7', 'i', 'vii_dim7', 'i', 'iv', 'V7', 'i'],
+
+        ],
+
+        32: [
+
+          ['i', 'V7', 'i', 'vii_dim7', 'i', 'iv', 'V7', 'i', 'i', 'i', 'V7', 'V7', 'bVI', 'iv', 'V7', 'i', 'i', 'i', 'V7', 'V7', 'bVI', 'iv', 'V7', 'i', 'i', 'V7', 'i', 'vii_dim7', 'i', 'iv', 'V7', 'i'],
+
+          ['i', 'V7', 'i', 'vii_dim7', 'i', 'iv', 'V7', 'i', 'i', 'V7', 'i', 'vii_dim7', 'i', 'iv', 'V7', 'i', 'i', 'i', 'V7', 'V7', 'bVI', 'iv', 'V7', 'i', 'i', 'i', 'V7', 'V7', 'bVI', 'iv', 'V7', 'i'],
+
+        ],
       },
     },
     forms: {
@@ -148,6 +228,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       8: [
         ['statement', 'restatement', 'development', 'half_cadence', 'contrast', 'development', 'climax', 'cadence'],
         ['statement', 'restatement', 'contrast', 'half_cadence', 'development', 'development', 'climax', 'cadence'],
+      ],
+
+      16: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'development', 'half_cadence', 'restatement', 'contrast', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence'],
+
+      ],
+
+      32: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence', 'statement', 'restatement', 'development', 'half_cadence', 'contrast', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'contrast', 'half_cadence', 'restatement', 'development', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence', 'restatement', 'contrast', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'development', 'restatement', 'contrast', 'development', 'development', 'climax', 'half_cadence', 'cadence'],
+
       ],
     },
   },
@@ -164,7 +260,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { pp: 45, p: 40, mp: 15 },
       dynamicShape: { arch: 55, decrescendo: 20, steady: 15, crescendo: 10 },
       defaultInstrument: { grand_piano: 80, strings: 10, choir: 10 },
-      barCount: { '8': 60, '4': 40 },
+      barCount: { '8': 42, '4': 40, '16': 12, '32': 6 },
       contour: { arch: 35, fall: 25, dip: 15, rise: 15, static: 10 },
     },
     progressions: {
@@ -178,12 +274,44 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['Iadd9', 'bIIImaj7', 'IVmaj9', 'I_aug', 'vi9', 'bVII', 'V9', 'Imaj9'],
           ['Isus2', 'bVII', 'bVImaj7', 'bVII', 'Imaj9', 'V_aug', 'IVmaj7s11', 'Iadd9'],
         ],
+
+        16: [
+
+          ['Imaj7', 'bVII', 'Imaj7', 'IVmaj7s11', 'I_aug', 'bVImaj7', 'bIImaj7', 'Iadd9', 'Iadd9', 'bIIImaj7', 'IVmaj9', 'I_aug', 'vi9', 'bVII', 'V9', 'Imaj9'],
+
+          ['Iadd9', 'bIIImaj7', 'IVmaj9', 'I_aug', 'vi9', 'bVII', 'V9', 'Imaj9', 'Imaj7', 'bVII', 'Imaj7', 'IVmaj7s11', 'I_aug', 'bVImaj7', 'bIImaj7', 'Iadd9'],
+
+        ],
+
+        32: [
+
+          ['Imaj7', 'bVII', 'Imaj7', 'IVmaj7s11', 'I_aug', 'bVImaj7', 'bIImaj7', 'Iadd9', 'Iadd9', 'bIIImaj7', 'IVmaj9', 'I_aug', 'vi9', 'bVII', 'V9', 'Imaj9', 'Iadd9', 'bIIImaj7', 'IVmaj9', 'I_aug', 'vi9', 'bVII', 'V9', 'Imaj9', 'Imaj7', 'bVII', 'Imaj7', 'IVmaj7s11', 'I_aug', 'bVImaj7', 'bIImaj7', 'Iadd9'],
+
+          ['Imaj7', 'bVII', 'Imaj7', 'IVmaj7s11', 'I_aug', 'bVImaj7', 'bIImaj7', 'Iadd9', 'Imaj7', 'bVII', 'Imaj7', 'IVmaj7s11', 'I_aug', 'bVImaj7', 'bIImaj7', 'Iadd9', 'Iadd9', 'bIIImaj7', 'IVmaj9', 'I_aug', 'vi9', 'bVII', 'V9', 'Imaj9', 'Iadd9', 'bIIImaj7', 'IVmaj9', 'I_aug', 'vi9', 'bVII', 'V9', 'Imaj9'],
+
+        ],
       },
       minor: {
         4: [['i_add9', 'bVII', 'bVImaj7', 'i9']],
         8: [
           ['i_add9', 'bVII', 'bVImaj7', 'bVII', 'i9', 'iv7', 'bIImaj7', 'i_add9'],
           ['i_add9', 'bIIImaj7', 'bVImaj9', 'V_aug', 'i9', 'bVII', 'bVImaj7', 'i_add9'],
+        ],
+
+        16: [
+
+          ['i_add9', 'bVII', 'bVImaj7', 'bVII', 'i9', 'iv7', 'bIImaj7', 'i_add9', 'i_add9', 'bIIImaj7', 'bVImaj9', 'V_aug', 'i9', 'bVII', 'bVImaj7', 'i_add9'],
+
+          ['i_add9', 'bIIImaj7', 'bVImaj9', 'V_aug', 'i9', 'bVII', 'bVImaj7', 'i_add9', 'i_add9', 'bVII', 'bVImaj7', 'bVII', 'i9', 'iv7', 'bIImaj7', 'i_add9'],
+
+        ],
+
+        32: [
+
+          ['i_add9', 'bVII', 'bVImaj7', 'bVII', 'i9', 'iv7', 'bIImaj7', 'i_add9', 'i_add9', 'bIIImaj7', 'bVImaj9', 'V_aug', 'i9', 'bVII', 'bVImaj7', 'i_add9', 'i_add9', 'bIIImaj7', 'bVImaj9', 'V_aug', 'i9', 'bVII', 'bVImaj7', 'i_add9', 'i_add9', 'bVII', 'bVImaj7', 'bVII', 'i9', 'iv7', 'bIImaj7', 'i_add9'],
+
+          ['i_add9', 'bVII', 'bVImaj7', 'bVII', 'i9', 'iv7', 'bIImaj7', 'i_add9', 'i_add9', 'bVII', 'bVImaj7', 'bVII', 'i9', 'iv7', 'bIImaj7', 'i_add9', 'i_add9', 'bIIImaj7', 'bVImaj9', 'V_aug', 'i9', 'bVII', 'bVImaj7', 'i_add9', 'i_add9', 'bIIImaj7', 'bVImaj9', 'V_aug', 'i9', 'bVII', 'bVImaj7', 'i_add9'],
+
         ],
       },
     },
@@ -192,6 +320,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       8: [
         ['statement', 'restatement', 'contrast', 'development', 'climax', 'contrast', 'half_cadence', 'cadence'],
         ['statement', 'contrast', 'restatement', 'development', 'climax', 'restatement', 'contrast', 'cadence'],
+      ],
+
+      16: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'development', 'half_cadence', 'restatement', 'contrast', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence'],
+
+      ],
+
+      32: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence', 'statement', 'restatement', 'development', 'half_cadence', 'contrast', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'contrast', 'half_cadence', 'restatement', 'development', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence', 'restatement', 'contrast', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'development', 'restatement', 'contrast', 'development', 'development', 'climax', 'half_cadence', 'cadence'],
+
       ],
     },
   },
@@ -208,7 +352,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { mp: 40, mf: 35, p: 25 },
       dynamicShape: { steady: 45, arch: 25, crescendo: 20, terraced: 10 },
       defaultInstrument: { grand_piano: 50, church_organ: 20, strings: 20, choir: 5, electric_piano: 5 },
-      barCount: { '8': 85, '4': 15 },
+      barCount: { '8': 60, '4': 15, '16': 17, '32': 8 },
       contour: { static: 55, arch: 20, rise: 15, fall: 10 },
     },
     progressions: {
@@ -217,6 +361,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         8: [
           ['I', 'vi', 'IV', 'V', 'I', 'vi', 'IV', 'I'],
           ['I', 'iii', 'vi', 'IV', 'I', 'iii', 'vi', 'I'],
+        ],
+
+        16: [
+
+          ['I', 'vi', 'IV', 'V', 'I', 'vi', 'IV', 'I', 'I', 'iii', 'vi', 'IV', 'I', 'iii', 'vi', 'I'],
+
+          ['I', 'iii', 'vi', 'IV', 'I', 'iii', 'vi', 'I', 'I', 'vi', 'IV', 'V', 'I', 'vi', 'IV', 'I'],
+
+        ],
+
+        32: [
+
+          ['I', 'vi', 'IV', 'V', 'I', 'vi', 'IV', 'I', 'I', 'iii', 'vi', 'IV', 'I', 'iii', 'vi', 'I', 'I', 'iii', 'vi', 'IV', 'I', 'iii', 'vi', 'I', 'I', 'vi', 'IV', 'V', 'I', 'vi', 'IV', 'I'],
+
+          ['I', 'vi', 'IV', 'V', 'I', 'vi', 'IV', 'I', 'I', 'vi', 'IV', 'V', 'I', 'vi', 'IV', 'I', 'I', 'iii', 'vi', 'IV', 'I', 'iii', 'vi', 'I', 'I', 'iii', 'vi', 'IV', 'I', 'iii', 'vi', 'I'],
+
         ],
       },
       minor: {
@@ -230,6 +390,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['i', 'i', 'bVI', 'bVI', 'iv', 'iv', 'V', 'i'],
           ['i', 'bIII', 'bVI', 'iv', 'i', 'bIII', 'bVI', 'i'],
         ],
+
+        16: [
+
+          ['i', 'bVI', 'bIII', 'bVII', 'i', 'bVI', 'bIII', 'i', 'i', 'bVII', 'bVI', 'bVII', 'i', 'bVII', 'bVI', 'i'],
+
+          ['i', 'bVII', 'bVI', 'bVII', 'i', 'bVII', 'bVI', 'i', 'i', 'bVI', 'bIII', 'bVII', 'i', 'bVI', 'bIII', 'i'],
+
+        ],
+
+        32: [
+
+          ['i', 'bVI', 'bIII', 'bVII', 'i', 'bVI', 'bIII', 'i', 'i', 'bVII', 'bVI', 'bVII', 'i', 'bVII', 'bVI', 'i', 'i', 'bVII', 'bVI', 'bVII', 'i', 'bVII', 'bVI', 'i', 'i', 'bVI', 'bIII', 'bVII', 'i', 'bVI', 'bIII', 'i'],
+
+          ['i', 'bVI', 'bIII', 'bVII', 'i', 'bVI', 'bIII', 'i', 'i', 'bVI', 'bIII', 'bVII', 'i', 'bVI', 'bIII', 'i', 'i', 'bVII', 'bVI', 'bVII', 'i', 'bVII', 'bVI', 'i', 'i', 'bVII', 'bVI', 'bVII', 'i', 'bVII', 'bVI', 'i'],
+
+        ],
       },
     },
     forms: {
@@ -237,6 +413,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       8: [
         ['statement', 'restatement', 'restatement', 'development', 'restatement', 'development', 'climax', 'cadence'],
         ['statement', 'restatement', 'development', 'restatement', 'restatement', 'development', 'climax', 'cadence'],
+      ],
+
+      16: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'development', 'half_cadence', 'restatement', 'contrast', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence'],
+
+      ],
+
+      32: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence', 'statement', 'restatement', 'development', 'half_cadence', 'contrast', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'contrast', 'half_cadence', 'restatement', 'development', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence', 'restatement', 'contrast', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'development', 'restatement', 'contrast', 'development', 'development', 'climax', 'half_cadence', 'cadence'],
+
       ],
     },
   },
@@ -253,7 +445,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { mf: 40, mp: 35, p: 15, f: 10 },
       dynamicShape: { arch: 35, crescendo: 30, steady: 20, sudden_contrast: 15 },
       defaultInstrument: { grand_piano: 70, electric_piano: 20, strings: 10 },
-      barCount: { '8': 70, '4': 30 },
+      barCount: { '8': 49, '4': 30, '16': 14, '32': 7 },
       contour: { arch: 30, rise: 25, static: 20, dip: 15, fall: 10 },
     },
     progressions: {
@@ -263,6 +455,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['Iadd9', 'IVmaj7s11', 'vi9', 'V7sus4', 'Iadd9', 'bVII', 'IVmaj9', 'Isus2'],
           ['Isus2', 'vi11', 'IVmaj7s11', 'V7sus4', 'iii7', 'vi9', 'bVImaj7', 'Iadd9'],
           ['IVmaj7s11', 'Iadd9', 'vi9', 'V7sus4', 'IVmaj7s11', 'iii7', 'bVII', 'Isus2'],
+        ],
+
+        16: [
+
+          ['Iadd9', 'IVmaj7s11', 'vi9', 'V7sus4', 'Iadd9', 'bVII', 'IVmaj9', 'Isus2', 'Isus2', 'vi11', 'IVmaj7s11', 'V7sus4', 'iii7', 'vi9', 'bVImaj7', 'Iadd9'],
+
+          ['Isus2', 'vi11', 'IVmaj7s11', 'V7sus4', 'iii7', 'vi9', 'bVImaj7', 'Iadd9', 'Iadd9', 'IVmaj7s11', 'vi9', 'V7sus4', 'Iadd9', 'bVII', 'IVmaj9', 'Isus2'],
+
+        ],
+
+        32: [
+
+          ['Iadd9', 'IVmaj7s11', 'vi9', 'V7sus4', 'Iadd9', 'bVII', 'IVmaj9', 'Isus2', 'Isus2', 'vi11', 'IVmaj7s11', 'V7sus4', 'iii7', 'vi9', 'bVImaj7', 'Iadd9', 'Isus2', 'vi11', 'IVmaj7s11', 'V7sus4', 'iii7', 'vi9', 'bVImaj7', 'Iadd9', 'Iadd9', 'IVmaj7s11', 'vi9', 'V7sus4', 'Iadd9', 'bVII', 'IVmaj9', 'Isus2'],
+
+          ['Iadd9', 'IVmaj7s11', 'vi9', 'V7sus4', 'Iadd9', 'bVII', 'IVmaj9', 'Isus2', 'Iadd9', 'IVmaj7s11', 'vi9', 'V7sus4', 'Iadd9', 'bVII', 'IVmaj9', 'Isus2', 'Isus2', 'vi11', 'IVmaj7s11', 'V7sus4', 'iii7', 'vi9', 'bVImaj7', 'Iadd9', 'Isus2', 'vi11', 'IVmaj7s11', 'V7sus4', 'iii7', 'vi9', 'bVImaj7', 'Iadd9'],
+
         ],
       },
       minor: {
@@ -274,6 +482,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['i_add9', 'bVImaj7', 'bIIImaj7', 'bVII', 'i9', 'iv7', 'bVImaj9', 'i_add9'],
           ['i_add9', 'bVII', 'IV', 'bVImaj7', 'i9', 'bIIImaj7', 'V7sus4', 'i_add9'],
         ],
+
+        16: [
+
+          ['i_add9', 'bVImaj7', 'bIIImaj7', 'bVII', 'i9', 'iv7', 'bVImaj9', 'i_add9', 'i_add9', 'bVII', 'IV', 'bVImaj7', 'i9', 'bIIImaj7', 'V7sus4', 'i_add9'],
+
+          ['i_add9', 'bVII', 'IV', 'bVImaj7', 'i9', 'bIIImaj7', 'V7sus4', 'i_add9', 'i_add9', 'bVImaj7', 'bIIImaj7', 'bVII', 'i9', 'iv7', 'bVImaj9', 'i_add9'],
+
+        ],
+
+        32: [
+
+          ['i_add9', 'bVImaj7', 'bIIImaj7', 'bVII', 'i9', 'iv7', 'bVImaj9', 'i_add9', 'i_add9', 'bVII', 'IV', 'bVImaj7', 'i9', 'bIIImaj7', 'V7sus4', 'i_add9', 'i_add9', 'bVII', 'IV', 'bVImaj7', 'i9', 'bIIImaj7', 'V7sus4', 'i_add9', 'i_add9', 'bVImaj7', 'bIIImaj7', 'bVII', 'i9', 'iv7', 'bVImaj9', 'i_add9'],
+
+          ['i_add9', 'bVImaj7', 'bIIImaj7', 'bVII', 'i9', 'iv7', 'bVImaj9', 'i_add9', 'i_add9', 'bVImaj7', 'bIIImaj7', 'bVII', 'i9', 'iv7', 'bVImaj9', 'i_add9', 'i_add9', 'bVII', 'IV', 'bVImaj7', 'i9', 'bIIImaj7', 'V7sus4', 'i_add9', 'i_add9', 'bVII', 'IV', 'bVImaj7', 'i9', 'bIIImaj7', 'V7sus4', 'i_add9'],
+
+        ],
       },
     },
     forms: {
@@ -281,6 +505,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       8: [
         ['statement', 'restatement', 'development', 'contrast', 'restatement', 'development', 'climax', 'cadence'],
         ['statement', 'development', 'contrast', 'half_cadence', 'restatement', 'development', 'climax', 'cadence'],
+      ],
+
+      16: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'development', 'half_cadence', 'restatement', 'contrast', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence'],
+
+      ],
+
+      32: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence', 'statement', 'restatement', 'development', 'half_cadence', 'contrast', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'contrast', 'half_cadence', 'restatement', 'development', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence', 'restatement', 'contrast', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'development', 'restatement', 'contrast', 'development', 'development', 'climax', 'half_cadence', 'cadence'],
+
       ],
     },
   },
@@ -297,7 +537,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamics: { mp: 40, p: 35, mf: 15, pp: 10 },
       dynamicShape: { arch: 40, steady: 30, decrescendo: 15, crescendo: 15 },
       defaultInstrument: { electric_piano: 50, grand_piano: 40, choir: 5, strings: 5 },
-      barCount: { '8': 60, '4': 40 },
+      barCount: { '8': 42, '4': 40, '16': 12, '32': 6 },
       contour: { arch: 30, fall: 30, dip: 15, rise: 15, static: 10 },
     },
     progressions: {
@@ -311,10 +551,42 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           ['Imaj9', 'iii9', 'IVmaj9', 'V7sus4', 'vi9', 'ii9', 'bVII7', 'I6_9'],
           ['Imaj9', 'bVImaj9', 'IVmaj9', 'V13', 'iii9', 'vi11', 'bIImaj7', 'Imaj9'],
         ],
+
+        16: [
+
+          ['IVmaj9', 'V13', 'iii9', 'vi9', 'ii9', 'V7alt', 'Imaj9', 'I6_9', 'Imaj9', 'iii9', 'IVmaj9', 'V7sus4', 'vi9', 'ii9', 'bVII7', 'I6_9'],
+
+          ['Imaj9', 'iii9', 'IVmaj9', 'V7sus4', 'vi9', 'ii9', 'bVII7', 'I6_9', 'IVmaj9', 'V13', 'iii9', 'vi9', 'ii9', 'V7alt', 'Imaj9', 'I6_9'],
+
+        ],
+
+        32: [
+
+          ['IVmaj9', 'V13', 'iii9', 'vi9', 'ii9', 'V7alt', 'Imaj9', 'I6_9', 'Imaj9', 'iii9', 'IVmaj9', 'V7sus4', 'vi9', 'ii9', 'bVII7', 'I6_9', 'Imaj9', 'iii9', 'IVmaj9', 'V7sus4', 'vi9', 'ii9', 'bVII7', 'I6_9', 'IVmaj9', 'V13', 'iii9', 'vi9', 'ii9', 'V7alt', 'Imaj9', 'I6_9'],
+
+          ['IVmaj9', 'V13', 'iii9', 'vi9', 'ii9', 'V7alt', 'Imaj9', 'I6_9', 'IVmaj9', 'V13', 'iii9', 'vi9', 'ii9', 'V7alt', 'Imaj9', 'I6_9', 'Imaj9', 'iii9', 'IVmaj9', 'V7sus4', 'vi9', 'ii9', 'bVII7', 'I6_9', 'Imaj9', 'iii9', 'IVmaj9', 'V7sus4', 'vi9', 'ii9', 'bVII7', 'I6_9'],
+
+        ],
       },
       minor: {
         4: [['i9', 'bVImaj9', 'V7alt', 'i9']],
         8: [['i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9']],
+
+        16: [
+
+          ['i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9', 'i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9'],
+
+          ['i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9', 'i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9'],
+
+        ],
+
+        32: [
+
+          ['i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9', 'i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9', 'i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9', 'i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9'],
+
+          ['i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9', 'i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9', 'i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9', 'i9', 'iv7', 'bVII7', 'bIIImaj7', 'bVImaj9', 'ii_half_dim7', 'V7alt', 'i9'],
+
+        ],
       },
     },
     forms: {
@@ -322,6 +594,22 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       8: [
         ['statement', 'restatement', 'development', 'half_cadence', 'restatement', 'contrast', 'climax', 'cadence'],
         ['statement', 'development', 'restatement', 'contrast', 'restatement', 'development', 'half_cadence', 'cadence'],
+      ],
+
+      16: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'development', 'half_cadence', 'restatement', 'contrast', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence'],
+
+      ],
+
+      32: [
+
+        ['statement', 'restatement', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence', 'statement', 'restatement', 'development', 'half_cadence', 'contrast', 'development', 'climax', 'cadence', 'restatement', 'development', 'contrast', 'half_cadence', 'development', 'climax', 'development', 'cadence'],
+
+        ['statement', 'development', 'contrast', 'half_cadence', 'restatement', 'development', 'climax', 'cadence', 'statement', 'restatement', 'development', 'contrast', 'development', 'development', 'climax', 'cadence', 'restatement', 'contrast', 'development', 'half_cadence', 'statement', 'development', 'climax', 'cadence', 'development', 'restatement', 'contrast', 'development', 'development', 'climax', 'half_cadence', 'cadence'],
+
       ],
     },
   },

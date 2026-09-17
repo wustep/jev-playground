@@ -118,7 +118,7 @@ export class JevPlanner implements Planner {
     for (const field of GLOBAL_FIELD_IDS) {
       globals[field] = decide(first, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
     }
-    const barCount = input.bars === 'auto' ? (Number(decide(first, 'barCount', 'barCount', BAR_COUNTS)) as 4 | 8) : input.bars
+    const barCount = input.bars === 'auto' ? (Number(decide(first, 'barCount', 'barCount', BAR_COUNTS)) as 4 | 8 | 16 | 32) : input.bars
     // Roles were asked in parallel, so each distribution is a marginal that
     // knows nothing of its neighbours. Sampling eight of those independently
     // scrambles the phrase (a cadence in bar 2); take the argmax form and let

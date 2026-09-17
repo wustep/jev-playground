@@ -99,7 +99,7 @@ export class HeuristicPlanner implements Planner {
 
     const countProbabilities = withFloor(BAR_COUNT_IDS, profile.priors.barCount)
     const barCount =
-      input.bars === 'auto' ? (Number(pickFrom(countProbabilities, input.pick, random)) as 4 | 8) : input.bars
+      input.bars === 'auto' ? (Number(pickFrom(countProbabilities, input.pick, random)) as 4 | 8 | 16 | 32) : input.bars
     emit(decision('barCount', String(barCount), countProbabilities, input.bars === 'auto' ? undefined : 1))
 
     // Harmony and form come from whole templates so the progression stays
@@ -172,7 +172,7 @@ function heuristicMatch(plan: CompositionPlan, profile: StyleProfile): StyleMatc
     totalWeight += FIELD_WEIGHT[field]
   }
   const vocabulary = new Set<ChordId>(
-    [profile.progressions.major, profile.progressions.minor].flatMap((byLength) => [...byLength[4], ...byLength[8]].flat()),
+    [profile.progressions.major, profile.progressions.minor].flatMap((byLength) => [...byLength[4], ...byLength[8], ...byLength[16], ...byLength[32], ...byLength[16], ...byLength[32]].flat()),
   )
   const chordFit = plan.bars.filter((bar) => vocabulary.has(bar.chord)).length / plan.bars.length
   const fit = 0.7 * (weighted / totalWeight) + 0.3 * chordFit

@@ -8,7 +8,7 @@
 // Design notes (from docs.typesafe.ai):
 //  • Questions in one request run in parallel and cannot see each other, so
 //    everything independent is fanned out in ONE call (globals + the bar roles
-//    for both possible lengths, speculatively).
+//    for all supported lengths, speculatively).
 //  • Chords DO depend on each other, so they are asked one bar at a time with
 //    the progression-so-far in state ("respond to changing state").
 //  • Choice criteria are the enum descriptions from schema.ts; Score levels
@@ -105,7 +105,7 @@ const choice = (instructions: string, criteria: Record<string, string>): ChoiceQ
 })
 
 /** Question ids for the speculative role fan-out, e.g. `role8_3`. */
-export const roleQuestionId = (length: 4 | 8, index: number) => `role${length}_${index}`
+export const roleQuestionId = (length: 4 | 8 | 16 | 32, index: number) => `role${length}_${index}`
 
 function globalsRequest(op: Extract<JevOp, { op: 'globals' }>, model: string): SystemOneRequest {
   const questions: Record<string, Question> = {}
@@ -116,9 +116,9 @@ function globalsRequest(op: Extract<JevOp, { op: 'globals' }>, model: string): S
     'How long should a characteristic musical idea in the style of `requested_style.name` be?',
     BAR_COUNTS,
   )
-  // Speculative fan-out: ask the phrase role of every bar under BOTH possible
+  // Speculative fan-out: ask the phrase role of every bar under all supported
   // lengths. Code reads only the set matching the chosen length.
-  for (const length of [4, 8] as const) {
+  for (const length of [4, 8, 16, 32] as const) {
     for (let i = 0; i < length; i++) {
       questions[roleQuestionId(length, i)] = choice(
         `Suppose the piece is exactly ${length} bars long. What role should bar ${i + 1} of ${length} play in a phrase shaped the way \`requested_style.name\` typically shapes phrases? The first bar normally presents the idea and the last bar normally closes.`,
@@ -225,7 +225,7 @@ export function parseOp(raw: unknown): JevOp {
       return { op: 'globals', style: parseStyle(obj.style), brief: obj.brief === true }
     case 'bar': {
       const roles = Array.isArray(obj.roles) ? obj.roles : []
-      if (roles.length !== 4 && roles.length !== 8) throw new PlanValidationError('op.roles: expected 4 or 8 roles')
+      if (![4, 8, 16, 32].includes(roles.length)) throw new PlanValidationError('op.roles: expected 4, 8, 16 or 32 roles')
       const chords = Array.isArray(obj.chords) ? obj.chords : []
       const index = obj.index
       if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= roles.length) {

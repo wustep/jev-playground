@@ -897,3 +897,98 @@ button.small {
     margin-left: 0;
   }
 }
+
+
+/* ── flow hint (generate → hear → inspect) ───────────────────────────────── */
+
+.flow-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: -4px 0 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.flow-hint b {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.flow-arrow {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.control-bars select {
+  min-width: 7.5rem;
+  font-weight: 600;
+}
+
+/* Clearer transport */
+.transport .play {
+  min-width: 108px;
+  height: 40px;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.transport .play:not(.is-playing)::before {
+  content: '▶ ';
+}
+
+.transport .play.is-playing::before {
+  content: '■ ';
+}
+
+.transport .push-right,
+.transport .ghost.push-right {
+  height: 40px;
+  font-weight: 600;
+}
+
+/* Dial: easier to scan & click */
+.dial-stop {
+  padding: 14px 12px 15px;
+  min-height: 64px;
+}
+
+.dial-name {
+  font-size: 19px;
+}
+
+/* Sheet + plan: less cramped */
+.workbench {
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 360px);
+  gap: 20px;
+}
+
+.sheet-panel {
+  min-height: 320px;
+}
+
+.sheet-panel .sheet,
+.sheet-panel canvas {
+  min-height: 280px;
+}
+
+.bar-strip {
+  overflow-x: auto;
+}
+
+.bar-strip[data-cols="8"] .bar-cell:nth-child(8n) {
+  border-right: 0;
+}

@@ -148,9 +148,13 @@ export const INSTRUMENT_IDS = keysOf<InstrumentId>(INSTRUMENTS)
 export const BAR_COUNTS = {
   '4': 'Four bars — one short phrase, a single gesture',
   '8': 'Eight bars — a full period: a phrase and its answer',
+  '16': 'Sixteen bars — a double period: two phrases with a midpoint breath',
+  '32': 'Thirty-two bars — a short binary form: exposition and return',
 } as const
 export type BarCountId = keyof typeof BAR_COUNTS
 export const BAR_COUNT_IDS = keysOf<BarCountId>(BAR_COUNTS)
+export const BAR_COUNT_VALUES = [4, 8, 16, 32] as const
+export type BarCount = (typeof BAR_COUNT_VALUES)[number]
 
 // ── Per-bar decisions ───────────────────────────────────────────────────────
 
@@ -254,7 +258,7 @@ export interface CompositionPlan {
   dynamics: DynamicId
   dynamicShape: DynamicShapeId
   defaultInstrument: InstrumentId
-  /** 4 or 8 bars, one harmony each. */
+  /** 4, 8, 16 or 32 bars, one harmony each. */
   bars: BarPlan[]
 }
 
@@ -327,8 +331,8 @@ export function parseStyle(raw: unknown, path = 'style'): StyleId {
 export function parsePlan(raw: unknown): CompositionPlan {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError('plan: expected an object')
   const obj = raw as Record<string, unknown>
-  if (!Array.isArray(obj.bars) || (obj.bars.length !== 4 && obj.bars.length !== 8)) {
-    throw new PlanValidationError('plan.bars: expected an array of 4 or 8 bars')
+  if (!Array.isArray(obj.bars) || !(BAR_COUNT_VALUES as readonly number[]).includes(obj.bars.length)) {
+    throw new PlanValidationError('plan.bars: expected an array of 4, 8, 16 or 32 bars')
   }
   return {
     version: 1,

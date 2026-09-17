@@ -56,8 +56,8 @@ describe('JevPlanner', () => {
     expect(trace.inputTokens).toBe(900)
     expect(trace.exchanges.every((exchange) => exchange.sent && exchange.response)).toBe(true)
 
-    // Request 1 fans out globals + length + roles for both lengths.
-    expect(Object.keys(seen[0].questions)).toHaveLength(8 + 1 + 4 + 8)
+    // Request 1 fans out globals + length + roles for all supported lengths.
+    expect(Object.keys(seen[0].questions)).toHaveLength(8 + 1 + 4 + 8 + 16 + 32)
     // With the brief off, the style's name is all Jev gets.
     expect(seen[0].state).toMatchObject({ requested_style: { name: 'Philip Glass' } })
     expect(JSON.stringify(seen[0].state)).not.toContain('minimalism')
@@ -95,6 +95,17 @@ describe('HeuristicPlanner', () => {
     expect(trace.exchanges).toHaveLength(1 + plan.bars.length)
     expect(trace.exchanges.every((exchange) => !exchange.sent && !exchange.response)).toBe(true)
     expect(trace.exchanges[0].request.model).toBe('jev-latest')
+  })
+
+
+  it('plans 16- and 32-bar forms end-to-end', async () => {
+    const planner = new HeuristicPlanner()
+    for (const bars of [16, 32] as const) {
+      const { plan } = await planner.plan({ style: 'bach', bars, pick: 'argmax', seed: 1, brief: true })
+      expect(plan.bars).toHaveLength(bars)
+      expect(parsePlan(plan)).toEqual(plan)
+      renderPlan(plan, 1)
+    }
   })
 
   it('scores its own style at least as high as the others', async () => {

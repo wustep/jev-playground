@@ -79,7 +79,7 @@ interface CompositionPlan {
   dynamics: DynamicId         // pp … ff
   dynamicShape: DynamicShapeId// steady | terraced | crescendo | decrescendo | arch | sudden_contrast
   defaultInstrument: InstrumentId
-  bars: BarPlan[]             // 4 | 8 × { chord: ChordId (50 key-relative labels), role, contour }
+  bars: BarPlan[]             // 4 | 8 | 16 | 32 × { chord: ChordId (50 key-relative labels), role, contour }
 }
 ```
 
@@ -91,7 +91,7 @@ Built against the public API (`POST https://api.typesafe.ai/v1/systemone`, [docs
 
 | # | Request | Questions | Why this shape |
 | --- | --- | --- | --- |
-| 1 | `globals` | 8 global Choices + bar count + bar roles for **both** 4- and 8-bar forms (21 Choices) | Questions in one request run in parallel and can't see each other → fan out everything independent, speculatively; code reads the role set matching the chosen length. |
+| 1 | `globals` | 8 global Choices + bar count + bar roles for **both** 4-, 8-, 16-, and 32-bar forms (21 Choices) | Questions in one request run in parallel and can't see each other → fan out everything independent, speculatively; code reads the role set matching the chosen length. |
 | 2…N | `bar` ×4/8 | `chord` (50 options) + `contour` | Chords depend on each other, so they're asked sequentially with the progression-so-far in `state`. |
 | opt. | `score` | one **Score** per style, levels low / medium / high | “How well does this plan match style X?” → `StyleMatchScore { match, confidence, raw }`. The plan's own `style` label is withheld from state. |
 

@@ -5,7 +5,7 @@ import type { SystemOneRequest, SystemOneResponse } from './jev/systemOne'
 export interface PlanInput {
   style: StyleId
   /** Force a length, or let the planner decide. */
-  bars: 4 | 8 | 'auto'
+  bars: 4 | 8 | 16 | 32 | 'auto'
   /**
    * How code turns a distribution into a decision:
    *  • `argmax` — always the most probable option (deterministic per style)

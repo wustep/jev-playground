@@ -100,7 +100,7 @@ export function PlanPanel({ plan, score, decisions, edited, onApply }: Props) {
         })}
       </dl>
 
-      <ol className="bar-strip" style={{ gridTemplateColumns: `repeat(${plan.bars.length === 8 ? 4 : plan.bars.length}, 1fr)` }}>
+      <ol className="bar-strip" data-cols={String(plan.bars.length <= 4 ? plan.bars.length : plan.bars.length <= 8 ? 4 : 8)} style={{ gridTemplateColumns: `repeat(${plan.bars.length <= 4 ? plan.bars.length : plan.bars.length <= 8 ? 4 : 8}, 1fr)` }}>
         {plan.bars.map((bar, i) => {
           const decision = edited ? undefined : byField.get(`bars[${i}].chord`)
           return (
