@@ -36,7 +36,18 @@ import {
   type StyleId,
   type StyleMatchScore,
 } from '../plan/schema'
-import { MELODY_DEGREES, PHRASE_NOTE_COUNT, parseJevNoteChoices, pitchQuestionId, rhythmsFor } from '../plan/notes'
+import {
+  BASS_PATTERN_QUESTION_ID,
+  MELODY_DEGREES,
+  PHRASE_NOTE_COUNT,
+  melodyMemoryFrom,
+  parseBassPattern,
+  parseJevNoteChoices,
+  pitchQuestionId,
+  rhythmsFor,
+  type BassPatternId,
+  type MelodyMemoryBar,
+} from '../plan/notes'
 import { realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
 import { formRoles, formSlots, themeSources } from '../plan/forms'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
@@ -263,10 +274,12 @@ export class JevPlanner implements Planner {
 
   /**
    * Debug experiment: repeated closed-schema picks after the plan. Jev writes
-   * a 4-slot RH phrase for every plan bar that is new material; theme-return
-   * bars reuse the source rhythm and degrees, re-spelled on the later chord.
-   * Code validates the closed schema; the caller falls back to renderPlan on
-   * failure. Bass / left hand stay with renderPlan.
+   * a 4-slot RH phrase plus a bass pattern for every plan bar that is new
+   * material; theme-return bars reuse the source rhythm, degrees and bass
+   * pattern, re-spelled on the later chord. Each notes request carries prior
+   * closed choices so later bars can continue the line. Code validates the
+   * closed schema; illegal RH falls back to renderPlan, illegal bass keeps
+   * that bar's renderPlan left hand.
    */
   async writeNotes(
     plan: CompositionPlan,
@@ -279,23 +292,42 @@ export class JevPlanner implements Planner {
     const exchanges: Required<Exchange>[] = []
     const random = rng(input.seed ^ 0x4e07e5)
     const rhythmTable = rhythmsFor(plan.meter)
+    const melodySoFar: MelodyMemoryBar[] = []
+    const bassSoFar: BassPatternId[] = []
 
     const pickChoices = (answers: Record<string, Answer>) => {
       const rhythm = parseOption(rhythmTable, pickFrom(choiceAnswer(answers, 'rhythm').probabilities, input.pick, random), 'jev.rhythm')
       const degrees = Array.from({ length: PHRASE_NOTE_COUNT }, (_, i) =>
         parseOption(MELODY_DEGREES, pickFrom(choiceAnswer(answers, pitchQuestionId(i)).probabilities, input.pick, random), `jev.${pitchQuestionId(i)}`),
       )
-      return parseJevNoteChoices({ rhythm, degrees }, plan.meter)
+      const bassPattern = parseBassPattern(
+        pickFrom(choiceAnswer(answers, BASS_PATTERN_QUESTION_ID).probabilities, input.pick, random),
+        `jev.${BASS_PATTERN_QUESTION_ID}`,
+      )
+      return parseJevNoteChoices({ rhythm, degrees, bassPattern }, plan.meter)
+    }
+
+    const remember = (phrase: NotePhrase, bassPattern?: BassPatternId) => {
+      melodySoFar.push(...melodyMemoryFrom([phrase]))
+      bassSoFar.push(bassPattern ?? phrase.bass?.pattern ?? 'root_hold')
     }
 
     for (let i = 0; i < plan.bars.length; i++) {
       const source = returns[i]
       const from = source !== undefined ? phrases[source] : undefined
       if (from) {
-        phrases.push(realizeJevNoteChoices({ rhythm: from.rhythm, degrees: from.degrees }, plan, { barIndex: i }))
+        const bassPattern = from.bass?.pattern
+        const phrase = realizeJevNoteChoices(
+          { rhythm: from.rhythm, degrees: from.degrees, ...(bassPattern ? { bassPattern } : {}) },
+          plan,
+          { barIndex: i },
+        )
+        phrases.push(phrase)
+        remember(phrase, bassPattern)
         continue
       }
       const bar = plan.bars[i]
+      const next = plan.bars[i + 1]
       const op: JevOp = {
         op: 'notes',
         style: plan.style,
@@ -308,10 +340,16 @@ export class JevPlanner implements Planner {
         palette: plan.palette,
         bar,
         barIndex: i,
+        melodySoFar: [...melodySoFar],
+        bassSoFar: [...bassSoFar],
+        ...(next ? { nextChord: next.chord } : {}),
       }
-      const exchange = await this.exchange(`melody bar ${i + 1}`, op, options?.signal)
+      const exchange = await this.exchange(`notes bar ${i + 1}`, op, options?.signal)
       exchanges.push(exchange)
-      phrases.push(realizeJevNoteChoices(pickChoices(exchange.response.answers), plan, { barIndex: i }))
+      const choices = pickChoices(exchange.response.answers)
+      const phrase = realizeJevNoteChoices(choices, plan, { barIndex: i })
+      phrases.push(phrase)
+      remember(phrase, choices.bassPattern)
     }
     return { phrases, exchanges }
   }

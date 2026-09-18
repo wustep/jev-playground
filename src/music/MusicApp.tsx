@@ -169,7 +169,7 @@ export default function MusicApp() {
         } else {
           if (mountedRef.current) {
             setPendingAsksJev(true)
-            setPlanStatus('Jev is writing the melody…')
+            setPlanStatus('Jev is writing the melody and bass…')
           }
           try {
             const written = await writer.writeNotes(result.plan, input, { signal: abort.signal })
@@ -403,7 +403,8 @@ export default function MusicApp() {
 
   // ── THE SEAM: plan JSON → notes ───────────────────────────────────────────
   // Default: labels → renderPlan. Debug + Notes:Jev overlays a validated
-  // right-hand line on every plan bar; illegal phrases fall back to renderPlan.
+  // RH melody and LH bass on every plan bar; illegal RH falls back to
+  // renderPlan, illegal bass keeps that bar's code left hand.
   // A stale one-bar cache is not applied — the notes pass must cover the piece.
   const applyJevNotes = debug && jevNotes && !editedPlan && notePhrasesCoverPlan(generated?.notePhrases, plan?.bars.length ?? 0)
   const score = useMemo(
@@ -434,7 +435,7 @@ export default function MusicApp() {
     abortRef.current = abort
     if (mountedRef.current) {
       setPendingAsksJev(true)
-      setPlanStatus('Jev is writing the melody…')
+      setPlanStatus('Jev is writing the melody and bass…')
     }
     void writer
       .writeNotes(generated.plan, generated.input, { signal: abort.signal })
@@ -713,7 +714,7 @@ export default function MusicApp() {
             Seed
             <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
           </label>
-          <label title="Experimental: after the plan, Jev picks a closed-schema right-hand melody for every plan bar. Off by default; illegal notes fall back to renderPlan.">
+          <label title="Experimental: after the plan, Jev picks a closed-schema right-hand melody and left-hand bass for every plan bar, continuing from earlier choices. Off by default; illegal RH falls back to renderPlan, illegal bass keeps that bar’s code left hand.">
             Notes
             <select value={jevNotes ? 'jev' : 'code'} onChange={(event) => setNotesMode(event.target.value === 'jev')}>
               <option value="code">code (renderPlan)</option>

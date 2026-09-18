@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MELODY_DEGREE_IDS, NOTE_TICK_VALUES, PHRASE_NOTE_COUNT, PHRASE_RHYTHMS, parseJevNoteChoices, parseNoteTick } from '../plan/notes'
+import { BASS_PATTERN_IDS, MELODY_DEGREE_IDS, NOTE_TICK_VALUES, PHRASE_NOTE_COUNT, PHRASE_RHYTHMS, parseJevNoteChoices, parseNoteTick } from '../plan/notes'
 import { METER_IDS, PlanValidationError, type BarCount } from '../plan/schema'
 import { HeuristicPlanner } from '../planner/HeuristicPlanner'
 import { JevPlanner, type JevTransport } from '../planner/JevPlanner'
@@ -9,9 +9,11 @@ import { themeSources } from '../plan/forms'
 import {
   applyNotePhrase,
   applyNotePhrases,
+  bassSlotsFor,
   notePhrasesCoverPlan,
   parseScoreNote,
   parseScoreVoice,
+  realizeBassPattern,
   realizeJevNoteChoices,
   renderWithOptionalJevNotes,
   type NotePhrase,
@@ -68,7 +70,7 @@ describe('closed note schema', () => {
 
 function closedPhrase(plan: Awaited<ReturnType<typeof samplePlan>>, barIndex: number): NotePhrase {
   return realizeJevNoteChoices(
-    { rhythm: 'four_long_short', degrees: ['tonic_high', 'dominant', 'mediant', 'tonic'] },
+    { rhythm: 'four_long_short', degrees: ['tonic_high', 'dominant', 'mediant', 'tonic'], bassPattern: 'root_fifth' },
     plan,
     { barIndex },
   )
@@ -93,6 +95,16 @@ describe('realize + overlay', () => {
     expect(overlaid.bars.filter((_, i) => i !== body)).toEqual(code.bars.filter((_, i) => i !== body))
     expect(overlaid.bars[body].bass).toEqual(code.bars[body].bass)
     expect(timeline(overlaid)[0].hand).toBe('right')
+
+    const both = realizeJevNoteChoices(
+      { rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic_high'], bassPattern: 'root_fifth' },
+      plan,
+    )
+    expect(both.bass?.notes.length).toBeGreaterThan(0)
+    const withBass = applyNotePhrase(code, both)
+    expect(withBass.bars[body].treble[0]).toEqual(both.notes)
+    expect(withBass.bars[body].bass[0]).toEqual(both.bass!.notes)
+    expect(withBass.bars[body].bass[0]).not.toEqual(code.bars[body].bass[0])
   })
 
   it('overlays the right-hand line on every plan bar, not just bar 1', async () => {
@@ -108,7 +120,8 @@ describe('realize + overlay', () => {
     for (let i = 0; i < plan.bars.length; i++) {
       const index = i + intro
       expect(overlaid.bars[index].treble[0], `bar ${i + 1}`).toEqual(phrases[i].notes)
-      expect(overlaid.bars[index].bass, `bar ${i + 1} bass`).toEqual(code.bars[index].bass)
+      expect(overlaid.bars[index].bass[0], `bar ${i + 1} bass`).toEqual(phrases[i].bass!.notes)
+      expect(overlaid.bars[index].bass[0], `bar ${i + 1} bass changed`).not.toEqual(code.bars[index].bass[0])
     }
 
     const { score, used, notice } = renderWithOptionalJevNotes(plan, 3, phrases)
@@ -170,6 +183,24 @@ describe('realize + overlay', () => {
     expect(empty).toEqual({ score: code, used: 'code', notice: null })
   })
 
+  it('keeps renderPlan bass when one bar’s left hand is illegal', async () => {
+    const plan = await samplePlan('four_four')
+    const good = plan.bars.map((_, i) => closedPhrase(plan, i))
+    const mixed = good.map((phrase, i) =>
+      i === 2
+        ? { ...phrase, bass: { pattern: 'root_fifth' as const, notes: [{ start: 0, dur: 5, pitches: ['C3'], velocity: 64 }] } }
+        : phrase,
+    )
+    const code = renderPlan(plan, 7)
+    const result = renderWithOptionalJevNotes(plan, 7, mixed)
+    expect(result.used).toBe('jev')
+    expect(result.notice).toMatch(/bass failed/)
+    const intro = result.score.introBars ?? 0
+    expect(result.score.bars[2 + intro].treble[0]).toEqual(mixed[2].notes)
+    expect(result.score.bars[2 + intro].bass).toEqual(code.bars[2 + intro].bass)
+    expect(result.score.bars[0 + intro].bass[0]).toEqual(good[0].bass!.notes)
+  })
+
   it('rejects an all-rest phrase so the caller can fall back', async () => {
     const plan = await samplePlan('four_four')
     expect(() =>
@@ -184,6 +215,25 @@ describe('realize + overlay', () => {
     }])
     expect(result.used).toBe('code')
     expect(result.notice).toMatch(/Jev notes failed/)
+  })
+})
+
+describe('closed bass patterns', () => {
+  it('fills every catalogued meter and stays in the bass range', async () => {
+    const plan = await samplePlan('four_four')
+    for (const pattern of BASS_PATTERN_IDS) {
+      const slots = bassSlotsFor(pattern, METER_INFO.four_four)
+      expect(slots.reduce((sum, slot) => sum + slot.ticks, 0), pattern).toBe(16)
+      const bass = realizeBassPattern(pattern, plan, { barIndex: 0 })
+      expect(bass.pattern).toBe(pattern)
+      expect(bass.notes.length).toBeGreaterThan(0)
+      expect(bass.notes.at(-1)!.start + bass.notes.at(-1)!.dur).toBe(16)
+      for (const note of bass.notes) {
+        expect(NOTE_TICK_VALUES).toContain(note.dur)
+        expect(midiOf(note.pitches[0])).toBeGreaterThanOrEqual(28)
+        expect(midiOf(note.pitches[0])).toBeLessThanOrEqual(55)
+      }
+    }
   })
 })
 
@@ -208,11 +258,14 @@ describe('Jev notes op', () => {
     expect(() => parseOp({ ...notesOp, bar: { chord: 'H7', role: 'statement', contour: 'rise' } })).toThrow()
 
     const request = buildRequest(notesOp, 'jev-latest')
-    expect(Object.keys(request.questions)).toEqual(['rhythm', 'pitch_1', 'pitch_2', 'pitch_3', 'pitch_4'])
+    expect(Object.keys(request.questions)).toEqual(['rhythm', 'pitch_1', 'pitch_2', 'pitch_3', 'pitch_4', 'bass_pattern'])
     expect(Object.values(request.questions).every((question) => question.type === 'choice')).toBe(true)
     expect(Object.keys(request.questions.rhythm.criteria as object).every((id) => PHRASE_RHYTHMS[id as keyof typeof PHRASE_RHYTHMS].meter === 'four_four')).toBe(true)
     expect(Object.keys(request.questions.pitch_1.criteria as object)).toEqual(MELODY_DEGREE_IDS)
+    expect(Object.keys(request.questions.bass_pattern.criteria as object)).toEqual(BASS_PATTERN_IDS)
     expect(JSON.stringify(request.state)).toContain('C major')
+    expect(JSON.stringify(request.state)).toContain('melody_so_far')
+    expect(request.state).toMatchObject({ melody_so_far: [], last_sounding_degree: null })
     expect(JSON.stringify(request.questions)).not.toContain('MIDI')
   })
 
@@ -224,7 +277,7 @@ describe('Jev notes op', () => {
       for (const [id, question] of Object.entries(request.questions)) {
         if (question.type !== 'choice') continue
         const options = Object.keys(question.criteria)
-        const favourite = id === 'rhythm' ? 'four_even' : id === 'pitch_1' ? 'tonic' : 'dominant'
+        const favourite = id === 'rhythm' ? 'four_even' : id === 'pitch_1' ? 'tonic' : id === 'bass_pattern' ? 'root_fifth' : 'dominant'
         const pick = options.includes(favourite) ? favourite : options[0]
         answers[id] = {
           type: 'choice',
@@ -249,6 +302,7 @@ describe('Jev notes op', () => {
       if (source === undefined) continue
       expect(phrases[i].rhythm).toBe(phrases[source].rhythm)
       expect(phrases[i].degrees).toEqual(phrases[source].degrees)
+      expect(phrases[i].bass?.pattern).toBe(phrases[source].bass?.pattern)
     }
     const { score, used, notice } = renderWithOptionalJevNotes(plan, 1, phrases)
     expect(used).toBe('jev')
@@ -256,13 +310,48 @@ describe('Jev notes op', () => {
     const intro = score.introBars ?? 0
     for (let i = 0; i < phrases.length; i++) {
       expect(score.bars[i + intro].treble[0]).toEqual(phrases[i].notes)
+      expect(score.bars[i + intro].bass[0]).toEqual(phrases[i].bass!.notes)
+    }
+    const firstNotes = exchanges[0].op
+    if (firstNotes.op === 'notes') {
+      expect(firstNotes.melodySoFar ?? []).toEqual([])
+      expect(firstNotes.barIndex).toBe(0)
+    }
+    const laterNotes = exchanges.find((exchange) => exchange.op.op === 'notes' && exchange.op.op === 'notes' && (exchange.op.barIndex ?? 0) > 0)
+    expect(laterNotes).toBeDefined()
+    if (laterNotes && laterNotes.op.op === 'notes') {
+      expect(laterNotes.op.melodySoFar?.length).toBe(laterNotes.op.barIndex)
+      expect(laterNotes.request.state).toHaveProperty('melody_so_far')
+      const soFar = laterNotes.request.state as { melody_so_far: unknown[] }
+      expect(soFar.melody_so_far.length).toBe(laterNotes.op.barIndex)
+      expect(JSON.stringify(laterNotes.request.state)).toContain('rhythm_id')
+      expect(JSON.stringify(laterNotes.request.questions.rhythm.instructions)).toContain('melody_so_far')
     }
   })
 
-  it('names the requested plan bar in the notes op, not only bar 1', () => {
-    const later = buildRequest({ ...notesOp, barIndex: 5 }, 'jev-latest')
+  it('names the requested plan bar in the notes op and carries prior melody', () => {
+    const later = buildRequest({
+      ...notesOp,
+      barIndex: 5,
+      melodySoFar: [
+        { rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic'] },
+        { rhythm: 'four_long_short', degrees: ['dominant', 'mediant', 'supertonic', 'tonic'] },
+        { rhythm: 'four_even', degrees: ['tonic', 'rest', 'dominant', 'mediant'] },
+        { rhythm: 'four_even', degrees: ['mediant', 'dominant', 'leading', 'tonic'] },
+        { rhythm: 'four_syncop', degrees: ['dominant', 'tonic', 'leading', 'tonic'] },
+      ],
+      bassSoFar: ['root_hold', 'root_fifth', 'walk_down', 'pedal', 'octave_drop'],
+      nextChord: 'V',
+    }, 'jev-latest')
     expect(JSON.stringify(later.state)).toContain('bar 6')
     expect(JSON.stringify(later.state)).not.toMatch(/bar 1 only/)
     expect(later.state).toMatchObject({ this_bar: { bar_number: 6 } })
+    expect(JSON.stringify(later.state)).toContain('melody_so_far')
+    expect((later.state as { melody_so_far: unknown[] }).melody_so_far).toHaveLength(5)
+    expect(JSON.stringify(later.state)).toContain('four_syncop')
+    expect(JSON.stringify(later.state)).toContain('next_chord')
+    expect(JSON.stringify(later.questions.rhythm.instructions)).toContain('melody_so_far')
+    expect(JSON.stringify(later.questions.pitch_1.instructions)).toContain('last_sounding_degree')
+    expect(later.questions).toHaveProperty('bass_pattern')
   })
 })

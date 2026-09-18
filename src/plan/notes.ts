@@ -104,6 +104,89 @@ export const pitchQuestionId = (index: number) => `pitch_${index + 1}`
 export interface JevNoteChoices {
   rhythm: PhraseRhythmId
   degrees: MelodyDegreeId[]
+  /** Closed left-hand pattern. Omitted = RH-only (legacy phrases). */
+  bassPattern?: BassPatternId
+}
+
+/** Prior bar’s closed RH choices — ids only, so the notes op stays allowlisted. */
+export interface MelodyMemoryBar {
+  rhythm: PhraseRhythmId
+  degrees: MelodyDegreeId[]
+}
+
+/**
+ * Simpler than the RH 4-slot phrase: one Choice for the whole left-hand bar.
+ * Code expands the pattern onto the sixteenth grid (root / fifth / walking).
+ */
+export const BASS_PATTERNS = {
+  root_hold: 'Hold the chord’s bass note for the whole bar',
+  root_fifth: 'Bass note on the first half of the bar, chord fifth on the second',
+  fifth_root: 'Chord fifth on the first half, bass note on the second',
+  octave_drop: 'Bass note, then the same note an octave lower',
+  walk_down: 'Walk down the scale by step from the chord’s bass note, one note per beat',
+  walk_up: 'Walk up the triad from the bass note (root, third, fifth, octave as the bar allows)',
+  pedal: 'Repeat the chord’s bass note on every beat',
+} as const
+export type BassPatternId = keyof typeof BASS_PATTERNS
+export const BASS_PATTERN_IDS = Object.keys(BASS_PATTERNS) as BassPatternId[]
+
+export const BASS_PATTERN_QUESTION_ID = 'bass_pattern'
+
+export function parseBassPattern(value: unknown, path = 'notes.bassPattern'): BassPatternId {
+  return parseOption(BASS_PATTERNS, value, path)
+}
+
+/** Last non-rest degree, for stepwise continuation across the barline. */
+export function lastSoundingDegree(degrees: readonly MelodyDegreeId[]): MelodyDegreeId | null {
+  for (let i = degrees.length - 1; i >= 0; i--) {
+    if (degrees[i] !== 'rest') return degrees[i]
+  }
+  return null
+}
+
+export function melodyMemoryFrom(
+  phrases: readonly { rhythm: PhraseRhythmId; degrees: readonly MelodyDegreeId[] }[],
+): MelodyMemoryBar[] {
+  return phrases.map((phrase) => ({ rhythm: phrase.rhythm, degrees: [...phrase.degrees] }))
+}
+
+export function parseMelodyMemoryBar(raw: unknown, _path: string, meter: MeterId): MelodyMemoryBar {
+  const choices = parseJevNoteChoices(raw, meter)
+  return { rhythm: choices.rhythm, degrees: choices.degrees }
+}
+
+/**
+ * Prior RH choices on the notes op. Omitted = none.
+ * When `expectedLength` is set (the current `barIndex`), the list must match.
+ */
+export function parseMelodySoFar(raw: unknown, meter: MeterId, expectedLength?: number): MelodyMemoryBar[] {
+  if (raw === undefined) {
+    if (expectedLength !== undefined && expectedLength > 0) {
+      throw new PlanValidationError('op.melodySoFar: expected one entry per earlier bar')
+    }
+    return []
+  }
+  if (!Array.isArray(raw)) throw new PlanValidationError('op.melodySoFar: expected an array')
+  if (raw.length > 32) throw new PlanValidationError('op.melodySoFar: expected at most 32 bars')
+  if (expectedLength !== undefined && raw.length !== expectedLength) {
+    throw new PlanValidationError('op.melodySoFar: expected one entry per earlier bar')
+  }
+  return raw.map((bar, i) => parseMelodyMemoryBar(bar, `op.melodySoFar[${i}]`, meter))
+}
+
+export function parseBassSoFar(raw: unknown, expectedLength?: number): BassPatternId[] {
+  if (raw === undefined) {
+    if (expectedLength !== undefined && expectedLength > 0) {
+      throw new PlanValidationError('op.bassSoFar: expected one entry per earlier bar')
+    }
+    return []
+  }
+  if (!Array.isArray(raw)) throw new PlanValidationError('op.bassSoFar: expected an array')
+  if (raw.length > 32) throw new PlanValidationError('op.bassSoFar: expected at most 32 bars')
+  if (expectedLength !== undefined && raw.length !== expectedLength) {
+    throw new PlanValidationError('op.bassSoFar: expected one entry per earlier bar')
+  }
+  return raw.map((pattern, i) => parseBassPattern(pattern, `op.bassSoFar[${i}]`))
 }
 
 export function parseNoteTick(value: unknown, path: string): number {
@@ -134,9 +217,11 @@ export function parseJevNoteChoices(raw: unknown, meter: MeterId): JevNoteChoice
   if (degrees.length !== PHRASE_NOTE_COUNT) {
     throw new PlanValidationError(`notes.degrees: expected ${PHRASE_NOTE_COUNT} scale degrees`)
   }
+  const bassPattern = obj.bassPattern === undefined ? undefined : parseBassPattern(obj.bassPattern)
   return {
     rhythm,
     degrees: degrees.map((degree, i) => parseOption(MELODY_DEGREES, degree, `notes.degrees[${i}]`)),
+    ...(bassPattern ? { bassPattern } : {}),
   }
 }
 

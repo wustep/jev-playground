@@ -371,8 +371,29 @@ describe('/api/jev handler', () => {
       bar: { chord: 'I', role: 'statement', contour: 'rise' },
     }
     expect(parseOp(notes)).toMatchObject({ op: 'notes', meter: 'four_four' })
+    expect(parseOp(notes)).not.toHaveProperty('melodySoFar')
     expect(parseOp({ ...notes, barIndex: 3 })).toMatchObject({ op: 'notes', barIndex: 3 })
+    expect(parseOp({
+      ...notes,
+      barIndex: 1,
+      melodySoFar: [{ rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic'] }],
+      bassSoFar: ['root_fifth'],
+      nextChord: 'V',
+    })).toMatchObject({
+      op: 'notes',
+      barIndex: 1,
+      melodySoFar: [{ rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic'] }],
+      bassSoFar: ['root_fifth'],
+      nextChord: 'V',
+    })
     expect(() => parseOp({ ...notes, barIndex: -1 })).toThrow(/barIndex/)
+    expect(() => parseOp({
+      ...notes,
+      barIndex: 1,
+      melodySoFar: [{ rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic'] }, { rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic'] }],
+    })).toThrow(/melodySoFar/)
+    expect(() => parseOp({ ...notes, barIndex: 1, bassSoFar: ['not_a_pattern'] })).toThrow(/bassSoFar/)
+    expect(() => parseOp({ ...notes, nextChord: 'H7' })).toThrow(/nextChord/)
     expect(() => parseOp({ ...notes, op: 'midi' })).toThrow(/notes/)
     expect(() => parseOp({ ...notes, palette: 'serial' })).toThrow()
   })
