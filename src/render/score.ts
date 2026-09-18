@@ -69,6 +69,13 @@ export interface Score {
   pedal: boolean
   /** 0–1: how much of a short note's written length sounds (the character's touch). */
   articulation: number
+  /**
+   * Framing bars prepended by the renderer (vamp or pickup). `plan.bars`
+   * stays 4/8/16/32; body bar *i* is `bars[introBars + i]`.
+   */
+  introBars: number
+  /** Stretch the last bar on playback so the cadence is not cut off. */
+  ritardando: boolean
 }
 
 /** A sounding note with absolute timing, for playback and MIDI export. */

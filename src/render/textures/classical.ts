@@ -1,4 +1,5 @@
 import type { BaseRoleId, MeterId } from '../../plan/schema'
+import { figureStep } from '../arrangement'
 import { note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches } from '../melody'
 import { ladder, midiOf, nearestNote } from '../pitch'
@@ -12,43 +13,43 @@ const CANTABILE: Record<MeterId, RhythmBank> = {
     main: [[6, 2, 4, 4], [4, 4, 4, 2, 2], [4, 2, 2, 8]],
     busy: [[2, 2, 2, 2, 4, 4], [4, 2, 2, 2, 2, 2, 2], [2, 2, 4, 2, 2, 4]],
     sparse: [[8, 4, 4], [8, 8]],
-    pause: [[4, 4, 8], [6, 2, 8]],
-    close: [[4, 4, 8]],
+    pause: [[4, 8, -4], [6, 2, 4, -4], [4, 4, 4, -4]],
+    close: [[4, 8, -4], [8, 4, -4]],
   },
   three_four: {
     main: [[6, 2, 4], [4, 4, 4], [4, 2, 2, 4]],
     busy: [[2, 2, 2, 2, 4], [2, 2, 2, 2, 2, 2]],
     sparse: [[8, 4], [12]],
-    pause: [[4, 8]],
-    close: [[4, 8]],
+    pause: [[4, 4, -4], [8, -4]],
+    close: [[8, -4], [4, 4, -4]],
   },
   six_eight: {
     main: [[4, 2, 4, 2], [6, 4, 2], [4, 2, 6]],
     busy: [[2, 2, 2, 4, 2], [2, 2, 2, 2, 2, 2]],
     sparse: [[6, 6]],
-    pause: [[4, 2, 6]],
-    close: [[6, 6]],
+    pause: [[4, 2, -6], [6, -6]],
+    close: [[6, -6]],
   },
   two_four: {
     main: [[4, 2, 2], [2, 2, 4], [6, 2]],
     busy: [[2, 2, 2, 2], [2, 2, 4]],
     sparse: [[8], [4, 4]],
-    pause: [[4, 4]],
-    close: [[4, 4]],
+    pause: [[4, -4]],
+    close: [[4, -4]],
   },
   nine_eight: {
     main: [[4, 2, 4, 2, 6], [6, 4, 2, 6], [6, 6, 6]],
     busy: [[2, 2, 2, 4, 2, 6], [2, 2, 2, 2, 2, 2, 2, 2, 2]],
     sparse: [[6, 12], [12, 6]],
-    pause: [[4, 2, 12]],
-    close: [[6, 12]],
+    pause: [[4, 2, 6, -6], [6, 6, -6]],
+    close: [[12, -6]],
   },
   twelve_eight: {
     main: [[4, 2, 4, 2, 4, 2, 4, 2], [6, 6, 6, 6], [6, 4, 2, 6, 6]],
     busy: [[2, 2, 2, 4, 2, 2, 2, 2, 4, 2], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]],
     sparse: [[12, 12], [6, 6, 12]],
-    pause: [[4, 2, 6, 12]],
-    close: [[12, 12]],
+    pause: [[4, 2, 12, -6], [12, 6, -6]],
+    close: [[18, -6]],
   },
 }
 
@@ -109,9 +110,12 @@ export function albertiMelody(bar: BarContext): BarNotes {
   const figure = figures[pieceChoice(bar, 'alberti', figures.length)]
   const left: Voice = []
   // The final bar stops the motor on a beat and lets the chord stand.
-  const motorLength = !bar.isLast ? figure.length : meter.id === 'three_four' ? 4 : Math.floor(figure.length / 2)
-  for (let k = 0; k < motorLength; k++) left.push(note(k * 2, 2, triad[figure[k]], velocity - 12 + (figure[k] === 0 ? 4 : 0)))
-  if (bar.isLast) left.push(note(motorLength * 2, meter.ticksPerBar - motorLength * 2, triad, velocity - 8))
+  const step = figureStep(bar, 2)
+  const motorLength = !bar.isLast ? Math.ceil(figure.length * (2 / step)) : meter.id === 'three_four' ? 4 : Math.floor(figure.length / 2)
+  for (let k = 0; k < motorLength && k * step < meter.ticksPerBar; k++) {
+    left.push(note(k * step, step, triad[figure[k % figure.length]], velocity - 12 + (figure[k % figure.length] === 0 ? 4 : 0)))
+  }
+  if (bar.isLast) left.push(note(motorLength * step, Math.max(0, meter.ticksPerBar - motorLength * step), triad, velocity - 8))
   return { treble: [melody], bass: [left] }
 }
 

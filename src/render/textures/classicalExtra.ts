@@ -10,6 +10,7 @@
 
 import { Note } from 'tonal'
 import type { BaseRoleId, MeterId } from '../../plan/schema'
+import { figureStep } from '../arrangement'
 import { meterGrid, note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches, stepwiseRun } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from '../pitch'
@@ -34,45 +35,45 @@ const ARIA: Record<MeterId, RhythmBank> = {
     main: [[6, 2, 4, 4], [4, 3, 1, 8], [8, 3, 1, 4], [4, 4, 6, 2]],
     busy: [[2, 1, 1, 4, 2, 2, 4], [3, 1, 2, 2, 4, 4], [4, 1, 1, 1, 1, 4, 4]],
     sparse: [[12, 4], [8, 8]],
-    pause: [[6, 2, 8], [4, 12]],
-    close: [[4, 12]],
+    pause: [[6, 2, 4, -4], [4, 8, -4]],
+    close: [[4, 8, -4], [8, 4, -4]],
   },
   three_four: {
     // The sarabande leans on beat two.
     main: [[4, 6, 2], [4, 7, 1], [4, 4, 4], [6, 2, 4]],
     busy: [[2, 2, 3, 1, 4], [3, 1, 2, 2, 2, 2], [4, 1, 1, 1, 1, 4]],
     sparse: [[4, 8], [12]],
-    pause: [[4, 8]],
-    close: [[12]],
+    pause: [[4, 4, -4], [8, -4]],
+    close: [[8, -4]],
   },
   six_eight: {
     // Siciliano lilt: dotted eighth, sixteenth, eighth.
     main: [[3, 1, 2, 3, 1, 2], [3, 1, 2, 6], [6, 3, 1, 2]],
     busy: [[3, 1, 2, 2, 2, 2], [2, 2, 2, 3, 1, 2]],
     sparse: [[6, 6], [12]],
-    pause: [[6, 6]],
-    close: [[12]],
+    pause: [[6, -6]],
+    close: [[6, -6]],
   },
   two_four: {
     main: [[4, 3, 1], [3, 1, 4], [2, 2, 4], [6, 2]],
     busy: [[2, 1, 1, 2, 2], [3, 1, 2, 2]],
     sparse: [[8], [4, 4]],
-    pause: [[4, 4]],
-    close: [[8]],
+    pause: [[4, -4]],
+    close: [[4, -4]],
   },
   nine_eight: {
     main: [[3, 1, 2, 3, 1, 2, 6], [6, 3, 1, 2, 6], [6, 6, 6]],
     busy: [[3, 1, 2, 2, 2, 2, 6], [2, 2, 2, 3, 1, 2, 6]],
     sparse: [[6, 12], [12, 6]],
-    pause: [[6, 12]],
-    close: [[12, 6]],
+    pause: [[6, 6, -6]],
+    close: [[12, -6]],
   },
   twelve_eight: {
     main: [[3, 1, 2, 3, 1, 2, 3, 1, 2, 6], [6, 6, 6, 6], [6, 3, 1, 2, 6, 6]],
     busy: [[3, 1, 2, 2, 2, 2, 3, 1, 2, 6], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]],
     sparse: [[12, 12], [6, 6, 12]],
-    pause: [[12, 12]],
-    close: [[12, 12]],
+    pause: [[12, 6, -6]],
+    close: [[18, -6]],
   },
 }
 
@@ -174,43 +175,43 @@ const LILT: Record<MeterId, RhythmBank> = {
     main: [[6, 2, 4, 4], [4, 2, 2, 6, 2], [3, 1, 4, 4, 4], [4, 4, 3, 1, 4]],
     busy: [[2, 2, 2, 2, 3, 1, 4], [3, 1, 2, 2, 2, 2, 4], [2, 2, 4, 2, 2, 4]],
     sparse: [[8, 8], [12, 4]],
-    pause: [[4, 4, 8], [6, 2, 8]],
-    close: [[4, 12]],
+    pause: [[4, 8, -4], [6, 2, 4, -4]],
+    close: [[4, 8, -4], [8, 4, -4]],
   },
   three_four: {
     main: [[4, 2, 2, 4], [6, 2, 4], [4, 4, 2, 2], [8, 2, 2]],
     busy: [[2, 2, 2, 2, 2, 2], [4, 2, 2, 2, 2], [3, 1, 2, 2, 4]],
     sparse: [[8, 4], [12]],
-    pause: [[8, 4], [4, 8]],
-    close: [[12]],
+    pause: [[4, 4, -4], [8, -4]],
+    close: [[8, -4]],
   },
   six_eight: {
     main: [[4, 2, 4, 2], [6, 4, 2], [4, 2, 6], [3, 1, 2, 4, 2]],
     busy: [[2, 2, 2, 2, 2, 2], [4, 2, 2, 2, 2]],
     sparse: [[6, 6], [12]],
-    pause: [[6, 6]],
-    close: [[12]],
+    pause: [[6, -6]],
+    close: [[6, -6]],
   },
   two_four: {
     main: [[4, 2, 2], [2, 2, 4], [3, 1, 4], [6, 2]],
     busy: [[2, 2, 2, 2], [3, 1, 2, 2]],
     sparse: [[8], [4, 4]],
-    pause: [[4, 4]],
-    close: [[8]],
+    pause: [[4, -4]],
+    close: [[4, -4]],
   },
   nine_eight: {
     main: [[4, 2, 4, 2, 6], [6, 4, 2, 6], [3, 1, 2, 4, 2, 6]],
     busy: [[2, 2, 2, 2, 2, 2, 2, 2, 2], [4, 2, 2, 2, 2, 6]],
     sparse: [[6, 12], [12, 6]],
-    pause: [[6, 12]],
-    close: [[12, 6]],
+    pause: [[6, 6, -6]],
+    close: [[12, -6]],
   },
   twelve_eight: {
     main: [[4, 2, 4, 2, 4, 2, 4, 2], [6, 6, 6, 6], [3, 1, 2, 4, 2, 6, 6]],
     busy: [[2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [4, 2, 2, 2, 2, 4, 2, 6]],
     sparse: [[12, 12], [6, 6, 12]],
-    pause: [[12, 12]],
-    close: [[12, 12]],
+    pause: [[12, 6, -6]],
+    close: [[18, -6]],
   },
 }
 
@@ -240,17 +241,20 @@ export function strideDance(bar: BarContext): BarNotes {
   if (meter.beatTicks === 6) {
     // Swung compound groups: bass – chord – chord, later groups on the partner tone.
     const groups = meter.ticksPerBar / 6
+    const thin = bar.arrangement <= 0
     for (let group = 0; group < groups; group++) {
       const start = group * 6
-      left.push(note(start, 2, group === 0 ? low : alternate, velocity - 2), note(start + 2, 2, chord, velocity - 14), note(start + 4, 2, chord, velocity - 14))
+      left.push(note(start, thin ? 6 : 2, group === 0 ? low : alternate, velocity - 2))
+      if (!thin) left.push(note(start + 2, 2, chord, velocity - 14), note(start + 4, 2, chord, velocity - 14))
     }
   } else {
     const beats = meter.ticksPerBar / meter.beatTicks
     for (let beat = 0; beat < beats; beat++) {
       const isBass = meter.id === 'three_four' || meter.id === 'two_four' ? beat === 0 : beat % 2 === 0
+      if (bar.arrangement <= 0 && !isBass) continue
       const pitch = isBass ? (beat === 0 ? low : alternate) : chord
-      // A waltz lifts its after-beats; a quiet bar lets them ring.
-      const dur = isBass || bar.role === 'contrast' ? meter.beatTicks : 2
+      // A waltz lifts its after-beats; a quiet bar lets them ring. Level 3 fills the beat.
+      const dur = isBass || bar.role === 'contrast' || bar.arrangement >= 3 ? meter.beatTicks : 2
       left.push(note(beat * meter.beatTicks, dur, pitch, isBass ? velocity - 2 : velocity - 14))
     }
   }
@@ -287,7 +291,8 @@ export function rollingNocturne(bar: BarContext): BarNotes {
   // Rolling figure in even eighths: low–mid–high in triple groupings, low–mid–high–mid in duple.
   const figure = meter.beatTicks === 6 ? [0, 1, 2] : [[0, 1, 2, 1], [0, 1, 2, 0]][pieceChoice(bar, 'rolling', 2)]
   const rolling: Voice = []
-  for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += 2, k++) rolling.push(note(tick, 2, triad[figure[k % figure.length]], velocity - 10))
+  const step = figureStep(bar, 2)
+  for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += step, k++) rolling.push(note(tick, step, triad[figure[k % figure.length]], velocity - 10))
 
   // The tune waits: the opening bar is the accompaniment alone.
   const kind = bar.index === 0 ? 'tacet' : bar.role === 'development' || bar.role === 'climax' ? 'moving' : bar.role === 'contrast' ? 'plain' : 'upbeat'

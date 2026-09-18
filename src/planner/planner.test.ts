@@ -71,8 +71,10 @@ describe('JevPlanner', () => {
     // … and with the brief off, the style's name is all Jev gets.
     expect(seen[0].state).toMatchObject({ requested_style: { name: 'Philip Glass' } })
     expect(JSON.stringify(seen[0].state)).not.toContain('minimalism')
-    // Request 2 fans out form + the eight other globals, conditioned on that character. Length is never asked.
-    expect(Object.keys(seen[1].questions)).toHaveLength(9)
+    // Request 2 fans out form + the other globals, conditioned on that character. Length is never asked.
+    expect(Object.keys(seen[1].questions)).toHaveLength(11)
+    expect(Object.keys(seen[1].questions)).toContain('arrangement')
+    expect(Object.keys(seen[1].questions)).toContain('opening')
     expect(Object.keys(seen[1].questions)).not.toContain('barCount')
     expect(JSON.stringify(seen[1].state)).toContain('steady motoric pulse')
     // Phrase requests carry the book options and prior-slot contour context.

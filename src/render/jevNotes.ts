@@ -156,7 +156,8 @@ function isFiniteTick(value: number): boolean {
 }
 
 export function applyNotePhrase(score: Score, phrase: NotePhrase): Score {
-  const bar = score.bars[phrase.barIndex]
+  const index = phrase.barIndex + (score.introBars ?? 0)
+  const bar = score.bars[index]
   if (!bar) throw new JevNotesError('Jev notes: no opening bar to overlay')
   const voice = parseScoreVoice(phrase.notes, score.meter.ticksPerBar)
   const sample = bar.treble[0]?.[0]?.velocity
@@ -164,7 +165,7 @@ export function applyNotePhrase(score: Score, phrase: NotePhrase): Score {
   const treble = bar.treble.length === 0 ? [shaped] : [shaped, ...bar.treble.slice(1)]
   return {
     ...score,
-    bars: score.bars.map((entry, i) => (i === phrase.barIndex ? { ...entry, treble } : entry)),
+    bars: score.bars.map((entry, i) => (i === index ? { ...entry, treble } : entry)),
   }
 }
 

@@ -22,7 +22,7 @@ import { renderPlan, timeline } from './renderPlan'
 import type { Score } from './score'
 
 function assertWellFormed(score: Score) {
-  expect(score.bars.length).toBe(score.plan.bars.length)
+  expect(score.bars.length).toBe(score.plan.bars.length + score.introBars)
   for (const bar of score.bars) {
     const voices = [...bar.treble, ...bar.bass]
     expect(voices.length, `bar ${bar.index} has notes`).toBeGreaterThan(0)

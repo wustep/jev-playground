@@ -9,6 +9,7 @@
 
 import { Note } from 'tonal'
 import type { BaseRoleId, MeterId } from '../../plan/schema'
+import { figureStep } from '../arrangement'
 import { meterGrid, note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote, spellMidi } from '../pitch'
@@ -82,9 +83,10 @@ export function pulsingChords(bar: BarContext): BarNotes {
 
   // The motor: even eighths, the first of each beat leaned on. A swell through development bars.
   const left: Voice = []
-  for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += 2, k++) {
-    const swell = role === 'development' ? (k / (meter.ticksPerBar / 2)) * 12 - 4 : 0
-    left.push(note(tick, 2, pulse, velocity - 10 + swell + (tick % meter.beatTicks === 0 ? 4 : 0)))
+  const step = figureStep(bar, 2)
+  for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += step, k++) {
+    const swell = role === 'development' ? (k / Math.max(1, meter.ticksPerBar / step)) * 12 - 4 : 0
+    left.push(note(tick, step, pulse, velocity - 10 + swell + (tick % meter.beatTicks === 0 ? 4 : 0)))
   }
 
   // Above it: either flickering fragments, or one note repeated like a bell (fixed per piece).
@@ -109,43 +111,43 @@ const SPARSE_TUNE: Record<MeterId, RhythmBank> = {
     main: [[-4, 8, 4], [-2, 6, 8], [8, -4, 4], [-8, 8]],
     busy: [[4, 4, 8], [-2, 2, 4, 8], [4, 2, 2, 8]],
     sparse: [[-8, 8], [16], [-16]],
-    pause: [[8, -8], [-4, 12]],
-    close: [[16]],
+    pause: [[8, -8], [-4, 8, -4]],
+    close: [[12, -4], [8, -8]],
   },
   three_four: {
     main: [[-4, 8], [8, 4], [-2, 6, 4], [-4, 4, 4]],
     busy: [[4, 4, 4], [-2, 2, 4, 4]],
     sparse: [[12], [-12], [-8, 4]],
     pause: [[8, -4]],
-    close: [[12]],
+    close: [[8, -4]],
   },
   six_eight: {
     main: [[-6, 6], [6, 6], [-2, 4, 6], [6, 4, 2]],
     busy: [[4, 2, 6], [-2, 2, 2, 6]],
     sparse: [[12], [-12], [-6, 6]],
     pause: [[6, -6]],
-    close: [[12]],
+    close: [[6, -6]],
   },
   two_four: {
     main: [[-2, 4, 2], [4, -2, 2], [-4, 4]],
     busy: [[2, 2, 4], [-1, 1, 2, 4]],
     sparse: [[8], [-8]],
     pause: [[4, -4]],
-    close: [[8]],
+    close: [[4, -4]],
   },
   nine_eight: {
     main: [[-6, 6, 6], [6, 6, 6], [-2, 4, 6, 6]],
     busy: [[4, 2, 6, 6], [-2, 2, 2, 6, 6]],
     sparse: [[18], [-18], [-6, 12]],
     pause: [[6, -12]],
-    close: [[18]],
+    close: [[12, -6]],
   },
   twelve_eight: {
     main: [[-6, 6, 6, 6], [6, 6, 6, 6], [-2, 4, 6, 12]],
     busy: [[4, 2, 6, 6, 6], [-2, 2, 2, 6, 12]],
     sparse: [[24], [-24], [-12, 12]],
     pause: [[12, -12]],
-    close: [[24]],
+    close: [[18, -6]],
   },
 }
 
@@ -164,7 +166,8 @@ export function melodyOverOstinato(bar: BarContext): BarNotes {
     // Rocking dyad: bass note against the third above, even eighths.
     const rock = midiOf(partner) < midiOf(third) ? partner : third
     const voice: Voice = []
-    for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += 2, k++) voice.push(note(tick, 2, k % 2 === 0 ? low : rock, velocity - 10 + (k === 0 ? 4 : 0)))
+    const step = figureStep(bar, 2)
+    for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += step, k++) voice.push(note(tick, step, k % 2 === 0 ? low : rock, velocity - 10 + (k === 0 ? 4 : 0)))
     bass.push(voice)
   } else if (kind === 1) {
     // A two-note cell over a held pedal: short–long, the footstep figure.
@@ -179,8 +182,9 @@ export function melodyOverOstinato(bar: BarContext): BarNotes {
     // Broken chord up and back: root – fifth – octave – tenth – …
     const tones = [low, partner, nearestNote([bar.chord.bass], midiOf(low) + 12), tenth]
     const pattern = meter.beatTicks === 6 ? [0, 1, 2, 3, 2, 1] : [0, 1, 2, 3, 2, 3, 2, 1]
-    const order = Array.from({ length: meter.ticksPerBar / 2 }, (_, k) => pattern[k % pattern.length])
-    bass.push(order.map((index, k) => note(k * 2, 2, tones[index], velocity - 10 + (k === 0 ? 4 : 0))))
+    const step = figureStep(bar, 2)
+    const order = Array.from({ length: Math.ceil(meter.ticksPerBar / step) }, (_, k) => pattern[k % pattern.length])
+    bass.push(order.map((index, k) => note(k * step, step, tones[index], velocity - 10 + (k === 0 ? 4 : 0))))
   }
 
   if (bar.isLast) {
@@ -306,43 +310,43 @@ const CHORDAL: Record<MeterId, RhythmBank> = {
     main: [[6, 2, 8], [8, 6, 2], [4, 4, 8], [6, 6, 4]],
     busy: [[4, 2, 2, 4, 4], [6, 2, 4, 4], [3, 3, 2, 4, 4]],
     sparse: [[16], [12, 4]],
-    pause: [[8, 8], [4, 12]],
-    close: [[16]],
+    pause: [[8, 4, -4], [4, 8, -4]],
+    close: [[12, -4], [8, 4, -4]],
   },
   three_four: {
     main: [[8, 4], [4, 8], [6, 6], [4, 4, 4]],
     busy: [[4, 2, 2, 4], [6, 2, 4]],
     sparse: [[12]],
-    pause: [[8, 4]],
-    close: [[12]],
+    pause: [[8, -4], [4, 4, -4]],
+    close: [[8, -4]],
   },
   six_eight: {
     main: [[6, 6], [6, 4, 2], [4, 2, 6]],
     busy: [[4, 2, 4, 2], [6, 2, 2, 2]],
     sparse: [[12]],
-    pause: [[6, 6]],
-    close: [[12]],
+    pause: [[6, -6]],
+    close: [[6, -6]],
   },
   two_four: {
     main: [[6, 2], [4, 4], [3, 3, 2]],
     busy: [[2, 2, 4], [3, 1, 4]],
     sparse: [[8]],
-    pause: [[4, 4]],
-    close: [[8]],
+    pause: [[4, -4]],
+    close: [[4, -4]],
   },
   nine_eight: {
     main: [[6, 6, 6], [6, 4, 2, 6], [4, 2, 6, 6]],
     busy: [[4, 2, 4, 2, 6], [6, 2, 2, 2, 6]],
     sparse: [[18]],
-    pause: [[6, 12]],
-    close: [[18]],
+    pause: [[6, 6, -6]],
+    close: [[12, -6]],
   },
   twelve_eight: {
     main: [[6, 6, 6, 6], [8, 4, 6, 6], [6, 6, 4, 8]],
     busy: [[4, 2, 4, 2, 6, 6], [6, 2, 2, 2, 6, 6]],
     sparse: [[24]],
-    pause: [[12, 12]],
-    close: [[24]],
+    pause: [[12, 6, -6]],
+    close: [[18, -6]],
   },
 }
 
@@ -386,43 +390,43 @@ const TOLLING: Record<MeterId, RhythmBank> = {
     main: [[4, 4, 4, 4], [8, 4, 4], [4, 4, 8]],
     busy: [[4, 4, 4, 4], [2, 2, 4, 4, 4]],
     sparse: [[8, 8], [16]],
-    pause: [[8, 8]],
-    close: [[16]],
+    pause: [[8, 4, -4]],
+    close: [[12, -4]],
   },
   three_four: {
     main: [[4, 4, 4], [8, 4], [4, 8]],
     busy: [[4, 4, 4], [2, 2, 4, 4]],
     sparse: [[12]],
-    pause: [[8, 4]],
-    close: [[12]],
+    pause: [[8, -4]],
+    close: [[8, -4]],
   },
   six_eight: {
     main: [[6, 6], [6, 4, 2], [4, 2, 6]],
     busy: [[4, 2, 4, 2], [2, 2, 2, 6]],
     sparse: [[12]],
-    pause: [[6, 6]],
-    close: [[12]],
+    pause: [[6, -6]],
+    close: [[6, -6]],
   },
   two_four: {
     main: [[4, 4], [2, 2, 4], [4, 2, 2]],
     busy: [[2, 2, 2, 2], [2, 2, 4]],
     sparse: [[8]],
-    pause: [[4, 4]],
-    close: [[8]],
+    pause: [[4, -4]],
+    close: [[4, -4]],
   },
   nine_eight: {
     main: [[6, 6, 6], [6, 4, 2, 6], [4, 2, 6, 6]],
     busy: [[4, 2, 4, 2, 6], [2, 2, 2, 6, 6]],
     sparse: [[12, 6]],
-    pause: [[6, 12]],
-    close: [[18]],
+    pause: [[6, 6, -6]],
+    close: [[12, -6]],
   },
   twelve_eight: {
     main: [[6, 6, 6, 6], [8, 4, 6, 6], [6, 6, 4, 8]],
     busy: [[4, 2, 4, 2, 6, 6], [2, 2, 2, 6, 6, 6]],
     sparse: [[12, 12]],
-    pause: [[12, 12]],
-    close: [[24]],
+    pause: [[12, 6, -6]],
+    close: [[18, -6]],
   },
 }
 
