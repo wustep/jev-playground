@@ -6,6 +6,8 @@ Fable, 2026-09-18. Read of `wustep/jev-playground` on `main` (`2f187c0`, PR #31 
 
 **Short version.** The live graph is already the right *kind* of API: character first, then a globals fan-out, then one HarmonyBook phrase per 4-bar slot. Breath, arrangement and opening are on `main` and do not need re-proposing as inventions. What still makes a Jev plan an étude is *how* later questions are asked: four parallel bar contours that cannot form a phrase, contours asked for bars code will overwrite, every style offered every texture/form/key, frame labels (`arrangement`, `opening`) asked before `form` is known, and a style-match Score whose rubric still ignores the song fields the plan now carries. Fix those and the same renderer will sound like a piece.
 
+**Best button (Appendix B).** Dual critic: keep `target.raw - max(other.raw)`, add a 4-level `song_quality` Score scored from plan labels only, `dualObjective = contrast + 0.45 * (song.raw - 1.5)`, N 4 → 5. Wire spec for a follow-up; not in this PR.
+
 ---
 
 ## 0. Verified against `main` (do not re-ship)
@@ -32,7 +34,7 @@ Questions in one request are **parallel and cannot see each other**. Code combin
 request 1   concept     character Choice + 12 character Nouls
 request 2   globals     11 parallel Choices, character in state
 request 3…  phrase ×N   1 HarmonyBook phrase + 4 contour Choices
-optional    score       1 Score per style (Best-of-N critic)
+optional    score       1 Score per style + `song_quality` (Best-of-N dual critic; Appendix B)
 debug       notes       1 rhythm + 4 scale-degree Choices (bar 1 RH only)
 legacy      bar         per-bar chord + contour + optional approach (tests only)
 ```
@@ -235,18 +237,18 @@ Not a question — state. Zero extra tokens of *judgment*, large gain in what th
 
 `returns[k]` is the 1-based source bar or `null`. Rename today’s `current_slot.prior_melodic_shapes` (it is the *previous* slot’s contours, not this one’s) to `previous_slot_shapes` at piece level so the model is not lied to.
 
-### A5. Style-match rubric + a `songness` Score
+### A5. Dual critic: restated `match_*` + `song_quality` Score
 
-- **Why.** Best-of-N is the only Score use on the music path. It cannot keep a song-shaped plan because the rubric predates `arrangement` / `opening` / phrase return. Trolley already uses Score for “how hard / how absurd” as *standalone* level descriptions — copy that, do not add a mid-Generate reject loop (4 extra POSTs, rate-limit noisy).
-- **Payoff.** ★★★ for Best-of-N winners (the cached style preview and any critic path). ★☆ for live Jev Generate (does not call `score`).
-- **Cost.** S. Criteria strings only; optional ninth Score on the same `score` op.
-- **Allowlist.** No. New question id `songness` on `score` is still `op: 'score'`.
-- **Sketch.** Rewrite `match_*` criteria to name the fields `describePlan` actually sends:
+- **Why.** Best is the only Score use on the music path. Style contrast (`target.raw - max(other.raw)`) keeps on-style études. The findings’ song cues (breath, phrase-length return, arrangement lift, one late summit, not perpetual downbeats) are already *proxied* by labels `describePlan` sends — `character`, `phrase_layout`, `texture`, `arrangement`, `opening`, `dynamic_shape`, `bars[].role`. A second Score on the same `score` op can read those without MIDI. N is moving 4 → 5; still one POST per candidate (questions are parallel).
+- **Payoff.** ★★★★ on the Best button. ★☆ for live Generate (does not call `score`).
+- **Cost.** S. Criteria strings + a combine function. Allowlist unchanged (`op: 'score'`).
+- **Ship the question now** — do not wait for A1/A4. Breath is not a plan field; the criteria use character / opening / texture as the stand-in the renderer already uses. Canonical id: `song_quality` (4 standalone levels, raw 0–3). Full instructions, criteria, proxy table, and Best-of-N objective: **Appendix B**.
+- **Also** restate `match_*` so style contrast sees form / arrangement / opening (today’s rubric still says texture, chords, tempo, dynamics, instrument only):
 
 ```json
 {
   "type": "score",
-  "instructions": "How closely does `plan` match the musical style of Frédéric Chopin? Judge character, form, texture, harmony, arrangement, opening, tempo and dynamics together. The style name is not written on the plan; do not reward a lucky guess at the label.",
+  "instructions": "How closely does `plan` match the musical style of Frédéric Chopin? Judge character, phrase layout, texture, harmony, arrangement, opening, tempo and dynamics together. The style name is not written on the plan; do not reward a lucky guess at the label.",
   "criteria": [
     "A different tradition: texture, phrase layout and harmony would not be recognised as this musician's.",
     "Partial: some globals fit, but the form, arrangement or chord vocabulary point elsewhere or at a generic étude.",
@@ -254,24 +256,6 @@ Not a question — state. Zero extra tokens of *judgment*, large gain in what th
   ]
 }
 ```
-
-And, parallel on the same request:
-
-```json
-{
-  "songness": {
-    "type": "score",
-    "instructions": "Does `plan` describe a short song (a tune that returns, breathes, and changes clothes) rather than a one-texture étude?",
-    "criteria": [
-      "Étude: one figuration from first bar to last, no return of a phrase, straight in, no sense of verse and close.",
-      "Piece: a real form and a texture, but the tune does not obviously come back or the arrangement never lifts.",
-      "Song: a phrase-length idea returns, the opening and arrangement match that return, and the character is one a singer could hold."
-    ]
-  }
-}
-```
-
-Best-of-N: `contrastiveScore` stays for style; add `0.25 * songness` (or keep songness as a tie-break). Do not ask `songness` until A1/A4 make breath/return visible in the plan — otherwise every plan scores “étude” and the Score is noise.
 
 ### A6. `feel` (groove) — only after a groove texture exists
 
@@ -541,11 +525,11 @@ Tighten:
 
 - Returning contours: do not call `decide()` on a discarded answer (already skipped). After A2, do not send the question.
 - If `phrase_shape` is asked on a returning slot by mistake, ignore it the way contours are ignored today — but do not ask.
-- Score: withhold `plan.style` (already). After A5, also withhold nothing else — form/arrangement/opening *should* be judged.
+- Score: withhold `plan.style` (already). After A5, also withhold nothing else — form/arrangement/opening *should* be judged. `song_quality` is a separate answer, not a ninth style.
 
 ### S5. `score` stays off Generate; its state should match the critic’s job
 
-- **Why.** Scoring a Jev plan mid-flight is 8 Scores × N. The critic scores heuristic candidates and needs song fields in the rubric (A5). Putting `songness` on Generate would not write better notes; it would only reject plans after the expensive phrase loop.
+- **Why.** Scoring a Jev plan mid-flight is 8 style Scores + `song_quality` × N. The critic scores heuristic candidates (Appendix B). Putting `song_quality` on Generate would not write better notes; it would only reject plans after the expensive phrase loop.
 - **Payoff.** Correctness of Best-of-N, once A5 lands.
 - **Cost.** S.
 - **Allowlist.** No.
@@ -573,13 +557,14 @@ Independent of UI PRs. Ordered for the music playground: audible first, cheapest
 | **2** | **Filter texture / form / key / instrument by style+character priors** | Restructure + Remove | Stops foreign labels the nucleus sampler will draw. Same rule as mode-filtered chords. No new questions. | No |
 | **3** | **Ask `phrasing`; ask `arrangement` / `opening` / `phrasing` after `form`+`texture`** | Add + Restructure | Breath on stormy songs; frame labels that can see the layout they describe. `S1b` if we refuse a new op; `S1a` `frame` if we want a clean allowlist. | No / yes (`frame`) |
 | **4** | **Put `material` / `varied` / `returns` on phrase state** | Add (state only) | The existing phrase Choice can finally mean “A′” instead of “another four chords.” | No |
-| **5** | **Restate style-match Score; add `songness` once 1–4 are in the plan** | Add (Score) | Best-of-N can keep a song. Rubric is lying today. Do not put Score on the Generate loop. | No |
+| **5** | **Dual critic: `song_quality` Score + restated `match_*`; Best-of-N 4 → 5** | Add (Score) | Best can keep a song-shaped plan from labels already in `describePlan`. Appendix B is the wire spec. Not on the Generate loop. | No |
 
 Then, not before the renderer can play them: `return_as` (A3), Laufey `feel` + `bossa_comp` (A6), derived-or-asked `ending` (A7). Summit and 1+1+2 stay code (`melody.ts`, `forms.ts` role tables) — no Jev question.
 
-### Suggested first PR after this doc (not this PR)
+### Suggested first PRs after this doc (not this PR)
 
-A single allowlist-neutral cut of **#1 + #2 + #4**: phrase_shape, filtered criteria, richer `current_slot`. Audible on the next Generate. **#3** is the follow-up (one extra POST or a `frame` op). **#5** waits until those fields are what a critic would see.
+- **Best dual critic (urgent, independent):** Appendix B — `song_quality` on `score`, `BEST_OF_N = 5`, `dualObjective`. Allowlist-neutral. Can land before phrase_shape.
+- **Generate path:** a single allowlist-neutral cut of **#1 + #2 + #4**: phrase_shape, filtered criteria, richer `current_slot`. **#3** is the follow-up (one extra POST or a `frame` op).
 
 ---
 
@@ -593,6 +578,150 @@ A single allowlist-neutral cut of **#1 + #2 + #4**: phrase_shape, filtered crite
 
 `phrase`, `contour_0`, `contour_1`, `contour_2`, `contour_3`.
 
-`score` questions today: `match_bach` … `match_elijah_fox` (3-level Scores). Plan label withheld.
+`score` questions today: `match_bach` … `match_elijah_fox` (3-level Scores). Plan label withheld. Appendix B adds `song_quality` (4-level) on the same request.
 
 `concept` questions today: `character` + `writes_<CharacterId>` × 12.
+
+---
+
+## Appendix B — Best dual critic: `song_quality` (wire spec)
+
+Urgent addendum for the Best button. A follow-up agent wires this; this appendix is the contract. No MIDI. No new op. No allowlist change.
+
+Best-of-N samples heuristic plans (cheap), then one `score` POST each. Today that POST is eight `match_*` Scores; the winner is `target.raw - max(other.raw)`. That elects the most *on-style* étude. The second critic is one more parallel Score, `song_quality`, whose levels encode the findings’ song cues **as they appear on `CompositionPlan`**, which is what `describePlan` already puts in `state.plan`.
+
+N is **5** (was 4). Still 5 POSTs, still well under 90/min. Each POST: 8 style Scores + 1 `song_quality`.
+
+### B.1 What Jev can see (and cannot)
+
+`score` state today (`describePlan`):
+
+```json
+{
+  "task": "Judge a composition plan for a short solo keyboard piece.",
+  "plan": {
+    "character": "A slow, singing melody over a simple accompaniment; tender and intimate",
+    "phrase_layout": "Question and answer: a phrase that pauses on an open half cadence, then the same opening again, this time closing firmly",
+    "key": "…",
+    "meter": "…",
+    "texture": "Slow rolling broken chords in the middle register …",
+    "melodic_palette": "…",
+    "tempo": "…",
+    "dynamics": "…",
+    "dynamic_shape": "Swells gradually to a peak past the midpoint, then recedes",
+    "instrument": "…",
+    "arrangement": "The first statement is simple; when the idea comes back the arrangement is fuller — a thicker left hand, the tune doubled at the octave",
+    "opening": "A short upbeat into the first downbeat, the tune leaning in from the bar before",
+    "length_in_bars": 16,
+    "bars": [
+      { "bar": 1, "chord": "I — …", "role": "Presents the main idea for the first time", "melodic_shape": "Line rises to a mid-bar peak and returns" }
+    ]
+  }
+}
+```
+
+`plan.style` stays withheld. `arrangement` / `opening` are omitted by `describePlan` when unset — **always emit them** in the follow-up (same defaults as `parseGlobals`: `lift_on_return`, `straight_in`) so the critic is not scoring a missing field.
+
+Not in the plan, so **not in the criteria**: actual rests, ties, MIDI summit, skyline breath %. Those are renderer consequences of the labels below. Asking Jev to imagine them is asking it to invent notes.
+
+### B.2 Plan-label proxies (findings → enums)
+
+Use this table in tests and in the instructions. Descriptions, not ids, go to Jev; ids are for the follow-up’s fixtures.
+
+| Findings cue | High (song) on the plan | Low (étude) on the plan |
+| --- | --- | --- |
+| Breath / rests / not perpetual downbeats | `character` is lyrical_song, solemn_hymn, dance_lilt, warm_groove, restless_searching, meditative_stillness, or dreamy_haze; **or** `opening` is pickup / vamp_intro; **and** `texture` is a sung line over accompaniment (alberti_melody, rolling_nocturne, chordal_melody, aria_walking_bass, stride_dance, lush_voicings, melody_over_ostinato, chorale, pulsing_chords) | `character` is flowing_perpetual, hypnotic_pulse, or playful_wit **and** `opening` is straight_in **and** `texture` is unbroken figuration (broken_chord_prelude, toccata_perpetual, minimal_cells, interlocking_hands, two_voice_counterpoint) |
+| Phrase-length return (3–8 bars, not one bar) | `phrase_layout` is period, sentence, arch_return, call_and_response, vamp_and_tag, or binary_dance. Roles include restatement / echo after a statement. | `phrase_layout` is free_fantasia (never repeats). `additive_loop` / `layered_build` / `spinning_out` are **not** automatic études — they only fail this cue if the arrangement stays constant and there is no melody-over-ostinato / pulsing tune. |
+| Arrangement lift on return | `arrangement` is lift_on_return, build, peak_then_bare, or terraced_blocks | `arrangement` is constant |
+| One late summit | Exactly one `climax` role, in the last third of `length_in_bars` (bars 11–16 of 16; 6–8 of 8); **or** `dynamic_shape` is late_surge or arch **and** the last climax is past the midpoint. Roles `dissolve` / `echo` after that peak help. | No climax; climax at ~50% only (the measured 48% pathology); two or more climaxes spread evenly (the 2.8× top-note tell) |
+
+Glass / Zimmer loop + `peak_then_bare` or `build` + `vamp_intro` + melody-over-ostinato / pulsing_chords is a *song in the film-score / minimal sense* (findings: “Time”, *Metamorphosis*). Do not mark every loop as an étude.
+
+Bach invention: flowing_perpetual + two_voice_counterpoint + spinning_out + constant + straight_in is correctly an étude. Style contrast still prefers it when it is much more Bach than the alternatives; `song_quality` only overturns a *mild* style edge (B.4).
+
+### B.3 The question (copy into `scoreRequest`)
+
+Question id: `song_quality`. Type: `score`. Four levels; each sentence is a complete situation (the model never sees the ordering). `raw` is the probability-weighted position on **0–3**.
+
+```json
+{
+  "song_quality": {
+    "type": "score",
+    "instructions": "How song-like is the composition plan in `plan`? Judge only the labels in `plan` — character, phrase_layout, texture, arrangement, opening, dynamic_shape, length_in_bars, and each bar's role. Do not imagine notes, rests, MIDI, or a performance. A song here means a short keyboard piece a listener would hear as a tune that returns, can breathe, and changes clothes; an étude means unbroken figuration that starts again every bar. Loop-and-layer plans (a short cycle that builds or peaks then drops, often with a vamp) count as songs in the film-score and minimal sense.",
+    "criteria": [
+      "Étude / perpetual study. The character is continuous figuration or a motor pulse, the texture is two-hand perpetual motion or unbroken broken-chord / cell figuration, the opening is straight in (or omitted), and the arrangement is constant. The phrase layout does not bring a three-to-four-bar idea back — it spins, fantasises, or loops without a sung line on top. Bar roles have no single late peak: no climax, or climaxes scattered through the middle. Realising this plan would attack every downbeat and never change clothes.",
+      "A finished piece, not yet a song. There is a real character, texture and phrase layout, but the song cues are missing or they fight each other. Either the layout does not return a phrase-length idea (a fantasia, or a loop/spin with a constant arrangement and no melody riding an ostinato), or a returning layout is paired with a straight-in opening, a perpetual or on-the-beat character, and a constant arrangement. Dynamics may swell, but climaxes sit at the midpoint or repeat. Someone would hear a coherent miniature, still an étude's cousin.",
+      "Song-shaped. The phrase layout is one where a three-to-four-bar idea comes back (question and answer, sentence, arch with return, call and response, vamp and tag, or a binary that returns home), or it is a loop/layer form whose texture is a tune over a repeating figure. The character and texture are a singing line over accompaniment — lyrical, hymn, dance, warm groove, searching, still, or hazy; nocturne, alberti, chordal melody, aria, stride, chorale, ostinato-under-tune, pulsing chords — not a two-hand perpetual. The opening is a vamp or a pickup, or the character is one that lands and rests at phrase ends. Arrangement may still be constant. At most one clear climax, and it is not early. On the page this is a short song without words, even if the return is not yet dressed.",
+      "A song that returns in new clothes. Song-shaped, and the plan also marks the return and the peak. Arrangement is lift-on-return, a build, peak-then-bare, or terraced blocks — not constant. There is one summit late in the piece: a climax role in the last third of the bars, or a late-surge / arch dynamic shape whose climax is past the midpoint, not a climax at half-time and again at the end. A film-score or minimal plan qualifies at this level when a short loop accumulates layers or peaks then drops to a bare texture, the opening is a vamp, and a melody sits on the ostinato. A straight-in perpetual texture with a constant arrangement cannot be this level."
+    ]
+  }
+}
+```
+
+Do not add a fifth level. Do not mention composer names. Do not ask for free text.
+
+### B.4 Combine with style contrast
+
+Keep `contrastiveScore` as it is:
+
+```
+styleContrast = target.raw - max(other.raw)     // style Scores are 3-level; raw ∈ [0, 2]
+                                                // typical range ≈ [−2, +2]
+```
+
+`song_quality.raw` ∈ **[0, 3]**. Center it so an étude *hurts* and a dressed song *helps*:
+
+```
+SONG_WEIGHT = 0.45
+SONG_MID    = 1.5
+
+dualObjective = styleContrast + SONG_WEIGHT * (song_quality.raw - SONG_MID)
+```
+
+If `song_quality` is missing or NaN, `dualObjective = styleContrast` (fail open). `pickBestIndex` reads `dualObjective` instead of contrast alone.
+
+Worked examples (why these weights):
+
+| Candidate | styleContrast | song raw | dual |
+| --- | --- | --- | --- |
+| On-style étude | 0.90 | 0 | 0.90 + 0.45×(−1.5) = **0.225** |
+| Slightly less on-style song | 0.40 | 3 | 0.40 + 0.45×(+1.5) = **1.075** ← Best |
+| Wrong-style song | −1.00 | 3 | −1.00 + 0.675 = **−0.325** ← loses to the étude |
+| Tie on style, song vs piece | 0.50 | 3 vs 1 | **1.175** vs **0.275** |
+
+Song quality overturns a *mild* style edge and breaks ties. It cannot elect a wrong style. That is the dual critic: style keeps Bach from becoming generic Laufey; song keeps Best from handing you the most Bach-like prelude.
+
+If Bach Best starts preferring arias over inventions even when the invention is clearly more Bach (`styleContrast` gap ≳ 0.8), drop `SONG_WEIGHT` to **0.30** (étude penalty −0.45 instead of −0.675). Do not invert the terms (do not multiply contrast by song).
+
+Sketch for `bestOf.ts` (follow-up; not this PR):
+
+```ts
+export const BEST_OF_N = 5
+export const SONG_QUALITY_WEIGHT = 0.45
+export const SONG_QUALITY_MID = 1.5
+
+export function dualObjective(
+  styleContrast: number | null,
+  songRaw: number | null,
+): number | null {
+  if (styleContrast === null) return null
+  if (songRaw == null || !Number.isFinite(songRaw)) return styleContrast
+  return styleContrast + SONG_QUALITY_WEIGHT * (songRaw - SONG_QUALITY_MID)
+}
+```
+
+`ScoreResult` grows an optional `songQuality?: { raw: number; confidence: number }` read from `answers.song_quality` (`type === 'score'`). Do not reuse `MATCH_LEVELS` / `low|medium|high` — those are 3-wide and belong to `match_*` only. Round `song_quality` only if the UI needs a label; the critic uses `raw`.
+
+Heuristic stub scorer: a deterministic stand-in so offline Best still moves. Count how many of the four cues in B.2 are high, map 0→0, 1→1, 2→2, 3–4→3. Not ground truth; plumbing, same as today’s prior-fit `heuristicMatch`.
+
+### B.5 Follow-up checklist (code, not this PR)
+
+1. `BEST_OF_N = 5`; update the “four POSTs” comment.
+2. `describePlan`: always include `arrangement` and `opening` (defaults above).
+3. `scoreRequest`: add the `song_quality` question from B.3 next to the `match_*` loop. Restate `match_*` instructions as in A5 (form / arrangement / opening).
+4. `JevPlanner.score` / `HeuristicPlanner.score`: parse `song_quality` onto `ScoreResult`.
+5. `selectBestOfN`: `dualObjective(contrastiveScore(...), songQuality.raw)`; `pickBestIndex` on that.
+6. Tests: fixture plans for the four rows in B.4 (on-style étude vs milder song vs wrong-style song); stub `song_quality` raw; assert the song wins the first pair and loses the wrong-style pair. Do not call TypeSafe in CI.
+7. Debug payload: the ninth question should show up on the style-match exchange.
+
+Still do not put `song_quality` on the Generate planning loop. Still do not invent MIDI in the API.
