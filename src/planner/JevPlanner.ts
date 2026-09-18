@@ -4,7 +4,7 @@
 //                  this composer writes at all (one Noul each); code combines them
 //   request 2      form + globals, given that character            (fan-out)
 //   requests 3..   one per 4-bar form slot: a HarmonyBook phrase + four contours
-//   score()        one request: one Score per style + one song-quality Score
+//   score()        one request: one Score per style + song_quality (0–3)
 //
 // Bar roles are not asked: they are the chosen form, expanded by code
 // (src/plan/forms.ts).
@@ -240,7 +240,7 @@ export class JevPlanner implements Planner {
   }
 
   async score(plan: CompositionPlan, styles: readonly StyleId[], options?: Pick<PlanOptions, 'signal'>): Promise<ScoreResult> {
-    const exchange = await this.exchange('style + song', { op: 'score', plan, styles: [...styles] }, options?.signal)
+    const exchange = await this.exchange('style match', { op: 'score', plan, styles: [...styles] }, options?.signal)
     const response = exchange.response
     const result: Partial<Record<StyleId, StyleMatchScore>> = {}
     const fromScore = (answer: { score: number; confidence: number } | undefined): StyleMatchScore | undefined => {
@@ -256,8 +256,9 @@ export class JevPlanner implements Planner {
       result[style] = fromScore(answer)
     }
     const songAnswer = response.answers[SONG_SCORE_QUESTION_ID]
-    const song = songAnswer?.type === 'score' ? fromScore(songAnswer) : undefined
-    return { scores: result, song, exchanges: [exchange] }
+    const songQuality =
+      songAnswer?.type === 'score' ? { raw: songAnswer.score, confidence: songAnswer.confidence } : undefined
+    return { scores: result, songQuality, exchanges: [exchange] }
   }
 
   /**

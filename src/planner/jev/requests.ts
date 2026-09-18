@@ -142,8 +142,8 @@ function describeGlobals(globals: PlanGlobals): Json {
     dynamics: DYNAMICS[globals.dynamics],
     dynamic_shape: DYNAMIC_SHAPES[globals.dynamicShape],
     instrument: INSTRUMENTS[globals.defaultInstrument],
-    ...(globals.arrangement ? { arrangement: ARRANGEMENTS[globals.arrangement] } : {}),
-    ...(globals.opening ? { opening: OPENINGS[globals.opening] } : {}),
+    arrangement: ARRANGEMENTS[globals.arrangement ?? 'lift_on_return'],
+    opening: OPENINGS[globals.opening ?? 'straight_in'],
     ...(globals.pedal ? { sustain_pedal: PEDALS[globals.pedal] } : {}),
   }
 }
@@ -358,35 +358,33 @@ export function describePlan(plan: CompositionPlan): Json {
 
 export const scoreQuestionId = (style: StyleId) => `match_${style}`
 
-/** Song-quality Score on the existing `score` op — not a new op. */
-export const SONG_SCORE_QUESTION_ID = 'song'
+/** Song-quality Score on the existing `score` op — Appendix B. Not a new op. */
+export const SONG_SCORE_QUESTION_ID = 'song_quality'
 
 function styleMatchQuestion(style: StyleId): ScoreQuestion {
   const name = STYLE_LABELS[style]
   return {
     type: 'score',
-    instructions: `How closely does the composition plan in \`plan\` match the musical style of ${name}? Judge texture, chord vocabulary, tempo, dynamics and instrument together.`,
+    instructions: `How closely does \`plan\` match the musical style of ${name}? Judge character, phrase layout, texture, harmony, arrangement, opening, tempo and dynamics together. The style name is not written on the plan; do not reward a lucky guess at the label.`,
     criteria: [
-      `The plan's texture, harmony, tempo and dynamics belong to a clearly different musical tradition from ${name}; someone who knows ${name}'s music would not recognise it here.`,
-      `Some of the plan's choices are typical of ${name}, but others are generic or point to a different composer; the resemblance is only partial.`,
-      `The plan's texture, chord vocabulary, tempo, dynamics and instrument are all characteristic of ${name}; someone who knows the music would recognise the style immediately.`,
+      "A different tradition: texture, phrase layout and harmony would not be recognised as this musician's.",
+      'Partial: some globals fit, but the form, arrangement or chord vocabulary point elsewhere or at a generic étude.',
+      'Immediate: someone who knows the music would recognise the kind of piece, the texture, the harmony and how it opens and returns.',
     ],
   }
 }
 
-/**
- * Fable song-shaped cues visible in the plan JSON (FIDELITY_FINDINGS.md).
- * Three standalone levels: the model never sees the ordering.
- */
+/** Appendix B.3 — copy the locked criteria; four standalone levels, raw 0–3. */
 function songQualityQuestion(): ScoreQuestion {
   return {
     type: 'score',
     instructions:
-      'How much is the composition plan in `plan` a song rather than a keyboard étude? Judge only what the plan states: phrase layout and bar roles (does a phrase-length idea return?), opening (vamp, pickup, or straight in), arrangement (does density change when material returns?), dynamic shape (an arch or late surge, or a flat line?), character and texture. Do not judge how well the plan matches a named style.',
+      'How song-like is the composition plan in `plan`? Judge only the labels in `plan` — character, phrase_layout, texture, arrangement, opening, dynamic_shape, length_in_bars, and each bar\'s role. Do not imagine notes, rests, MIDI, or a performance. A song here means a short keyboard piece a listener would hear as a tune that returns, can breathe, and changes clothes; an étude means unbroken figuration that starts again every bar. Loop-and-layer plans (a short cycle that builds or peaks then drops, often with a vamp) count as songs in the film-score and minimal sense.',
     criteria: [
-      'The plan is a perpetual on-the-beat étude: continuous figuration that never breathes, no phrase-length return of material, a straight-in opening with no vamp or pickup, and a constant arrangement with no late summit. It reads as an exercise, not a song.',
-      'The plan has some song-shaped cues — a form that brings material back, or an opening that breathes, or an arrangement that changes, or a dynamic arch — but they do not add up. A listener would hear a piece, not yet a song.',
-      'The plan is song-shaped: a form that brings a phrase-length idea back, breathing (rests in the roles, a pickup, or an accompaniment vamp before the tune), an arrangement that changes when the idea returns rather than staying at one density, and one late summit (a dynamic arch or late surge). Not a perpetual étude.',
+      'Étude / perpetual study. The character is continuous figuration or a motor pulse, the texture is two-hand perpetual motion or unbroken broken-chord / cell figuration, the opening is straight in (or omitted), and the arrangement is constant. The phrase layout does not bring a three-to-four-bar idea back — it spins, fantasises, or loops without a sung line on top. Bar roles have no single late peak: no climax, or climaxes scattered through the middle. Realising this plan would attack every downbeat and never change clothes.',
+      "A finished piece, not yet a song. There is a real character, texture and phrase layout, but the song cues are missing or they fight each other. Either the layout does not return a phrase-length idea (a fantasia, or a loop/spin with a constant arrangement and no melody riding an ostinato), or a returning layout is paired with a straight-in opening, a perpetual or on-the-beat character, and a constant arrangement. Dynamics may swell, but climaxes sit at the midpoint or repeat. Someone would hear a coherent miniature, still an étude's cousin.",
+      'Song-shaped. The phrase layout is one where a three-to-four-bar idea comes back (question and answer, sentence, arch with return, call and response, vamp and tag, or a binary that returns home), or it is a loop/layer form whose texture is a tune over a repeating figure. The character and texture are a singing line over accompaniment — lyrical, hymn, dance, warm groove, searching, still, or hazy; nocturne, alberti, chordal melody, aria, stride, chorale, ostinato-under-tune, pulsing chords — not a two-hand perpetual. The opening is a vamp or a pickup, or the character is one that lands and rests at phrase ends. Arrangement may still be constant. At most one clear climax, and it is not early. On the page this is a short song without words, even if the return is not yet dressed.',
+      'A song that returns in new clothes. Song-shaped, and the plan also marks the return and the peak. Arrangement is lift-on-return, a build, peak-then-bare, or terraced blocks — not constant. There is one summit late in the piece: a climax role in the last third of the bars, or a late-surge / arch dynamic shape whose climax is past the midpoint, not a climax at half-time and again at the end. A film-score or minimal plan qualifies at this level when a short loop accumulates layers or peaks then drops to a bare texture, the opening is a vamp, and a melody sits on the ostinato. A straight-in perpetual texture with a constant arrangement cannot be this level.',
     ],
   }
 }

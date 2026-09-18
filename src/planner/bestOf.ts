@@ -3,8 +3,10 @@
 // most like a song rather than an étude.
 //
 // Jev plan × N is too expensive (~18 POSTs each). Heuristic plan is free;
-// Jev `score` is one request per candidate (style Scores + one song Score
+// Jev `score` is one request per candidate (style `match_*` + `song_quality`
 // on the same POST). Five score POSTs stay well under the 90/min budget.
+//
+// Dual critic: docs/fable-context/JEV_REQUEST_STRUCTURE_REVIEW.md Appendix B.
 
 import { STYLE_IDS, type CompositionPlan, type StyleId, type StyleMatchScore } from '../plan/schema'
 import type { PlanInput, PlanResult, Planner, ScoreResult } from './Planner'
@@ -13,20 +15,22 @@ import type { PlanInput, PlanResult, Planner, ScoreResult } from './Planner'
 export const BEST_OF_N = 5
 
 /**
- * Combined critic:
- *   total = styleContrast + SONG_WEIGHT * songRaw
+ * dualObjective = styleContrast + SONG_QUALITY_WEIGHT * (song_quality.raw - SONG_QUALITY_MID)
  *
- * Style contrast is `target.raw − max(other.raw)` on the 0–2 Score scale,
- * so one full extra style-match step is about +1.0. Song raw is the same
- * 0–2 scale (low / medium / high).
+ * Style contrast is `target.raw − max(other.raw)` on the 0–2 `match_*` scale
+ * (typical range ≈ −2…+2). `song_quality.raw` is 0–3; centering at 1.5 means
+ * an étude (0) hurts and a dressed song (3) helps by the same 0.675.
  *
- * SONG_WEIGHT = 0.5 means a high song score (+2 raw) adds +1.0 — one full
- * style-contrast step. That is enough to break a tie and to prefer a
- * song-shaped plan over a slightly more style-typical étude, but not
- * enough to overturn a decisive style win. Range asked: ~0.5–1.0 of a
- * full contrast step; 0.5 sits at the low end of that band.
+ * Worked examples (Appendix B.4):
+ *   on-style étude     0.90 + 0.45×(0 − 1.5) = 0.225
+ *   milder song        0.40 + 0.45×(3 − 1.5) = 1.075  ← Best
+ *   wrong-style song  −1.00 + 0.45×(3 − 1.5) = −0.325 ← loses to the étude
+ *
+ * Song overturns a mild style edge and breaks ties. It cannot elect a wrong
+ * style. Missing / NaN song_quality fails open (style contrast only).
  */
-export const SONG_WEIGHT = 0.5
+export const SONG_QUALITY_WEIGHT = 0.45
+export const SONG_QUALITY_MID = 1.5
 
 /**
  * Numeric style-match used by the critic.
@@ -57,17 +61,13 @@ export function contrastiveScore(scores: Partial<Record<StyleId, StyleMatchScore
 }
 
 /**
- * `styleContrast + weight * songRaw`. `null` when contrast is missing.
- * A missing song raw is treated as 0 so style-only ranking still works.
+ * Appendix B.4: style contrast plus a centered song_quality term.
+ * Missing song_quality → style contrast only.
  */
-export function combinedScore(
-  contrast: number | null,
-  songRaw: number | null,
-  weight: number = SONG_WEIGHT,
-): number | null {
-  if (contrast === null || !Number.isFinite(contrast)) return null
-  const song = songRaw !== null && Number.isFinite(songRaw) ? songRaw : 0
-  return contrast + weight * song
+export function dualObjective(styleContrast: number | null, songRaw: number | null): number | null {
+  if (styleContrast === null || !Number.isFinite(styleContrast)) return null
+  if (songRaw == null || !Number.isFinite(songRaw)) return styleContrast
+  return styleContrast + SONG_QUALITY_WEIGHT * (songRaw - SONG_QUALITY_MID)
 }
 
 /** First index of the highest finite total. `-1` if none are usable. */
@@ -91,9 +91,9 @@ export interface BestOfCandidate {
   result: PlanResult
   scores: ScoreResult
   contrast: number | null
-  /** Song-quality raw (0–2), or null when the scorer omitted it. */
+  /** `song_quality.raw` (0–3), or null when the scorer omitted it. */
   song: number | null
-  /** `contrast + SONG_WEIGHT * song` — what Best actually maximises. */
+  /** `dualObjective` — what Best actually maximises. */
   total: number | null
 }
 
@@ -145,9 +145,9 @@ async function scoreOne(
 }
 
 /**
- * Sample N heuristic plans (distinct seeds), score each, keep the max total
- * (`styleContrast + SONG_WEIGHT * songRaw`). Never calls `plan()` on the Jev
- * planner — only `score()`, when provided.
+ * Sample N heuristic plans (distinct seeds), score each, keep the max
+ * `dualObjective`. Never calls `plan()` on the Jev planner — only `score()`,
+ * when provided.
  */
 export async function selectBestOfN(options: SelectBestOfOptions): Promise<BestOfResult> {
   const n = options.n ?? BEST_OF_N
@@ -167,7 +167,7 @@ export async function selectBestOfN(options: SelectBestOfOptions): Promise<BestO
     const { scores, used } = await scoreOne(result.plan, options.scorer, fallback, options.signal)
     if (used === 'jev') jevScores += 1
     const contrast = contrastiveScore(scores.scores, input.style)
-    const song = styleMatchValue(scores.song)
+    const song = scores.songQuality && Number.isFinite(scores.songQuality.raw) ? scores.songQuality.raw : null
     candidates.push({
       seed: input.seed,
       input,
@@ -175,7 +175,7 @@ export async function selectBestOfN(options: SelectBestOfOptions): Promise<BestO
       scores,
       contrast,
       song,
-      total: combinedScore(contrast, song),
+      total: dualObjective(contrast, song),
     })
     options.onProgress?.(i + 1, n)
   }

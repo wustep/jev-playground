@@ -57,10 +57,15 @@ export interface PlanTrace {
   exchanges: Exchange[]
 }
 
+/** `song_quality` Score on the 0–3 scale. Critic uses `raw`; do not reuse MATCH_LEVELS. */
+export interface SongQualityScore {
+  raw: number
+  confidence: number
+}
+
 export interface ScoreResult {
   scores: Partial<Record<StyleId, StyleMatchScore>>
-  /** Song-quality Score on the same 0–2 scale as a style match. */
-  song?: StyleMatchScore
+  songQuality?: SongQualityScore
   exchanges: Exchange[]
 }
 

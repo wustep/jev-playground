@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { formRoles } from '../plan/forms'
-import type { BarPlan, CompositionPlan, ContourId } from '../plan/schema'
+import { ARRANGEMENTS, OPENINGS, type BarPlan, type CompositionPlan, type ContourId } from '../plan/schema'
 import { HeuristicPlanner } from './HeuristicPlanner'
-import { buildRequest, SONG_SCORE_QUESTION_ID } from './jev/requests'
-import { heuristicSongQuality, longestReturnRun } from './songScore'
+import { buildRequest, describePlan, SONG_SCORE_QUESTION_ID } from './jev/requests'
+import {
+  arrangementCueHigh,
+  breathCueHigh,
+  heuristicSongQuality,
+  returnCueHigh,
+  songQualityCues,
+  summitCueHigh,
+} from './songScore'
 
 const barsOf = (form: CompositionPlan['form'], contour: ContourId = 'arch'): BarPlan[] =>
   formRoles(form, 16).map((role) => ({ chord: 'I', role, contour }))
 
-function songPlan(overrides: Partial<CompositionPlan> = {}): CompositionPlan {
+function plan(overrides: Partial<CompositionPlan> = {}): CompositionPlan {
   const form = overrides.form ?? 'period'
   return {
     version: 1,
@@ -30,74 +37,142 @@ function songPlan(overrides: Partial<CompositionPlan> = {}): CompositionPlan {
   }
 }
 
-function etudePlan(overrides: Partial<CompositionPlan> = {}): CompositionPlan {
-  const form = overrides.form ?? 'free_fantasia'
-  return {
-    version: 1,
+/** Étude: motor character, unbroken figuration, straight-in, constant, no return, no late peak. */
+function etudePlan(): CompositionPlan {
+  return plan({
     style: 'bach',
     character: 'flowing_perpetual',
-    form,
-    key: 'C_major',
-    meter: 'four_four',
+    form: 'free_fantasia',
     texture: 'toccata_perpetual',
-    palette: 'diatonic',
-    tempo: 'allegro',
-    dynamics: 'mf',
     dynamicShape: 'steady',
-    defaultInstrument: 'harpsichord',
     arrangement: 'constant',
     opening: 'straight_in',
-    bars: barsOf(form),
-    ...overrides,
-  }
+    bars: barsOf('free_fantasia').map((bar) => ({ ...bar, role: bar.role === 'climax' ? 'development' : bar.role })),
+  })
 }
 
-describe('heuristicSongQuality', () => {
-  it('scores a song-shaped plan high and a perpetual étude low', () => {
-    const song = heuristicSongQuality(songPlan())
-    const etude = heuristicSongQuality(etudePlan())
-    expect(longestReturnRun(songPlan())).toBeGreaterThanOrEqual(3)
-    expect(longestReturnRun(etudePlan())).toBe(0)
-    expect(song.match).toBe('high')
-    expect(etude.match).toBe('low')
-    expect(song.raw).toBeGreaterThan(etude.raw + 0.8)
+/** A piece, not a song: returning form, but cues fight (perpetual + constant + straight-in). */
+function piecePlan(): CompositionPlan {
+  return plan({
+    style: 'bach',
+    character: 'flowing_perpetual',
+    form: 'period',
+    texture: 'toccata_perpetual',
+    dynamicShape: 'steady',
+    arrangement: 'constant',
+    opening: 'straight_in',
+    bars: barsOf('period').map((bar) => ({ ...bar, role: bar.role === 'climax' ? 'development' : bar.role })),
+  })
+}
+
+/** Song-shaped: phrase return + singing line + pickup; arrangement still constant. */
+function songShapedPlan(): CompositionPlan {
+  return plan({
+    arrangement: 'constant',
+    dynamicShape: 'steady',
+    form: 'period',
+    bars: formRoles('period', 8).map((role) => ({
+      chord: 'I',
+      role: role === 'climax' ? 'development' : role,
+      contour: 'arch' as const,
+    })),
+  })
+}
+
+/** Song in new clothes: song-shaped + lift + late summit. */
+function dressedSongPlan(): CompositionPlan {
+  return plan({
+    arrangement: 'lift_on_return',
+    opening: 'pickup',
+    dynamicShape: 'arch',
+    form: 'period',
+    bars: formRoles('period', 8).map((role) => ({ chord: 'I', role, contour: 'arch' as const })),
+  })
+}
+
+describe('heuristicSongQuality (Appendix B.2 cues)', () => {
+  it('maps 0 / 1 / 2 / 3–4 high cues onto raw 0–3', () => {
+    expect(songQualityCues(etudePlan())).toBe(0)
+    expect(heuristicSongQuality(etudePlan()).raw).toBe(0)
+    expect(breathCueHigh(etudePlan())).toBe(false)
+    expect(returnCueHigh(etudePlan())).toBe(false)
+    expect(arrangementCueHigh(etudePlan())).toBe(false)
+    expect(summitCueHigh(etudePlan())).toBe(false)
+
+    expect(songQualityCues(piecePlan())).toBe(1)
+    expect(heuristicSongQuality(piecePlan()).raw).toBe(1)
+    expect(returnCueHigh(piecePlan())).toBe(true)
+
+    expect(songQualityCues(songShapedPlan())).toBe(2)
+    expect(heuristicSongQuality(songShapedPlan()).raw).toBe(2)
+    expect(breathCueHigh(songShapedPlan())).toBe(true)
+    expect(returnCueHigh(songShapedPlan())).toBe(true)
+    expect(arrangementCueHigh(songShapedPlan())).toBe(false)
+
+    expect(songQualityCues(dressedSongPlan())).toBeGreaterThanOrEqual(3)
+    expect(heuristicSongQuality(dressedSongPlan()).raw).toBe(3)
+    expect(arrangementCueHigh(dressedSongPlan())).toBe(true)
+    expect(summitCueHigh(dressedSongPlan())).toBe(true)
+  })
+
+  it('treats a loop with a tune on top as a return cue, not an automatic étude', () => {
+    const loopSong = plan({
+      style: 'hans_zimmer',
+      character: 'hypnotic_pulse',
+      form: 'additive_loop',
+      texture: 'melody_over_ostinato',
+      arrangement: 'peak_then_bare',
+      opening: 'vamp_intro',
+      dynamicShape: 'late_surge',
+    })
+    expect(returnCueHigh(loopSong)).toBe(true)
+    expect(breathCueHigh(loopSong)).toBe(true)
+    expect(heuristicSongQuality(loopSong).raw).toBe(3)
   })
 
   it('is deterministic from plan features', () => {
-    const a = heuristicSongQuality(songPlan())
-    const b = heuristicSongQuality(songPlan())
-    expect(a).toEqual(b)
+    expect(heuristicSongQuality(dressedSongPlan())).toEqual(heuristicSongQuality(dressedSongPlan()))
   })
 })
 
-describe('HeuristicPlanner.score song', () => {
-  it('returns a song Score on the same score op as the style matches', async () => {
+describe('HeuristicPlanner.score song_quality', () => {
+  it('returns song_quality on the same score op as the style matches', async () => {
     const planner = new HeuristicPlanner()
-    const { plan } = await planner.plan({ style: 'chopin', bars: 16, pick: 'argmax', seed: 1, brief: true })
-    const { scores, song, exchanges } = await planner.score(plan, ['chopin', 'bach'])
+    const { plan: made } = await planner.plan({ style: 'chopin', bars: 16, pick: 'argmax', seed: 1, brief: true })
+    const { scores, songQuality, exchanges } = await planner.score(made, ['chopin', 'bach'])
     expect(scores.chopin).toBeDefined()
-    expect(song).toEqual(heuristicSongQuality(plan))
+    expect(songQuality).toEqual(heuristicSongQuality(made))
     expect(exchanges[0].op.op).toBe('score')
     expect(exchanges[0].request.questions).toHaveProperty(SONG_SCORE_QUESTION_ID)
   })
 })
 
-describe('song Score question', () => {
-  it('lives on the score op and encodes the Fable song cues', () => {
-    const request = buildRequest({ op: 'score', plan: songPlan(), styles: ['chopin'] }, 'jev-latest')
+describe('song_quality Score question', () => {
+  it('is the locked Appendix B.3 wording, four levels, no composer names', () => {
+    const request = buildRequest({ op: 'score', plan: dressedSongPlan(), styles: ['chopin'] }, 'jev-latest')
     const song = request.questions[SONG_SCORE_QUESTION_ID]
     expect(song.type).toBe('score')
     if (song.type !== 'score') return
-    expect(song.criteria).toHaveLength(3)
+    expect(song.criteria).toHaveLength(4)
+    expect(String(song.instructions)).toContain('Do not imagine notes, rests, MIDI')
+    expect(song.criteria[0]).toMatch(/^Étude \/ perpetual study/)
+    expect(song.criteria[1]).toMatch(/^A finished piece, not yet a song/)
+    expect(song.criteria[2]).toMatch(/^Song-shaped/)
+    expect(song.criteria[3]).toMatch(/^A song that returns in new clothes/)
     const text = JSON.stringify([song.instructions, song.criteria])
-    expect(text).toMatch(/phrase-length|phrase layout|returns?/i)
-    expect(text).toMatch(/vamp|pickup/i)
-    expect(text).toMatch(/arrangement/i)
-    expect(text).toMatch(/arch|late surge/i)
-    expect(text).toMatch(/étude|etude/i)
-    expect(Object.keys(request.questions)).toContain('match_chopin')
     for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Laufey', 'Fox', 'Chopin', 'Zimmer', 'Satie', 'Reich']) {
       expect(text).not.toContain(name)
     }
+  })
+})
+
+describe('describePlan arrangement and opening', () => {
+  it('always emits arrangement and opening, defaulting like parseGlobals', () => {
+    const bare = plan()
+    delete bare.arrangement
+    delete bare.opening
+    const described = describePlan(bare) as { arrangement: string; opening: string }
+    expect(described.arrangement).toBe(ARRANGEMENTS.lift_on_return)
+    expect(described.opening).toBe(OPENINGS.straight_in)
   })
 })

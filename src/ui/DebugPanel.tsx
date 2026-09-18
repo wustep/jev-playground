@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { STYLE_IDS, STYLE_LABELS, type CompositionPlan, type StyleId, type StyleMatchScore } from '../plan/schema'
-import type { Decision, Exchange, PlanInput, PlanTrace } from '../planner'
+import type { Decision, Exchange, PlanInput, PlanTrace, SongQualityScore } from '../planner'
 import type { Score } from '../render/score'
 
 interface Props {
@@ -19,8 +19,8 @@ interface Props {
   exchanges: Exchange[]
   matchExchanges: Exchange[]
   matches: Partial<Record<StyleId, StyleMatchScore>> | null
-  /** Song-quality Score from the same `score` POST as the style matches. */
-  song?: StyleMatchScore | null
+  /** `song_quality` from the same `score` POST as the style matches (raw 0–3). */
+  songQuality?: SongQualityScore | null
   edited: boolean
   notice: string | null
   /** How the sounding notes were produced. */
@@ -85,7 +85,7 @@ function ExchangeRow({ exchange, index, defaultOpen }: { exchange: Exchange; ind
   )
 }
 
-export function DebugPanel({ plan, score, input, trace, exchanges, matchExchanges, matches, song, edited, notice, notes }: Props) {
+export function DebugPanel({ plan, score, input, trace, exchanges, matchExchanges, matches, songQuality, edited, notice, notes }: Props) {
   const byField = new Map<string, Decision>(edited ? [] : trace.decisions.map((d) => [d.field, d]))
   const globals = edited ? [] : trace.decisions.filter((d) => !d.field.startsWith('bars['))
   const live = trace.planner === 'jev'
@@ -189,13 +189,13 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
             <p className="muted">Not scored yet.</p>
           )}
 
-          <h3>Song</h3>
-          {song ? (
+          <h3>Song quality</h3>
+          {songQuality ? (
             <table className="kv">
               <tbody>
-                <tr><th>level</th><td><code>{song.match}</code></td></tr>
-                <tr><th>conf.</th><td>{percent(song.confidence)}</td></tr>
-                <tr><th>raw 0–2</th><td>{song.raw.toFixed(2)}</td></tr>
+                <tr><th>level 0–3</th><td><code>{Math.max(0, Math.min(3, Math.round(songQuality.raw)))}</code></td></tr>
+                <tr><th>conf.</th><td>{percent(songQuality.confidence)}</td></tr>
+                <tr><th>raw 0–3</th><td>{songQuality.raw.toFixed(2)}</td></tr>
               </tbody>
             </table>
           ) : (

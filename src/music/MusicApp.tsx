@@ -757,7 +757,7 @@ export default function MusicApp() {
               exchanges={exchanges}
               matchExchanges={matches?.exchanges ?? []}
               matches={matches?.scores ?? null}
-              song={matches?.song ?? null}
+              songQuality={matches?.songQuality ?? null}
               edited={edited}
               notice={generated.notice}
               notes={applyJevNotes ? 'jev' : 'code'}

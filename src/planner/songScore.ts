@@ -1,135 +1,101 @@
-// Deterministic stand-in for the `song` Score on the `score` op.
+// Deterministic stand-in for the `song_quality` Score (Appendix B).
 //
-// Jev judges the plan JSON it sees in state (form, opening, arrangement,
-// dynamic shape, character, texture, bar roles). This function reads the
-// same fields and approximates that rubric so Best-of-N still works offline.
-//
-// Criteria come from docs/fable-context/FIDELITY_FINDINGS.md (phrase-length
-// returns, breath/pickup/vamp, arrangement that changes on return, one late
-// summit; not a perpetual on-the-beat étude). JEV_REQUEST_STRUCTURE_REVIEW.md
-// was not on main; the Score wording in requests.ts is invented from those
-// findings.
+// Jev judges only `describePlan` labels. This counts how many of the four
+// B.2 cues are high and maps 0→0, 1→1, 2→2, 3–4→3 so offline Best moves.
+// Not ground truth — plumbing, same as heuristicMatch.
 
-import { themeSources } from '../plan/forms'
 import {
-  MATCH_LEVELS,
   type ArrangementId,
-  type BarCount,
   type CharacterId,
   type CompositionPlan,
   type DynamicShapeId,
+  type FormId,
   type OpeningId,
-  type StyleMatchScore,
   type TextureId,
 } from '../plan/schema'
+import type { SongQualityScore } from './Planner'
 
-const PERPETUAL_CHARACTERS = new Set<CharacterId>(['flowing_perpetual', 'hypnotic_pulse'])
-const BREATHING_CHARACTERS = new Set<CharacterId>([
+const SINGING_CHARACTERS = new Set<CharacterId>([
   'lyrical_song',
-  'warm_groove',
-  'dreamy_haze',
-  'meditative_stillness',
+  'solemn_hymn',
   'dance_lilt',
-])
-const PERPETUAL_TEXTURES = new Set<TextureId>([
-  'toccata_perpetual',
-  'broken_chord_prelude',
-  'two_voice_counterpoint',
-  'minimal_cells',
-  'interlocking_hands',
-  'displaced_arpeggio',
+  'warm_groove',
+  'restless_searching',
+  'meditative_stillness',
+  'dreamy_haze',
 ])
 const SINGING_TEXTURES = new Set<TextureId>([
   'alberti_melody',
-  'stride_dance',
   'rolling_nocturne',
   'chordal_melody',
   'aria_walking_bass',
+  'stride_dance',
   'lush_voicings',
   'melody_over_ostinato',
+  'chorale',
+  'pulsing_chords',
 ])
-const CHANGING_ARRANGEMENTS = new Set<ArrangementId>(['lift_on_return', 'build', 'peak_then_bare', 'terraced_blocks'])
 const BREATHING_OPENINGS = new Set<OpeningId>(['pickup', 'vamp_intro'])
-const SUMMIT_SHAPES = new Set<DynamicShapeId>(['arch', 'late_surge'])
-const BUILD_SHAPES = new Set<DynamicShapeId>(['crescendo', 'build_then_drop'])
+const RETURNING_FORMS = new Set<FormId>([
+  'period',
+  'sentence',
+  'arch_return',
+  'call_and_response',
+  'vamp_and_tag',
+  'binary_dance',
+])
+const LOOP_LAYER_FORMS = new Set<FormId>(['additive_loop', 'layered_build', 'spinning_out'])
+const LOOP_TUNE_TEXTURES = new Set<TextureId>(['melody_over_ostinato', 'pulsing_chords'])
+const LIFT_ARRANGEMENTS = new Set<ArrangementId>(['lift_on_return', 'build', 'peak_then_bare', 'terraced_blocks'])
+const SUMMIT_SHAPES = new Set<DynamicShapeId>(['late_surge', 'arch'])
 
-/** Longest run of consecutive bars that bring back earlier material. */
-export function longestReturnRun(plan: CompositionPlan): number {
-  const sources = themeSources(plan.form, plan.bars.length as BarCount)
-  let longest = 0
-  let run = 0
-  for (const source of sources) {
-    if (source !== undefined) {
-      run += 1
-      if (run > longest) longest = run
-    } else {
-      run = 0
-    }
-  }
-  return longest
+function openingOf(plan: CompositionPlan): OpeningId {
+  return plan.opening ?? 'straight_in'
 }
 
-function returnCue(plan: CompositionPlan): number {
-  const run = longestReturnRun(plan)
-  // Repertoire returning runs are typically 3–4 bars (FIDELITY_FINDINGS).
-  if (run >= 3) return 1
-  if (run === 2) return 0.7
-  if (run === 1) return 0.25
-  return 0
+function arrangementOf(plan: CompositionPlan): ArrangementId {
+  return plan.arrangement ?? 'lift_on_return'
 }
 
-function breathCue(plan: CompositionPlan): number {
-  let score = 0
-  if (BREATHING_OPENINGS.has(plan.opening ?? 'straight_in')) score += 0.6
-  if (BREATHING_CHARACTERS.has(plan.character)) score += 0.25
-  if (SINGING_TEXTURES.has(plan.texture)) score += 0.15
-  if (plan.bars.some((bar) => bar.role === 'half_cadence' || bar.role === 'echo' || bar.role === 'dissolve')) score += 0.15
-  return Math.min(1, score)
+/** Breath / rests / not perpetual downbeats (B.2). */
+export function breathCueHigh(plan: CompositionPlan): boolean {
+  const singingCharacter = SINGING_CHARACTERS.has(plan.character)
+  const breathingOpen = BREATHING_OPENINGS.has(openingOf(plan))
+  return (singingCharacter || breathingOpen) && SINGING_TEXTURES.has(plan.texture)
 }
 
-function arrangementCue(plan: CompositionPlan): number {
-  return CHANGING_ARRANGEMENTS.has(plan.arrangement ?? 'constant') ? 1 : 0
+/** Phrase-length return, or a loop/layer with a tune on top (B.2). */
+export function returnCueHigh(plan: CompositionPlan): boolean {
+  if (RETURNING_FORMS.has(plan.form)) return true
+  if (!LOOP_LAYER_FORMS.has(plan.form)) return false
+  return arrangementOf(plan) !== 'constant' || LOOP_TUNE_TEXTURES.has(plan.texture)
 }
 
-function summitCue(plan: CompositionPlan): number {
-  let score = 0
-  if (SUMMIT_SHAPES.has(plan.dynamicShape)) score += 0.7
-  else if (BUILD_SHAPES.has(plan.dynamicShape)) score += 0.45
-  else if (plan.dynamicShape === 'waves') score += 0.25
-  const lastClimax = plan.bars.reduce((last, bar, i) => (bar.role === 'climax' ? i : last), -1)
-  const climaxCount = plan.bars.filter((bar) => bar.role === 'climax').length
-  // One (or a few) late peaks, not climaxes everywhere.
-  if (lastClimax >= plan.bars.length * 0.5 && climaxCount > 0 && climaxCount <= 3) score += 0.35
-  return Math.min(1, score)
-}
-
-function etudePenalty(plan: CompositionPlan): number {
-  const perpetual = PERPETUAL_CHARACTERS.has(plan.character) || PERPETUAL_TEXTURES.has(plan.texture)
-  if (!perpetual) return 0
-  const noReturns = longestReturnRun(plan) < 2
-  const flat =
-    (plan.arrangement ?? 'constant') === 'constant' && (plan.opening ?? 'straight_in') === 'straight_in'
-  return 0.15 + (noReturns ? 0.45 : 0) + (flat ? 0.25 : 0)
+/** Arrangement lift on return (B.2). */
+export function arrangementCueHigh(plan: CompositionPlan): boolean {
+  return LIFT_ARRANGEMENTS.has(arrangementOf(plan))
 }
 
 /**
- * 0–2 raw, low/medium/high — same shape as a style-match Score, so Best can
- * add it to contrast without rescaling.
+ * One late summit: exactly one climax in the last third, or late_surge/arch
+ * with the last climax past the midpoint (B.2).
  */
-export function heuristicSongQuality(plan: CompositionPlan): StyleMatchScore {
-  const fit = Math.max(
-    0,
-    Math.min(
-      1,
-      0.28 * returnCue(plan) + 0.24 * breathCue(plan) + 0.24 * arrangementCue(plan) + 0.24 * summitCue(plan) - etudePenalty(plan),
-    ),
-  )
-  const thresholds = [0.4, 0.68]
-  const level = fit < thresholds[0] ? 0 : fit < thresholds[1] ? 1 : 2
-  const margin = Math.min(...thresholds.map((t) => Math.abs(fit - t)))
-  return {
-    match: MATCH_LEVELS[level],
-    confidence: Math.min(1, margin / 0.2),
-    raw: fit * 2,
-  }
+export function summitCueHigh(plan: CompositionPlan): boolean {
+  const n = plan.bars.length
+  const climaxes = plan.bars.map((bar, i) => (bar.role === 'climax' ? i : -1)).filter((i) => i >= 0)
+  const lastThirdStart = Math.floor((n * 2) / 3) + 1
+  if (climaxes.length === 1 && climaxes[0] + 1 >= lastThirdStart) return true
+  if (!SUMMIT_SHAPES.has(plan.dynamicShape) || climaxes.length === 0) return false
+  return climaxes[climaxes.length - 1] + 1 > n / 2
+}
+
+export function songQualityCues(plan: CompositionPlan): number {
+  return [breathCueHigh, returnCueHigh, arrangementCueHigh, summitCueHigh].filter((cue) => cue(plan)).length
+}
+
+/** 0–3 raw on the same scale as the `song_quality` Score. */
+export function heuristicSongQuality(plan: CompositionPlan): SongQualityScore {
+  const cues = songQualityCues(plan)
+  const raw = cues >= 3 ? 3 : cues
+  return { raw, confidence: 0.7 }
 }

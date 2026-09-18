@@ -412,8 +412,8 @@ export class HeuristicPlanner implements Planner {
     for (const style of styles) scores[style] = heuristicMatch(plan, STYLE_PROFILES[style])
     return {
       scores,
-      song: heuristicSongQuality(plan),
-      exchanges: [unsent('style + song', { op: 'score', plan, styles: [...styles] })],
+      songQuality: heuristicSongQuality(plan),
+      exchanges: [unsent('style match', { op: 'score', plan, styles: [...styles] })],
     }
   }
 }

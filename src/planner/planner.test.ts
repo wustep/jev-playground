@@ -166,12 +166,13 @@ describe('JevPlanner', () => {
   it('maps Score answers to low / medium / high', async () => {
     const { transport } = fakeJev()
     const { plan } = await new HeuristicPlanner().plan({ style: 'bach', bars: 4, pick: 'argmax', seed: 1, brief: true })
-    const { scores, song, exchanges } = await new JevPlanner(transport).score(plan, STYLE_IDS)
+    const { scores, songQuality, exchanges } = await new JevPlanner(transport).score(plan, STYLE_IDS)
     expect(scores.bach).toEqual({ match: 'high', confidence: 0.78, raw: 1.6 })
-    expect(song).toEqual({ match: 'high', confidence: 0.78, raw: 1.6 })
+    expect(songQuality).toEqual({ raw: 1.6, confidence: 0.78 })
     expect(Object.keys(exchanges[0].request.questions)).toHaveLength(STYLE_IDS.length + 1)
-    expect(exchanges[0].request.questions).toHaveProperty('song')
-    expect(exchanges[0].request.questions.song.type).toBe('score')
+    expect(exchanges[0].request.questions).toHaveProperty('song_quality')
+    expect(exchanges[0].request.questions.song_quality.type).toBe('score')
+    expect(exchanges[0].request.questions.song_quality.criteria).toHaveLength(4)
     // The label under test is withheld from the scorer's state.
     expect(JSON.stringify(exchanges[0].request.state)).not.toContain('"style"')
   })

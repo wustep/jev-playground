@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { STYLE_IDS, type StyleId, type StyleMatchScore } from '../plan/schema'
 import { HeuristicPlanner } from './HeuristicPlanner'
-import { BEST_OF_N, SONG_WEIGHT, combinedScore, contrastiveScore, pickBestIndex, selectBestOfN, styleMatchValue } from './bestOf'
+import {
+  BEST_OF_N,
+  SONG_QUALITY_MID,
+  SONG_QUALITY_WEIGHT,
+  contrastiveScore,
+  dualObjective,
+  pickBestIndex,
+  selectBestOfN,
+  styleMatchValue,
+} from './bestOf'
 import type { Planner, ScoreResult } from './Planner'
 
 function match(raw: number, level: StyleMatchScore['match'] = 'medium'): StyleMatchScore {
@@ -42,28 +51,30 @@ describe('contrastiveScore', () => {
   })
 })
 
-describe('combinedScore', () => {
-  it('is style contrast plus SONG_WEIGHT times song raw', () => {
-    expect(SONG_WEIGHT).toBe(0.5)
-    expect(combinedScore(0.8, 0.2)).toBeCloseTo(0.9)
-    expect(combinedScore(0.5, 1.8)).toBeCloseTo(1.4)
-    expect(combinedScore(1.6, 0.2)).toBeCloseTo(1.7)
-    expect(combinedScore(0.2, 2)).toBeCloseTo(1.2)
+describe('dualObjective', () => {
+  it('matches the Appendix B.4 worked examples', () => {
+    expect(SONG_QUALITY_WEIGHT).toBe(0.45)
+    expect(SONG_QUALITY_MID).toBe(1.5)
+    expect(dualObjective(0.9, 0)).toBeCloseTo(0.225)
+    expect(dualObjective(0.4, 3)).toBeCloseTo(1.075)
+    expect(dualObjective(-1, 3)).toBeCloseTo(-0.325)
+    expect(dualObjective(0.5, 3)).toBeCloseTo(1.175)
+    expect(dualObjective(0.5, 1)).toBeCloseTo(0.275)
   })
 
-  it('treats a missing song as 0 and a missing contrast as null', () => {
-    expect(combinedScore(0.7, null)).toBeCloseTo(0.7)
-    expect(combinedScore(null, 2)).toBeNull()
-    expect(combinedScore(Number.NaN, 1)).toBeNull()
+  it('fails open to style contrast when song_quality is missing', () => {
+    expect(dualObjective(0.7, null)).toBeCloseTo(0.7)
+    expect(dualObjective(0.7, Number.NaN)).toBeCloseTo(0.7)
+    expect(dualObjective(null, 3)).toBeNull()
+    expect(dualObjective(Number.NaN, 3)).toBeNull()
   })
 
-  it('lets song-ness beat a slightly more style-typical étude, not a decisive style win', () => {
-    const etude = combinedScore(0.8, 0.2)!
-    const song = combinedScore(0.5, 1.8)!
-    expect(song).toBeGreaterThan(etude)
-    const decisiveStyle = combinedScore(1.6, 0.2)!
-    const weakStyleSong = combinedScore(0.2, 2)!
-    expect(decisiveStyle).toBeGreaterThan(weakStyleSong)
+  it('lets a milder song beat an on-style étude, not a wrong-style song', () => {
+    const etude = dualObjective(0.9, 0)!
+    const milderSong = dualObjective(0.4, 3)!
+    const wrongStyleSong = dualObjective(-1, 3)!
+    expect(milderSong).toBeGreaterThan(etude)
+    expect(etude).toBeGreaterThan(wrongStyleSong)
   })
 })
 
@@ -75,8 +86,8 @@ describe('pickBestIndex', () => {
     expect(pickBestIndex([null, Number.NaN])).toBe(-1)
   })
 
-  it('picks the highest combined total, not the highest style contrast alone', () => {
-    const totals = [combinedScore(0.8, 0.2), combinedScore(0.5, 1.8), combinedScore(0.4, 0.4)]
+  it('picks the highest dualObjective, not the highest style contrast alone', () => {
+    const totals = [dualObjective(0.9, 0), dualObjective(0.4, 3), dualObjective(-1, 3)]
     expect(pickBestIndex(totals)).toBe(1)
   })
 })
@@ -98,7 +109,7 @@ function scriptedScorer(
       call += 1
       return {
         scores: scores(raws),
-        song: songRaw != null ? match(songRaw) : undefined,
+        songQuality: songRaw != null ? { raw: songRaw, confidence: 0.7 } : undefined,
         exchanges: [],
       }
     },
@@ -154,6 +165,7 @@ describe('selectBestOfN', () => {
     expect(picked.scoredWith).toBe('heuristic')
     expect(picked.winner.contrast).not.toBeNull()
     expect(STYLE_IDS.every((id) => picked.winner.scores.scores[id])).toBe(true)
+    expect(picked.winner.scores.songQuality).toBeDefined()
   })
 
   it('defaults to BEST_OF_N distinct sampled seeds', async () => {
@@ -174,8 +186,8 @@ describe('selectBestOfN', () => {
     expect(BEST_OF_N).toBe(5)
   })
 
-  it('picks the song-shaped plan over a slightly more style-typical étude', async () => {
-    const picked = await selectBestOfN({
+  it('picks a milder song over an on-style étude, and keeps the étude over a wrong-style song', async () => {
+    const songVsEtude = await selectBestOfN({
       input: base,
       n: 2,
       seeds: [1, 2],
@@ -183,16 +195,33 @@ describe('selectBestOfN', () => {
       fallback: planner,
       scorer: scriptedScorer(
         [
-          { bach: 1.6, beethoven: 0.8 },
-          { bach: 1.3, beethoven: 0.8 },
+          { bach: 1.9, beethoven: 1.0 },
+          { bach: 1.4, beethoven: 1.0 },
         ],
-        [0.2, 1.8],
+        [0, 3],
       ),
     })
-    expect(picked.index).toBe(1)
-    expect(picked.winner.seed).toBe(2)
-    expect(picked.winner.contrast).toBeCloseTo(0.5)
-    expect(picked.winner.song).toBeCloseTo(1.8)
-    expect(picked.winner.total).toBeCloseTo(1.4)
+    expect(songVsEtude.index).toBe(1)
+    expect(songVsEtude.winner.contrast).toBeCloseTo(0.4)
+    expect(songVsEtude.winner.song).toBe(3)
+    expect(songVsEtude.winner.total).toBeCloseTo(1.075)
+
+    const etudeVsWrong = await selectBestOfN({
+      input: base,
+      n: 2,
+      seeds: [1, 2],
+      planner,
+      fallback: planner,
+      scorer: scriptedScorer(
+        [
+          { bach: 1.9, beethoven: 1.0 },
+          { bach: 0.2, beethoven: 1.2 },
+        ],
+        [0, 3],
+      ),
+    })
+    expect(etudeVsWrong.index).toBe(0)
+    expect(etudeVsWrong.winner.contrast).toBeCloseTo(0.9)
+    expect(etudeVsWrong.winner.total).toBeCloseTo(0.225)
   })
 })
