@@ -59,6 +59,8 @@ export interface PlanTrace {
 
 export interface ScoreResult {
   scores: Partial<Record<StyleId, StyleMatchScore>>
+  /** Song-quality Score on the same 0–2 scale as a style match. */
+  song?: StyleMatchScore
   exchanges: Exchange[]
 }
 

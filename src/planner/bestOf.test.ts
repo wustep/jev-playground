@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { STYLE_IDS, type StyleId, type StyleMatchScore } from '../plan/schema'
 import { HeuristicPlanner } from './HeuristicPlanner'
-import { BEST_OF_N, contrastiveScore, pickBestIndex, selectBestOfN, styleMatchValue } from './bestOf'
+import { BEST_OF_N, SONG_WEIGHT, combinedScore, contrastiveScore, pickBestIndex, selectBestOfN, styleMatchValue } from './bestOf'
 import type { Planner, ScoreResult } from './Planner'
 
 function match(raw: number, level: StyleMatchScore['match'] = 'medium'): StyleMatchScore {
@@ -42,6 +42,31 @@ describe('contrastiveScore', () => {
   })
 })
 
+describe('combinedScore', () => {
+  it('is style contrast plus SONG_WEIGHT times song raw', () => {
+    expect(SONG_WEIGHT).toBe(0.5)
+    expect(combinedScore(0.8, 0.2)).toBeCloseTo(0.9)
+    expect(combinedScore(0.5, 1.8)).toBeCloseTo(1.4)
+    expect(combinedScore(1.6, 0.2)).toBeCloseTo(1.7)
+    expect(combinedScore(0.2, 2)).toBeCloseTo(1.2)
+  })
+
+  it('treats a missing song as 0 and a missing contrast as null', () => {
+    expect(combinedScore(0.7, null)).toBeCloseTo(0.7)
+    expect(combinedScore(null, 2)).toBeNull()
+    expect(combinedScore(Number.NaN, 1)).toBeNull()
+  })
+
+  it('lets song-ness beat a slightly more style-typical étude, not a decisive style win', () => {
+    const etude = combinedScore(0.8, 0.2)!
+    const song = combinedScore(0.5, 1.8)!
+    expect(song).toBeGreaterThan(etude)
+    const decisiveStyle = combinedScore(1.6, 0.2)!
+    const weakStyleSong = combinedScore(0.2, 2)!
+    expect(decisiveStyle).toBeGreaterThan(weakStyleSong)
+  })
+})
+
 describe('pickBestIndex', () => {
   it('keeps the first of a tie and skips nulls', () => {
     expect(pickBestIndex([0.2, 0.9, 0.4])).toBe(1)
@@ -49,9 +74,17 @@ describe('pickBestIndex', () => {
     expect(pickBestIndex([null, 0.1, 0.8, null])).toBe(2)
     expect(pickBestIndex([null, Number.NaN])).toBe(-1)
   })
+
+  it('picks the highest combined total, not the highest style contrast alone', () => {
+    const totals = [combinedScore(0.8, 0.2), combinedScore(0.5, 1.8), combinedScore(0.4, 0.4)]
+    expect(pickBestIndex(totals)).toBe(1)
+  })
 })
 
-function scriptedScorer(rawByCall: Array<Partial<Record<StyleId, number>>>): Planner {
+function scriptedScorer(
+  rawByCall: Array<Partial<Record<StyleId, number>>>,
+  songs: Array<number | undefined> = [],
+): Planner {
   let call = 0
   return {
     id: 'jev',
@@ -61,8 +94,13 @@ function scriptedScorer(rawByCall: Array<Partial<Record<StyleId, number>>>): Pla
     },
     score: async (): Promise<ScoreResult> => {
       const raws = rawByCall[call] ?? rawByCall[rawByCall.length - 1]
+      const songRaw = songs[call]
       call += 1
-      return { scores: scores(raws), exchanges: [] }
+      return {
+        scores: scores(raws),
+        song: songRaw != null ? match(songRaw) : undefined,
+        exchanges: [],
+      }
     },
   }
 }
@@ -88,6 +126,7 @@ describe('selectBestOfN', () => {
     expect(picked.index).toBe(1)
     expect(picked.winner.seed).toBe(2)
     expect(picked.winner.contrast).toBeCloseTo(1.6)
+    expect(picked.winner.total).toBeCloseTo(1.6)
     expect(picked.scoredWith).toBe('jev')
     expect(picked.winner.result.plan.style).toBe('bach')
     expect(picked.winner.result.trace.planner).toBe('heuristic')
@@ -132,5 +171,28 @@ describe('selectBestOfN', () => {
     const picked = await selectBestOfN({ input: base, planner: recording, fallback: planner })
     expect(picked.n).toBe(BEST_OF_N)
     expect(seen.size).toBe(BEST_OF_N)
+    expect(BEST_OF_N).toBe(5)
+  })
+
+  it('picks the song-shaped plan over a slightly more style-typical étude', async () => {
+    const picked = await selectBestOfN({
+      input: base,
+      n: 2,
+      seeds: [1, 2],
+      planner,
+      fallback: planner,
+      scorer: scriptedScorer(
+        [
+          { bach: 1.6, beethoven: 0.8 },
+          { bach: 1.3, beethoven: 0.8 },
+        ],
+        [0.2, 1.8],
+      ),
+    })
+    expect(picked.index).toBe(1)
+    expect(picked.winner.seed).toBe(2)
+    expect(picked.winner.contrast).toBeCloseTo(0.5)
+    expect(picked.winner.song).toBeCloseTo(1.8)
+    expect(picked.winner.total).toBeCloseTo(1.4)
   })
 })

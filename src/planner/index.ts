@@ -3,7 +3,7 @@ import { directTransport, JevPlanner, proxyTransport } from './JevPlanner'
 import type { Planner } from './Planner'
 
 export type { Decision, Exchange, PlanInput, PlanResult, PlanTrace, Planner, PlannerId, ScoreResult } from './Planner'
-export { BEST_OF_N, contrastiveScore, pickBestIndex, selectBestOfN } from './bestOf'
+export { BEST_OF_N, SONG_WEIGHT, combinedScore, contrastiveScore, pickBestIndex, selectBestOfN } from './bestOf'
 export { JevPlanner } from './JevPlanner'
 
 export const heuristicPlanner: Planner = new HeuristicPlanner()

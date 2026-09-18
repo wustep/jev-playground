@@ -38,6 +38,7 @@ import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, S
 import { decision, normalize, pickFrom, rng } from './pick'
 import { buildRequest, type JevOp } from './jev/requests'
 import { DEFAULT_MODEL } from './jev/systemOne'
+import { heuristicSongQuality } from './songScore'
 
 /** The request Jev would have received for this op — never actually sent. */
 const unsent = (label: string, op: JevOp): Exchange => ({ label, op, request: buildRequest(op, DEFAULT_MODEL), sent: false })
@@ -409,7 +410,11 @@ export class HeuristicPlanner implements Planner {
   async score(plan: CompositionPlan, styles: readonly StyleId[]): Promise<ScoreResult> {
     const scores: Partial<Record<StyleId, StyleMatchScore>> = {}
     for (const style of styles) scores[style] = heuristicMatch(plan, STYLE_PROFILES[style])
-    return { scores, exchanges: [unsent('style match', { op: 'score', plan, styles: [...styles] })] }
+    return {
+      scores,
+      song: heuristicSongQuality(plan),
+      exchanges: [unsent('style + song', { op: 'score', plan, styles: [...styles] })],
+    }
   }
 }
 

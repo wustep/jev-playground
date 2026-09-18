@@ -1,14 +1,32 @@
 // Best-of-N critic: sample cheap heuristic plans, score each, keep the one
-// that looks most like the target style and least like the others.
+// that looks most like the target style (and least like the others) *and*
+// most like a song rather than an étude.
 //
 // Jev plan × N is too expensive (~18 POSTs each). Heuristic plan is free;
-// Jev `score` is one request per candidate (one Score question per style).
+// Jev `score` is one request per candidate (style Scores + one song Score
+// on the same POST). Five score POSTs stay well under the 90/min budget.
 
 import { STYLE_IDS, type CompositionPlan, type StyleId, type StyleMatchScore } from '../plan/schema'
 import type { PlanInput, PlanResult, Planner, ScoreResult } from './Planner'
 
-/** Four score POSTs stay well under the 90/min /api/jev budget. */
-export const BEST_OF_N = 4
+/** Five score POSTs stay well under the 90/min /api/jev budget. */
+export const BEST_OF_N = 5
+
+/**
+ * Combined critic:
+ *   total = styleContrast + SONG_WEIGHT * songRaw
+ *
+ * Style contrast is `target.raw − max(other.raw)` on the 0–2 Score scale,
+ * so one full extra style-match step is about +1.0. Song raw is the same
+ * 0–2 scale (low / medium / high).
+ *
+ * SONG_WEIGHT = 0.5 means a high song score (+2 raw) adds +1.0 — one full
+ * style-contrast step. That is enough to break a tie and to prefer a
+ * song-shaped plan over a slightly more style-typical étude, but not
+ * enough to overturn a decisive style win. Range asked: ~0.5–1.0 of a
+ * full contrast step; 0.5 sits at the low end of that band.
+ */
+export const SONG_WEIGHT = 0.5
 
 /**
  * Numeric style-match used by the critic.
@@ -38,7 +56,21 @@ export function contrastiveScore(scores: Partial<Record<StyleId, StyleMatchScore
   return targetValue - (otherMax ?? 0)
 }
 
-/** First index of the highest finite contrast. `-1` if none are usable. */
+/**
+ * `styleContrast + weight * songRaw`. `null` when contrast is missing.
+ * A missing song raw is treated as 0 so style-only ranking still works.
+ */
+export function combinedScore(
+  contrast: number | null,
+  songRaw: number | null,
+  weight: number = SONG_WEIGHT,
+): number | null {
+  if (contrast === null || !Number.isFinite(contrast)) return null
+  const song = songRaw !== null && Number.isFinite(songRaw) ? songRaw : 0
+  return contrast + weight * song
+}
+
+/** First index of the highest finite total. `-1` if none are usable. */
 export function pickBestIndex(contrasts: readonly (number | null)[]): number {
   let best = -1
   let bestValue = -Infinity
@@ -59,6 +91,10 @@ export interface BestOfCandidate {
   result: PlanResult
   scores: ScoreResult
   contrast: number | null
+  /** Song-quality raw (0–2), or null when the scorer omitted it. */
+  song: number | null
+  /** `contrast + SONG_WEIGHT * song` — what Best actually maximises. */
+  total: number | null
 }
 
 export interface BestOfResult {
@@ -109,8 +145,9 @@ async function scoreOne(
 }
 
 /**
- * Sample N heuristic plans (distinct seeds), score each, keep the max contrast.
- * Never calls `plan()` on the Jev planner — only `score()`, when provided.
+ * Sample N heuristic plans (distinct seeds), score each, keep the max total
+ * (`styleContrast + SONG_WEIGHT * songRaw`). Never calls `plan()` on the Jev
+ * planner — only `score()`, when provided.
  */
 export async function selectBestOfN(options: SelectBestOfOptions): Promise<BestOfResult> {
   const n = options.n ?? BEST_OF_N
@@ -129,17 +166,21 @@ export async function selectBestOfN(options: SelectBestOfOptions): Promise<BestO
     const result = await planner.plan(input, { signal: options.signal })
     const { scores, used } = await scoreOne(result.plan, options.scorer, fallback, options.signal)
     if (used === 'jev') jevScores += 1
+    const contrast = contrastiveScore(scores.scores, input.style)
+    const song = styleMatchValue(scores.song)
     candidates.push({
       seed: input.seed,
       input,
       result,
       scores,
-      contrast: contrastiveScore(scores.scores, input.style),
+      contrast,
+      song,
+      total: combinedScore(contrast, song),
     })
     options.onProgress?.(i + 1, n)
   }
 
-  const index = pickBestIndex(candidates.map((candidate) => candidate.contrast))
+  const index = pickBestIndex(candidates.map((candidate) => candidate.total))
   const winner = candidates[index === -1 ? 0 : index]
   return {
     winner,

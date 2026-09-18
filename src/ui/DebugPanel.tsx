@@ -19,6 +19,8 @@ interface Props {
   exchanges: Exchange[]
   matchExchanges: Exchange[]
   matches: Partial<Record<StyleId, StyleMatchScore>> | null
+  /** Song-quality Score from the same `score` POST as the style matches. */
+  song?: StyleMatchScore | null
   edited: boolean
   notice: string | null
   /** How the sounding notes were produced. */
@@ -83,7 +85,7 @@ function ExchangeRow({ exchange, index, defaultOpen }: { exchange: Exchange; ind
   )
 }
 
-export function DebugPanel({ plan, score, input, trace, exchanges, matchExchanges, matches, edited, notice, notes }: Props) {
+export function DebugPanel({ plan, score, input, trace, exchanges, matchExchanges, matches, song, edited, notice, notes }: Props) {
   const byField = new Map<string, Decision>(edited ? [] : trace.decisions.map((d) => [d.field, d]))
   const globals = edited ? [] : trace.decisions.filter((d) => !d.field.startsWith('bars['))
   const live = trace.planner === 'jev'
@@ -183,6 +185,19 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
                 </tbody>
               </table>
             </div>
+          ) : (
+            <p className="muted">Not scored yet.</p>
+          )}
+
+          <h3>Song</h3>
+          {song ? (
+            <table className="kv">
+              <tbody>
+                <tr><th>level</th><td><code>{song.match}</code></td></tr>
+                <tr><th>conf.</th><td>{percent(song.confidence)}</td></tr>
+                <tr><th>raw 0–2</th><td>{song.raw.toFixed(2)}</td></tr>
+              </tbody>
+            </table>
           ) : (
             <p className="muted">Not scored yet.</p>
           )}

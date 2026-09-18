@@ -355,6 +355,9 @@ export function describePlan(plan: CompositionPlan): Json {
 
 export const scoreQuestionId = (style: StyleId) => `match_${style}`
 
+/** Song-quality Score on the existing `score` op — not a new op. */
+export const SONG_SCORE_QUESTION_ID = 'song'
+
 function styleMatchQuestion(style: StyleId): ScoreQuestion {
   const name = STYLE_LABELS[style]
   return {
@@ -364,6 +367,23 @@ function styleMatchQuestion(style: StyleId): ScoreQuestion {
       `The plan's texture, harmony, tempo and dynamics belong to a clearly different musical tradition from ${name}; someone who knows ${name}'s music would not recognise it here.`,
       `Some of the plan's choices are typical of ${name}, but others are generic or point to a different composer; the resemblance is only partial.`,
       `The plan's texture, chord vocabulary, tempo, dynamics and instrument are all characteristic of ${name}; someone who knows the music would recognise the style immediately.`,
+    ],
+  }
+}
+
+/**
+ * Fable song-shaped cues visible in the plan JSON (FIDELITY_FINDINGS.md).
+ * Three standalone levels: the model never sees the ordering.
+ */
+function songQualityQuestion(): ScoreQuestion {
+  return {
+    type: 'score',
+    instructions:
+      'How much is the composition plan in `plan` a song rather than a keyboard étude? Judge only what the plan states: phrase layout and bar roles (does a phrase-length idea return?), opening (vamp, pickup, or straight in), arrangement (does density change when material returns?), dynamic shape (an arch or late surge, or a flat line?), character and texture. Do not judge how well the plan matches a named style.',
+    criteria: [
+      'The plan is a perpetual on-the-beat étude: continuous figuration that never breathes, no phrase-length return of material, a straight-in opening with no vamp or pickup, and a constant arrangement with no late summit. It reads as an exercise, not a song.',
+      'The plan has some song-shaped cues — a form that brings material back, or an opening that breathes, or an arrangement that changes, or a dynamic arch — but they do not add up. A listener would hear a piece, not yet a song.',
+      'The plan is song-shaped: a form that brings a phrase-length idea back, breathing (rests in the roles, a pickup, or an accompaniment vamp before the tune), an arrangement that changes when the idea returns rather than staying at one density, and one late summit (a dynamic arch or late surge). Not a perpetual étude.',
     ],
   }
 }
@@ -408,9 +428,11 @@ function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): Syste
 
 function scoreRequest(op: Extract<JevOp, { op: 'score' }>, model: string): SystemOneRequest {
   // The plan's own `style` field is withheld: the model should judge the
-  // musical content, not read the label.
+  // musical content, not read the label. Style questions and the song
+  // Score share this one POST — not a new op.
   const questions: Record<string, Question> = {}
   for (const style of op.styles) questions[scoreQuestionId(style)] = styleMatchQuestion(style)
+  questions[SONG_SCORE_QUESTION_ID] = songQualityQuestion()
   return {
     model,
     state: { task: 'Judge a composition plan for a short solo keyboard piece.', plan: describePlan(op.plan) },

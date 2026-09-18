@@ -616,8 +616,8 @@ export default function MusicApp() {
             type="button"
             className="ghost best-of"
             disabled={busy}
-            title={`Sample ${BEST_OF_N} plans for this style and keep the one that matches it most — and the others least`}
-            aria-label={`Best of ${BEST_OF_N}: pick the plan that best matches this style`}
+            title={`Sample ${BEST_OF_N} plans for this style and keep the one that matches it most — and the others least — and is most like a song`}
+            aria-label={`Best of ${BEST_OF_N}: pick the plan that best matches this style and is most like a song`}
             onClick={() => void bestOf()}
           >
             Best
@@ -757,6 +757,7 @@ export default function MusicApp() {
               exchanges={exchanges}
               matchExchanges={matches?.exchanges ?? []}
               matches={matches?.scores ?? null}
+              song={matches?.song ?? null}
               edited={edited}
               notice={generated.notice}
               notes={applyJevNotes ? 'jev' : 'code'}
