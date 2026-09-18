@@ -8,3 +8,9 @@ dist
 .DS_Store
 .env*
 !.env.example
+
+# Local MIDI for Fable analysis only — never ship
+docs/ref-midi/local/
+
+# Reference MIDI is analysed locally only; nothing under docs/ref-midi ships
+docs/ref-midi/**/*.mid

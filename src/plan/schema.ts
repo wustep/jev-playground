@@ -412,7 +412,15 @@ export const CHORD_IDS = keysOf<ChordId>(CHORDS)
 // ── The plan ────────────────────────────────────────────────────────────────
 
 export interface BarPlan {
+  /** The harmony on the downbeat — the whole bar's, unless `chord2` is set. */
   chord: ChordId
+  /**
+   * A second harmony for the second half of the bar (from the middle of the
+   * bar; in 3/4, from the third beat): a cadential six-four moving to the
+   * dominant, ii–V in one bar, a pre-dominant leaning into a cadence. Absent
+   * for the one-harmony-per-bar norm.
+   */
+  chord2?: ChordId
   role: BarRoleId
   contour: ContourId
 }
@@ -432,7 +440,7 @@ export interface CompositionPlan {
   dynamics: DynamicId
   dynamicShape: DynamicShapeId
   defaultInstrument: InstrumentId
-  /** 4, 8, 16 or 32 bars, one harmony each. */
+  /** 4, 8, 16 or 32 bars, one harmony each — two where a bar carries a `chord2`. */
   bars: BarPlan[]
 }
 
@@ -477,11 +485,14 @@ export function parseOption<K extends string>(table: OptionTable<K>, value: unkn
 export function parseBarPlan(raw: unknown, path: string): BarPlan {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError(`${path}: expected an object`)
   const bar = raw as Record<string, unknown>
-  return {
+  const parsed: BarPlan = {
     chord: parseOption(CHORDS, bar.chord, `${path}.chord`),
     role: parseOption(BAR_ROLES, bar.role, `${path}.role`),
     contour: parseOption(CONTOURS, bar.contour, `${path}.contour`),
   }
+  // Optional; `null` is what a hand-edited JSON plan uses to say "no second chord".
+  if (bar.chord2 != null) parsed.chord2 = parseOption(CHORDS, bar.chord2, `${path}.chord2`)
+  return parsed
 }
 
 export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
