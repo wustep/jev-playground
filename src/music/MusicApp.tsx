@@ -9,6 +9,7 @@ import { DebugPanel } from '../ui/DebugPanel'
 import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
+import { DIAL_PLANNER, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
 import { styleCache, type Generated } from './styleCache'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
@@ -76,6 +77,7 @@ export default function MusicApp() {
   // (or the browser tab) and coming back still has whatever finished, even if
   // other styles never completed.
   const [pendingStyle, setPendingStyle] = useState<StyleId | null>(null)
+  const [pendingAsksJev, setPendingAsksJev] = useState(false)
   const [planStatus, setPlanStatus] = useState<string | null>(null)
 
   const generate = useCallback(
@@ -84,8 +86,9 @@ export default function MusicApp() {
       const abort = new AbortController()
       abortRef.current = abort
       const input: PlanInput = { style, bars, pick, brief, seed, ...overrides }
-      const wanted = overrides.planner ?? plannerChoice
+      const wanted = generatePlanner(overrides.planner ?? plannerChoice, Boolean(jev?.planner))
       const planner = wanted === 'jev' && jev?.planner ? jev.planner : heuristicPlanner
+      const asksJev = planner !== heuristicPlanner
 
       if (mountedRef.current) {
         engine.stop()
@@ -94,6 +97,7 @@ export default function MusicApp() {
         setProgress([])
         setMatches(null)
         setPendingStyle(input.style)
+        setPendingAsksJev(asksJev)
         setPlanStatus('Planning…')
       }
       const settle = { fn: null as null | ((value: Generated | null) => void) }
@@ -127,6 +131,7 @@ export default function MusicApp() {
           if (mountedRef.current) {
             setProgress(null)
             setPendingStyle(null)
+            setPendingAsksJev(false)
             setError(cause instanceof Error ? cause.message : String(cause))
           }
           return
@@ -146,6 +151,7 @@ export default function MusicApp() {
       if (!mountedRef.current) return
       setProgress(null)
       setPendingStyle(null)
+      setPendingAsksJev(false)
       setEditedPlan(null)
       setMatches(null)
       setGenerated(made)
@@ -181,55 +187,66 @@ export default function MusicApp() {
         setPendingStyle(null)
         setPlanStatus(`Generated plan and ${made.input.bars} bars in ${(made.trace.latencyMs / 1000).toFixed(2)}s`)
       }).catch(() => {
-        if (mountedRef.current) void generate({ planner: 'heuristic' }, { cancelPrior: false })
+        if (mountedRef.current) void generate({ planner: DIAL_PLANNER }, { cancelPrior: false })
       })
       return
     }
-    void generate({ planner: 'heuristic' }, { cancelPrior: false })
+    void generate({ planner: DIAL_PLANNER }, { cancelPrior: false })
   }, [generate, style, bars])
 
-  // Prewarm offline stubs only (instant dial, no network). Live Jev is cached
-  // lazily on first Generate / dial miss — prewarming every style was ~108
-  // /api/jev calls and blew the 90/min rate limit on first paint.
+  // Offline heuristic prewarm for every style at 16 bars. Live Jev is cached
+  // only when the user clicks Generate — prewarming every style via Jev was
+  // ~18 requests each and blew the 90/min rate limit on first paint.
   useEffect(() => {
     let cancelled = false
-    const idle = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 300))
-    idle(async () => {
+    void (async () => {
       for (const id of STYLE_IDS) {
-        if (cancelled || styleCache.has(id)) continue
+        if (cancelled || styleCache.has(id) || styleCache.getInflight(id)) continue
         const input: PlanInput = { style: id, bars: 16, pick: 'sample', brief: true, seed: newSeed() }
-        const result = await heuristicPlanner.plan(input)
-        if (!cancelled && !styleCache.has(id)) styleCache.set(id, { ...result, input, notice: null })
+        const work = heuristicPlanner.plan(input).then((result) => {
+          const made: Generated = { ...result, input, notice: null }
+          if (!styleCache.has(id)) styleCache.set(id, made)
+          return styleCache.get(id) ?? made
+        })
+        styleCache.setInflight(id, work)
+        try {
+          await work
+        } catch {
+          /* leave empty; a later dial click will stub-plan */
+        }
       }
-    })
+    })()
     return () => {
       cancelled = true
     }
   }, [])
 
-  /** Dial click: show the cached piece at once; only plan when there is none that fits. */
+  /** Dial click: show cache at once. Never call Jev — only Generate may. */
   const chooseStyle = (id: StyleId) => {
     setStyle(id)
-    const wanted = plannerChoice === 'jev' && jev?.planner ? 'jev' : 'heuristic'
-    const pending = styleCache.getInflight(id)
-    if (pending) {
+    const action = resolveDialPlan({ cached: styleCache.get(id), inflight: styleCache.getInflight(id), bars })
+    if (action.kind === 'await-inflight') {
       setPendingStyle(id)
+      setPendingAsksJev(false)
       setPlanStatus('Planning…')
-      void pending.then((cached) => {
+      void action.inflight.then((cached) => {
         if (!mountedRef.current || cached.input.bars !== bars) return
         setSeed(cached.input.seed)
         setGenerated(cached)
         setInstrument(cached.plan.defaultInstrument)
         setPendingStyle(null)
+        setPendingAsksJev(false)
         setPlanStatus(`Generated plan and ${cached.input.bars} bars in ${(cached.trace.latencyMs / 1000).toFixed(2)}s`)
       }).catch(() => {
         /* aborted or superseded */
-        if (mountedRef.current) setPendingStyle(null)
+        if (mountedRef.current) {
+          setPendingStyle(null)
+          setPendingAsksJev(false)
+        }
       })
       return
     }
-    const cached = styleCache.get(id)
-    if (cached && cached.input.bars === bars) {
+    if (action.kind === 'use-cache') {
       abortRef.current?.abort()
       engine.stop()
       setPlaying(false)
@@ -237,19 +254,17 @@ export default function MusicApp() {
       setError(null)
       setEditedPlan(null)
       setMatches(null)
-      setSeed(cached.input.seed)
-      setGenerated(cached)
-      setInstrument(cached.plan.defaultInstrument)
-      setPlanStatus(`Generated plan and ${cached.input.bars} bars in ${(cached.trace.latencyMs / 1000).toFixed(2)}s`)
-      // Prefer a cache hit that matches the active planner; otherwise plan (and replace the stub).
-      if (cached.trace.planner === wanted) {
-        setPendingStyle(null)
-        return
-      }
+      setSeed(action.cached.input.seed)
+      setGenerated(action.cached)
+      setInstrument(action.cached.plan.defaultInstrument)
+      setPlanStatus(`Generated plan and ${action.cached.input.bars} bars in ${(action.cached.trace.latencyMs / 1000).toFixed(2)}s`)
+      setPendingStyle(null)
+      setPendingAsksJev(false)
+      return
     }
     const next = newSeed()
     setSeed(next)
-    void generate({ style: id, seed: next })
+    void generate({ style: id, seed: next, planner: DIAL_PLANNER })
   }
 
   const plan = editedPlan ?? generated?.plan ?? null
@@ -259,9 +274,10 @@ export default function MusicApp() {
   const score = useMemo(() => (plan && generated ? renderPlan(plan, generated.input.seed) : null), [plan, generated])
 
   // Optional style-match scoring — skip while a plan is in flight so latency stays honest.
+  // Jev score only when the displayed plan came from Jev, not because the picker is on Jev.
   useEffect(() => {
     if (!plan || !generated || progress !== null) return
-    const scorer = generated.trace.planner === 'jev' && jev?.planner?.score ? jev.planner : heuristicPlanner
+    const scorer = displayedPlanUsesJevScore(generated.trace.planner) && jev?.planner?.score ? jev.planner : heuristicPlanner
     const abort = new AbortController()
     scorer
       .score?.(plan, STYLE_IDS, { signal: abort.signal })
@@ -387,7 +403,7 @@ export default function MusicApp() {
             onClick={() => chooseStyle(id)}
           >
             <span className="dial-name">{STYLE_LABELS[id]}</span>
-            <span className="dial-tag">{pendingStyle === id ? (plannerChoice === 'jev' && jev?.planner ? `asking Jev… ${Math.round(planProgress * 100)}%` : 'planning…') : STYLE_THEME[id].tagline}</span>
+            <span className="dial-tag">{pendingStyle === id ? dialPendingTag(pendingAsksJev, planProgress) : STYLE_THEME[id].tagline}</span>
           </button>
         ))}
       </div>
@@ -426,6 +442,7 @@ export default function MusicApp() {
             onClick={() => {
               const next = newSeed()
               setSeed(next)
+              // Uses plannerChoice — live Jev when available. Dial clicks never take this path.
               void generate({ seed: next })
             }}
           >
@@ -528,7 +545,7 @@ export default function MusicApp() {
           <section className="panel match-panel">
             <header className="panel-head">
               <h2>How well does this plan match each style?</h2>
-              <span className="tag">{generated.trace.planner === 'jev' && !generated.notice ? 'Jev Score' : 'stub score'}</span>
+              <span className="tag">{displayedPlanUsesJevScore(generated.trace.planner) && !generated.notice ? 'Jev Score' : 'stub score'}</span>
             </header>
             <div className="match-row">
               {STYLE_IDS.map((id) => {
