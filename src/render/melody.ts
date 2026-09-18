@@ -7,6 +7,78 @@ import type { ContourId } from '../plan/schema'
 import type { BarContext, Slot } from './context'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 
+// ── motif memory: the same figure on a new chord ────────────────────────────
+//
+// A line remembers its first statement (the motif) and its previous bar (the
+// figure). Later bars reuse them instead of drawing a fresh contour:
+//   restatement   the motif comes back — over a related chord its pitches are
+//                 kept and strong beats reconciled with the new harmony; over a
+//                 distant chord the whole figure is transposed onto it
+//   sequence/echo the previous bar's figure, moved by the interval between the
+//                 two chords' roots (a step, a third, a fourth …)
+//   development   the head of the motif, transposed onto this chord, then the
+//                 fragment once more a step higher or lower — fragmentation
+// Transposition is diatonic: pitches move by scale steps of this bar's scale,
+// so a sequence changes quality with the harmony the way a real one does.
+
+/** Semitones from `from` to `to` as the smallest move: a fifth up becomes a fourth down. */
+export function rootShift(from: string, to: string): number {
+  const delta = ((Note.chroma(to) ?? 0) - (Note.chroma(from) ?? 0) + 12) % 12
+  return delta > 6 ? delta - 12 : delta
+}
+
+/** `pitches` stretched or squeezed to `count` entries, keeping the shape (identity when the counts match). */
+export function fitTo(pitches: readonly string[], count: number): string[] {
+  if (pitches.length === count || pitches.length === 0) return [...pitches]
+  if (count === 1) return [pitches[0]]
+  return Array.from({ length: count }, (_, k) => pitches[Math.round((k * (pitches.length - 1)) / (count - 1))])
+}
+
+/**
+ * Move a figure by `semitones`, diatonically: every pitch steps the same number
+ * of rungs along this bar's scale. A figure that would leave [lo, hi] is
+ * brought back by an octave. Then strong slots are reconciled with the chord.
+ */
+function transposeFigure(bar: BarContext, pitches: readonly string[], semitones: number, slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): string[] {
+  const rungs = ladder(bar.scale, Math.max(0, lo - 14), Math.min(127, hi + 14))
+  const perOctave = bar.scale.length
+  if (rungs.length === 0 || pitches.length === 0) return [...pitches]
+  const reference = midiOf(pitches[0])
+  let steps = nearestIndex(rungs, reference + semitones) - nearestIndex(rungs, reference)
+  const moved = () => pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + steps, 0, rungs.length - 1)])
+  let out = moved()
+  const top = Math.max(...out.map(midiOf))
+  const bottom = Math.min(...out.map(midiOf))
+  if (top > hi && bottom - 12 >= lo) {
+    steps -= perOctave
+    out = moved()
+  } else if (bottom < lo && top + 12 <= hi) {
+    steps += perOctave
+    out = moved()
+  }
+  return reconcile(bar, out, slots, isStrong, lo, hi)
+}
+
+/** Strong slots must sit on a chord tone: pull any that don't to the nearest one. Weak slots keep the figure's colour. */
+function reconcile(bar: BarContext, pitches: readonly string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): string[] {
+  const chordRungs = ladder(bar.chord.core, lo, hi)
+  const chromas = new Set(bar.chord.core.map((pc) => Note.chroma(pc)))
+  return pitches.map((pitch, k) => {
+    const slot = slots[k]
+    if (!slot || !isStrong(slot) || chromas.has(Note.chroma(pitch)) || chordRungs.length === 0) return pitch
+    return chordRungs[nearestIndex(chordRungs, midiOf(pitch))]
+  })
+}
+
+/** Pitch classes two chords share — I and vi share two; I and bVI share one. */
+function commonTones(a: readonly string[], b: readonly string[]): number {
+  const chromas = new Set(a.map((pc) => Note.chroma(pc)))
+  return b.filter((pc) => chromas.has(Note.chroma(pc))).length
+}
+
+/** Which way a development bar's second fragment steps. */
+const FRAGMENT_STEP: Record<ContourId, number> = { rise: 1, arch: 1, wave: 1, leap_fall: 1, fall: -1, dip: -1, drop_rise: -1, pendulum: -1, static: 0 }
+
 export interface MelodyOptions {
   lo: number
   hi: number
@@ -79,13 +151,30 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
   const scaleRungs = ladder(bar.scale, lo, hi)
   const isStrong = (slot: Slot) => slot.start % strongEvery === 0 || slot.dur >= bar.meter.beatTicks
 
-  // Thematic return: a restatement over the statement's own chord replays its
-  // pitches (the rhythm already matches — see rhythmFor), so the tune comes
-  // back instead of a second, unrelated line with the same shape.
+  // Thematic memory (see the notes at the top of this file). The rhythm
+  // already matches where it should — rhythmFor remembers it the same way.
   const motif = bar.memory.motifs[line]
-  const recalled = bar.plan.role === 'restatement' && motif && motif.chord === bar.chord.id && motif.pitches.length === slots.length && options.contour == null
+  const previousFigure = bar.memory.lastFigures[line]
+  const isMain = options.contour == null
+  let recalled: string[] | undefined
+  if ((bar.plan.role === 'sequence' || bar.plan.role === 'echo') && previousFigure && previousFigure.pitches.length > 0 && slots.length > 0) {
+    recalled = transposeFigure(bar, fitTo(previousFigure.pitches, slots.length), rootShift(previousFigure.root, bar.chord.root), slots, isStrong, lo, hi)
+  } else if (bar.plan.role === 'restatement' && isMain && motif && motif.pitches.length > 0 && slots.length > 0) {
+    const fitted = fitTo(motif.pitches, slots.length)
+    const related = motif.chord === bar.chord.id || commonTones(motif.core, bar.chord.core) >= 2
+    recalled = related ? reconcile(bar, fitted, slots, isStrong, lo, hi) : transposeFigure(bar, fitted, rootShift(motif.root, bar.chord.root), slots, isStrong, lo, hi)
+  } else if (bar.plan.role === 'development' && isMain && motif && motif.pitches.length > 1 && slots.length > 1) {
+    // Fragmentation: the head of the motif on this chord, then the same fragment a step on.
+    const onChord = transposeFigure(bar, motif.pitches, rootShift(motif.root, bar.chord.root), [], () => false, lo, hi)
+    const head = Math.ceil(slots.length / 2)
+    const cell = fitTo(onChord.slice(0, Math.max(2, Math.min(onChord.length, head))), head)
+    const rungs = ladder(bar.scale, Math.max(0, lo - 14), Math.min(127, hi + 14))
+    const step = FRAGMENT_STEP[contour]
+    const again = cell.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + step, 0, rungs.length - 1)]).slice(0, slots.length - head)
+    recalled = reconcile(bar, [...cell, ...again], slots, isStrong, lo, hi)
+  }
 
-  const pitches: string[] = recalled ? [...motif.pitches] : []
+  const pitches: string[] = recalled ? [...recalled] : []
   let previousDesired = reference
   if (!recalled) slots.forEach((slot, k) => {
     const t = slots.length === 1 ? 0.5 : slot.start / bar.meter.ticksPerBar
@@ -101,7 +190,9 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
     pitches.push(rungs[index])
     previousDesired = desired
   })
-  if (bar.plan.role === 'statement' && !motif && options.contour == null) bar.memory.motifs[line] = { chord: bar.chord.id, pitches: [...pitches] }
+  if (bar.plan.role === 'statement' && !motif && isMain && pitches.length > 0) {
+    bar.memory.motifs[line] = { chord: bar.chord.id, root: bar.chord.root, core: [...bar.chord.core], pitches: [...pitches] }
+  }
 
   // Closing bars land where the ear expects: the tonic if the chord has it.
   if ((role === 'cadence' || bar.isLast) && pitches.length > 0) {
@@ -121,7 +212,10 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
     }
   }
 
-  if (pitches.length > 0) bar.memory.lines[line] = midiOf(pitches[pitches.length - 1])
+  if (pitches.length > 0) {
+    bar.memory.lines[line] = midiOf(pitches[pitches.length - 1])
+    bar.memory.lastFigures[line] = { root: bar.chord.root, pitches: [...pitches] }
+  }
   return pitches
 }
 

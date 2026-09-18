@@ -329,11 +329,13 @@ button.small {
 }
 
 .plan-status {
+  /* Sits in the controls row next to the Bars select: centred on the select's box, not on its caption. */
   align-self: end;
   display: flex;
   align-items: center;
   min-height: var(--control-input-height);
   font-size: 12.5px;
+  line-height: 1.3;
   color: var(--muted);
   max-width: 48ch;
 }
@@ -1542,6 +1544,10 @@ button.small {
   select,
   input[type='number'] {
     height: 44px;
+  }
+
+  .plan-status {
+    min-height: 44px;
   }
 
   button.small {

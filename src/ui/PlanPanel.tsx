@@ -112,8 +112,8 @@ export function PlanPanel({ plan, score, decisions, edited, onApply, debug = fal
           return (
             <li key={i} className={`bar-cell role-${bar.role}`} title={runnersUp(decision)}>
               <span className="bar-number">{i + 1}</span>
-              <span className="bar-chord">{bar.chord}</span>
-              <span className="bar-symbol">{score.bars[i]?.chordSymbol}</span>
+              <span className="bar-chord">{bar.chord2 ? `${bar.chord} · ${bar.chord2}` : bar.chord}</span>
+              <span className="bar-symbol">{score.bars[i]?.split ? `${score.bars[i].chordSymbol} · ${score.bars[i].split.chordSymbol}` : score.bars[i]?.chordSymbol}</span>
               <span className="bar-role">{bar.role.replace(/_/g, ' ')}</span>
               <span className="bar-contour">{CONTOUR_GLYPH[bar.contour]}</span>
               <Confidence value={decision?.confidence} />

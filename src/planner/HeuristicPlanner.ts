@@ -56,6 +56,7 @@ export function shadowExchanges(plan: CompositionPlan, brief: boolean): Exchange
         globals,
         roles,
         chords: bars.slice(0, index).map((bar) => bar.chord),
+        chord2s: bars.slice(0, index).map((bar) => bar.chord2 ?? null),
         index,
       }),
     ),
@@ -99,14 +100,25 @@ function archetypeWeights(profile: StyleProfile): Weights<CharacterId> {
 
 interface Harmony {
   chords: ChordId[]
+  /** A second harmony for the second half of a bar — a cadence's approach and arrival sharing one bar. */
+  seconds: (ChordId | undefined)[]
   /** What else was on the table for each bar, for the trace. */
   candidates: ChordId[][]
 }
+
+/** Bars whose harmony must not be held over from the bar before: they are the phrase's punctuation. */
+const PUNCTUATION: ReadonlySet<BarRoleId> = new Set<BarRoleId>(['half_cadence', 'cadence', 'surprise'])
 
 function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds: boolean, sample: boolean, random: () => number): Harmony {
   const chords: ChordId[] = []
   const candidates: ChordId[][] = []
   const heads = new Map<PhraseSlot['material'], readonly ChordId[]>()
+  // Long harmonic rhythm, where the style has it. Decided once per piece so a
+  // piece is consistent with itself: its opening idea sits on one chord for
+  // two bars, and its chord cycle moves at half speed — each chord two bars,
+  // the drone and the held block rather than a chord a bar.
+  const holdHeads = holds && (sample ? random() < 0.55 : true)
+  const stretch = holds && (sample ? random() < 0.5 : true) ? 2 : 1
   // Loop-built pieces don't sit on one cycle: a second cycle takes over for
   // the middle of the piece (a harmonic shift every eight bars or so) and the
   // first returns to close. Short pieces keep the one.
@@ -116,10 +128,15 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
   const loopB = others.length && slots.length >= 4 ? { unit: sample ? others[Math.floor(random() * others.length)] : others[0], pool: others } : loopA
   let loopAt = 0
 
-  /** One unit from `units`, preferring those that don't just repeat the chord we are coming from. */
+  /**
+   * One unit from `units`. Without holds, prefer units that don't just repeat
+   * the chord we are coming from; with a holding piece, a phrase may open on
+   * the chord the last one closed on (the cadence chord carried over).
+   */
   function pickUnit<U extends readonly ChordId[]>(units: readonly U[], after: ChordId | undefined): { unit: U; pool: readonly U[] } {
+    const staying = holdHeads && after !== undefined && (sample ? random() < 0.5 : true) ? units.filter((unit) => unit[0] === after) : []
     const moving = holds || after === undefined ? units : units.filter((unit) => unit[0] !== after)
-    const pool = moving.length ? moving : units
+    const pool = staying.length ? staying : moving.length ? moving : units
     return { unit: sample ? pool[Math.floor(random() * pool.length)] : pool[0], pool }
   }
   const push = (unit: readonly ChordId[], pool: readonly (readonly ChordId[])[]) => {
@@ -138,8 +155,11 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
     const known = heads.get(slot.material)
     if (known) return { unit: slot.varied ? vary(known) : known, pool: [known] }
     const picked = pickUnit(book.heads, last())
-    heads.set(slot.material, picked.unit)
-    return picked
+    // A held head: the opening chord for both bars, unless the second bar is the phrase's punctuation.
+    const held = holdHeads && !PUNCTUATION.has(slot.roles[1]) && picked.unit[0] !== picked.unit[1]
+    const unit: readonly ChordId[] = held ? [picked.unit[0], picked.unit[0]] : picked.unit
+    heads.set(slot.material, unit)
+    return { unit, pool: held ? [unit, ...picked.pool] : picked.pool }
   }
   const tailFor = (slot: PhraseSlot) => pickUnit(book.tails[slot.end].length ? book.tails[slot.end] : book.tails.open, last())
 
@@ -150,8 +170,11 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
         // First appearance of an idea may be a whole phrase lifted from the repertoire.
         if (!heads.has(slot.material) && whole.length && (!sample || random() < 0.5)) {
           const picked = pickUnit(whole, last())
-          heads.set(slot.material, picked.unit.slice(0, 2))
-          push(picked.unit, picked.pool)
+          // A holding piece lets the phrase's opening chord sit through its second bar as well.
+          const held = holdHeads && !PUNCTUATION.has(slot.roles[1]) && picked.unit[0] !== picked.unit[1]
+          const phrase: readonly ChordId[] = held ? [picked.unit[0], picked.unit[0], picked.unit[2], picked.unit[3]] : picked.unit
+          heads.set(slot.material, phrase.slice(0, 2))
+          push(phrase, held ? [phrase, ...picked.pool] : picked.pool)
           break
         }
         const head = headFor(slot)
@@ -192,9 +215,14 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
         const middle = at >= Math.floor(slots.length / 2) && at < slots.length - 1
         const loop = middle ? loopB : loopA
         if (at === Math.floor(slots.length / 2) || at === slots.length - 1) loopAt = 0 // a new section starts its cycle from the top
-        const bars = Array.from({ length: 4 }, () => loop.unit[loopAt++ % loop.unit.length])
+        // At half speed (`stretch` 2) the slot takes two chords of the cycle and holds each for two bars.
+        const steps = 4 / stretch
+        const cycleBars = Array.from({ length: steps }, (_, j) => loop.unit[(loopAt + j) % loop.unit.length])
         // Each later pass may take a different inversion: the same cycle over a new bass.
-        push(slot.varied ? vary(bars) : bars, loop.pool.map((cycle) => bars.map((_, k) => cycle[(loopAt - 4 + k) % cycle.length])))
+        const varied = slot.varied ? vary(cycleBars) : cycleBars
+        const bars = Array.from({ length: 4 }, (_, k) => varied[Math.floor(k / stretch)])
+        push(bars, loop.pool.map((cycle) => bars.map((_, k) => cycle[(loopAt + Math.floor(k / stretch)) % cycle.length])))
+        loopAt += steps
         break
       }
       case 'pedal': {
@@ -239,7 +267,25 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
     candidates[end] = [...new Set([chords[end], ...book.finals])]
     chords[end] = sample ? book.finals[Math.floor(random() * book.finals.length)] : book.finals[0]
   }
-  return { chords, candidates }
+
+  // Two harmonies in a bar, where the phrase closes or pauses: the bar that
+  // arrives on the dominant takes its approach in the first half (ii6/5–V7 | I,
+  // I6/4–V), so cadences move at the pace of the repertoire, not the barline.
+  const seconds: (ChordId | undefined)[] = chords.map(() => undefined)
+  slots.forEach((slot, s) => {
+    if (!book.splits.length) return
+    // A half cadence splits its own bar (I6/4 | V); a phrase that closes, or runs on, splits the bar before its arrival.
+    const at = slot.end === 'half' ? s * 4 + 3 : s * 4 + 2
+    if (at >= end) return
+    const arrival = chords[at]
+    const options = book.splits.filter(([approach, target]) => target === arrival && approach !== chords[at - 1])
+    if (!options.length || (sample && random() >= 0.7)) return
+    const [approach] = sample ? options[Math.floor(random() * options.length)] : options[0]
+    candidates[at] = [...new Set([approach, ...options.map(([first]) => first), arrival])]
+    chords[at] = approach
+    seconds[at] = arrival
+  })
+  return { chords, seconds, candidates }
 }
 
 /**
@@ -324,9 +370,11 @@ export class HeuristicPlanner implements Planner {
         contourProbabilities = normalize(weights)
         contour = pickFrom(contourProbabilities, input.pick, random)
       }
-      bars.push({ chord, role, contour })
+      const chord2 = harmony.seconds[i]
+      bars.push(chord2 ? { chord, chord2, role, contour } : { chord, role, contour })
       emit(decision(`bars[${i}].role`, role, distributionOf(BAR_ROLE_IDS, [role]), 1))
       emit(decision(`bars[${i}].chord`, chord, distributionOf(CHORD_IDS, harmony.candidates[i])))
+      if (chord2) emit(decision(`bars[${i}].chord2`, chord2, distributionOf(CHORD_IDS, [chord2]), 1))
       emit(decision(`bars[${i}].contour`, contour, contourProbabilities))
     }
 

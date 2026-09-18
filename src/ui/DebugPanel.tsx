@@ -118,8 +118,8 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
                 {plan.bars.map((bar, i) => (
                   <tr key={i}>
                     <td>{i + 1}</td>
-                    <td><code>{bar.chord}</code></td>
-                    <td>{score.bars[i]?.chordSymbol}</td>
+                    <td><code>{bar.chord}</code>{bar.chord2 && <> | <code>{bar.chord2}</code></>}</td>
+                    <td>{score.bars[i]?.chordSymbol}{score.bars[i]?.split && ` | ${score.bars[i].split.chordSymbol}`}</td>
                     <td>{percent(byField.get(`bars[${i}].chord`)?.confidence)}</td>
                     <td><code>{bar.role}</code></td>
                     <td>{percent(byField.get(`bars[${i}].role`)?.confidence)}</td>
@@ -130,7 +130,7 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
             </table>
           </div>
           <p className="sequence">
-            {plan.bars.map((bar) => bar.chord).join(' → ')}
+            {plan.bars.map((bar) => (bar.chord2 ? `${bar.chord} | ${bar.chord2}` : bar.chord)).join(' → ')}
           </p>
         </div>
 

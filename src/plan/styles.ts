@@ -78,6 +78,13 @@ export interface HarmonyBook {
   codas: readonly Phrase[]
   /** Chords a piece may end on. */
   finals: readonly ChordId[]
+  /**
+   * Two harmonies in one bar, [first half, second half]: the approach and the
+   * arrival of a cadence — cadential six-four to V, ii–V, a pre-dominant leaning
+   * into the dominant. Applied where a phrase closes or pauses, when the bar's
+   * chord matches an arrival. Empty for styles that keep one harmony per bar.
+   */
+  splits: readonly Pair[]
   /** What a `surprise` bar reaches for. */
   surprises: readonly ChordId[]
   /** Light reharmonisation for varied returns (and, for loops, a new bass each pass). */
@@ -207,6 +214,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['V7', 'I64', 'V7sus4', 'V7']], // BWV 846 bars 24–27
         codas: [['V7_of_IV', 'IV64', 'V7_over_I', 'I']], // BWV 846 bars 32–35
         finals: ['I'],
+        splits: [['ii65', 'V7'], ['I64', 'V7'], ['IV', 'V7'], ['vi', 'V7'], ['ii6', 'V'], ['I64', 'V'], ['IV', 'V']], // chorale cadence in one bar: ii6/5–V7 | I, I6/4–V,
         surprises: ['V7_of_IV', 'vii_dim7_of_V', 'V7_of_vi', 'vii_dim7', 'bVI'],
         subs: { I: ['I6'], IV: ['ii6', 'IV6'], ii7: ['ii65', 'IV'], V7: ['V65', 'V43', 'vii_dim6'], vi: ['vi7', 'IV6'], V: ['V6', 'V7'], ii65: ['ii7', 'IV'] },
       },
@@ -229,6 +237,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['i64', 'vii_dim7_of_V', 'V7sus4', 'V7']],
         codas: [['V7_of_IV', 'iv64', 'vii_dim7', 'I'], ['i', 'iv64', 'V7_over_I', 'i']],
         finals: ['i', 'I'], // "almost certainly a chorale in a minor key will end with a major chord"
+        splits: [['ii_half_dim65', 'V7'], ['i64', 'V7'], ['iv6', 'V7'], ['iv', 'V7'], ['i64', 'V'], ['iv6', 'V'], ['ii_dim6', 'V']],
         surprises: ['V7_of_IV', 'vii_dim7_of_V', 'bII6', 'vii_dim7', 'I'],
         subs: { i: ['i6'], iv: ['iv6', 'ii_dim6'], V7: ['V65', 'vii_dim7'], V: ['V6', 'V7'], bVI: ['bVImaj7', 'iv6'], ii_half_dim7: ['ii_half_dim65'] },
       },
@@ -353,6 +362,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['V7', 'I64', 'V7', 'V'], ['V', 'vii_dim7_of_V', 'V7', 'V']],
         codas: [['I', 'IV64', 'V7_over_I', 'I'], ['I', 'V7', 'I', 'I']],
         finals: ['I'],
+        splits: [['I64', 'V7'], ['ii6', 'V7'], ['IV', 'V7'], ['I64', 'V'], ['ii6', 'V'], ['V65_of_V', 'V']], // the cadential 6/4 resolving within the bar,
         surprises: ['bVI', 'vii_dim7_of_V', 'iv6', 'bII6', 'V7_of_vi', 'vii_dim7'],
         subs: { I: ['I6'], V7: ['V65', 'V43'], IV: ['ii6', 'IV6'], ii: ['ii6'], V: ['V6', 'V7'], vi: ['IV6'] },
       },
@@ -376,6 +386,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['i64', 'vii_dim7_of_V', 'V7', 'V'], ['V7', 'i64', 'V7', 'V']],
         codas: [['i', 'iv64', 'V7_over_I', 'i'], ['i', 'V7', 'i', 'i'], ['i', 'iv64', 'V7', 'I']],
         finals: ['i', 'i', 'I'],
+        splits: [['i64', 'V7'], ['ii_dim6', 'V7'], ['iv6', 'V7'], ['i64', 'V'], ['iv6', 'V'], ['bVI7', 'V'], ['bII6', 'V7'], ['i64', 'V7b9']],
         surprises: ['bII6', 'vii_dim7_of_V', 'bVI7', 'bVI', 'vii_dim7', 'bII'],
         subs: { i: ['i6'], V7: ['V65', 'vii_dim7'], iv: ['iv6', 'ii_dim6'], V: ['V6', 'V7'], bVI: ['iv6'] },
       },
@@ -504,6 +515,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['I', 'IV64', 'I', 'IV64'], ['V7', 'I64', 'V7', 'V']],
         codas: [['I', 'IV64', 'V7_over_I', 'I'], ['V7_of_IV', 'IV6', 'V7', 'I']],
         finals: ['I'],
+        splits: [['I64', 'V7'], ['ii65', 'V7'], ['vi', 'V7'], ['ii6', 'V7'], ['I64', 'V'], ['V7_of_V', 'V']], // nocturne cadence: ii6–I6/4–V7 | I, the 6/4 and V7 sharing a bar,
         surprises: ['bII6', 'vii_dim7_of_V', 'V7_of_vi', 'iv6', 'bVI', 'vii_dim7'],
         subs: { I: ['I6'], V7: ['V65', 'V43'], IV: ['ii6', 'IV6'], ii: ['ii6', 'ii65'], V: ['V6', 'V7'], vi: ['vi6', 'IV6'] },
       },
@@ -527,6 +539,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['i64', 'vii_dim7_of_V', 'V7', 'V'], ['i', 'iv64', 'i', 'iv64']],
         codas: [['i', 'iv64', 'V7_over_I', 'i'], ['i', 'V7', 'i', 'i'], ['iv6', 'i64', 'V7', 'I']],
         finals: ['i', 'i', 'I'],
+        splits: [['i64', 'V7'], ['bII6', 'V7'], ['iv6', 'V7'], ['ii_dim6', 'V7'], ['i64', 'V'], ['i64', 'V7b9']],
         surprises: ['bII6', 'vii_dim7_of_V', 'bVI7', 'vii_dim7', 'bVI', 'I'],
         subs: { i: ['i6'], V7: ['V65', 'vii_dim7'], iv: ['iv6', 'ii_dim6'], V: ['V6', 'V7'], bVI: ['iv6', 'bVImaj7'], ii_half_dim7: ['ii_half_dim65'] },
       },
@@ -648,6 +661,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['ii9', 'ii9', 'ii9', 'ii9'], ['Isus2', 'bVII_over_I', 'Isus2', 'bVII_over_I'], ['V9sus4', 'V9', 'V9sus4', 'V9']],
         codas: [['I', 'iii', 'bIII6', 'I'], ['Iadd6', 'IV64', 'Iadd6', 'Iadd6'], ['bVII_over_I', 'IV64', 'Iadd9', 'Iadd6']],
         finals: ['Iadd6', 'I', 'Iadd9', 'Imaj9', 'I6_9'],
+        splits: [['ii7', 'V9sus4'], ['ii7', 'V9'], ['IV6', 'V9']], // rare: the pace is one colour a bar or slower,
         surprises: ['bIII6', 'II', 'I_aug', 'bVImaj7', 'III', 'bIImaj7', 'V_aug'],
         subs: { I: ['Iadd6', 'Iadd9', 'Imaj7'], IV: ['IVadd6', 'IVmaj7s11', 'IVmaj9'], V9: ['V9sus4'], ii7: ['ii9'], vi: ['vi9'], bVII: ['bVII_over_I'] },
       },
@@ -670,6 +684,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['i', 'IV64', 'i', 'IV64'], ['V', 'V7sus4', 'V', 'V7sus4']],
         codas: [['i', 'iv64', 'i_add9', 'i'], ['bVI', 'bVII', 'I', 'Iadd6']],
         finals: ['i', 'i_add9', 'I', 'i_add6'],
+        splits: [['iv7', 'V7sus4'], ['bVImaj7', 'bVII']],
         surprises: ['bII', 'I', 'IV', 'bIImaj7', 'V_aug', 'III'],
         subs: { i: ['i_add9', 'i_add6', 'i9'], iv: ['iv7', 'iv64'], bVI: ['bVImaj7', 'bVImaj9'], bVII: ['bVII_over_I'], IV: ['IV64'] },
       },
@@ -775,6 +790,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['i', 'bVII_over_I', 'i', 'bVII_over_I']],
         codas: [['i', 'bVI', 'i64', 'i'], ['bVI', 'i64', 'bVI', 'i']],
         finals: ['i', 'i', 'i64', 'IV64'],
+        splits: [], // one chord a bar (or two bars) — no pre-dominants, no intra-bar cadence,
         surprises: ['v6', 'I', 'III', 'IV7', 'bVII'], // the "loop breaker" bar
         subs: { i: ['i64', 'i6'], bVI: ['bVImaj7'], bIII: ['bIII6'], V: ['V6', 'V7'], bVII: ['bVII_over_I'], IV7: ['IV64'] },
       },
@@ -799,6 +815,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['I', 'IV64', 'I', 'bVII_over_I']],
         codas: [['I', 'iii64', 'I', 'I'], ['vi', 'V', 'I64', 'I']],
         finals: ['I', 'I', 'I64', 'I6'],
+        splits: [],
         surprises: ['i', 'bVI', 'bVII', 'III', 'iii64'],
         subs: { I: ['I64', 'I6'], vi: ['vi6'], V: ['V6'], IV: ['IV64'], iii: ['iii64'] },
       },
@@ -931,6 +948,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['i', 'iv64', 'i', 'iv64'], ['i', 'bVII_over_I', 'i', 'bVII_over_I'], ['V7sus4', 'V7', 'V7sus4', 'V7']],
         codas: [['iv', 'i', 'iv64', 'i'], ['bVII', 'i', 'bVII', 'i'], ['bVI', 'V', 'i', 'i']],
         finals: ['i', 'i', 'i64', 'i_add9'],
+        splits: [], // drones: the harmony moves slower than the bar, never faster,
         surprises: ['I', 'IV7', 'bVImaj7', 'V7sus4', 'III'],
         subs: { i: ['i64', 'i6', 'i_add9'], bVI: ['bVImaj7'], V: ['V7', 'V7sus4'], iv: ['iv64', 'iv6'], bVII: ['bVII_over_I'] },
       },
@@ -958,6 +976,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['I', 'IV64', 'I', 'IV64'], ['I', 'V7_over_I', 'I', 'bVII_over_I']],
         codas: [['IV', 'I', 'IV64', 'I'], ['I', 'V', 'I', 'I'], ['vi', 'V', 'I64', 'I']],
         finals: ['I', 'I', 'Iadd9', 'I64'],
+        splits: [],
         surprises: ['bVI', 'bVII', 'iv', 'bIII'],
         subs: { I: ['I64', 'I6', 'Iadd9'], IV: ['IV64', 'IV6'], V: ['V7', 'V7sus4'], vi: ['vi6'] },
       },
@@ -1063,6 +1082,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['I', 'IV64', 'I', 'IV64'], ['V7sus4', 'V7', 'V7sus4', 'V7']],
         codas: [['ii7', 'V7', 'Imaj7', 'I6_9'], ['IVmaj7', 'I64', 'V7', 'I'], ['vi7', 'ii7', 'V7', 'Imaj7']],
         finals: ['I', 'Imaj7', 'I6_9', 'Iadd9'],
+        splits: [['ii7', 'V7'], ['ii65', 'V'], ['ii7', 'V65'], ['IVmaj7', 'V7'], ['vi7', 'V7']], // ii–V in one bar, the standards' turnaround pace,
         surprises: ['bII7', 'iv', 'V7_of_vi', 'sharp_i_dim7', 'bVIImaj7'],
         subs: { Imaj7: ['I', 'I6', 'Iadd9'], I: ['I6', 'Imaj7'], vi7: ['vi', 'vi6'], ii7: ['ii65', 'ii9'], V7: ['V65', 'V43', 'V7sus4'], IVmaj7: ['IV', 'IV6'] },
       },
@@ -1083,6 +1103,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['i', 'iv64', 'i', 'iv64'], ['V7sus4', 'V7', 'V7sus4', 'V7b9']],
         codas: [['iv7', 'V7', 'i', 'i'], ['ii_half_dim7', 'V7b9', 'i', 'i7']],
         finals: ['i', 'i7', 'i_add9', 'I'],
+        splits: [['ii_half_dim7', 'V7'], ['iv7', 'V7'], ['i64', 'V7'], ['ii_half_dim65', 'V7b9'], ['ii_half_dim7', 'V65']],
         surprises: ['bII6', 'I', 'bVImaj7', 'iv_add6'],
         subs: { i: ['i7', 'i6'], i7: ['i9', 'i'], iv7: ['iv', 'iv6'], V7: ['V65', 'V7b9'], ii_half_dim7: ['ii_half_dim65'] },
       },
@@ -1181,6 +1202,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['V9sus4', 'V13', 'V9sus4', 'V7alt']],
         codas: [['ii9', 'bII7', 'Imaj9', 'Imaj7s11'], ['IVmaj9', 'iv_add6', 'Imaj9', 'I6_9'], ['bVImaj7', 'bVII9', 'Imaj9', 'Imaj7s11']],
         finals: ['Imaj7s11', 'I6_9', 'Imaj9', 'Iadd9', 'V9sus4'],
+        splits: [['ii9', 'V13'], ['ii9', 'V7alt'], ['vi9', 'V9sus4'], ['ii9', 'bII7'], ['iv_add6', 'bVII9']], // ii–V colour squeezed into one bar before a held tonic,
         surprises: ['bVImaj7', 'Imaj7s5', 'bII7', 'iv_add6', 'bVImaj9', 'III'],
         subs: { Imaj9: ['Imaj7', 'I6_9', 'Iadd9'], IVmaj9: ['IVmaj7', 'IVadd6'], V13: ['V9sus4', 'V7alt', 'bII7'], ii9: ['ii7', 'IVmaj9'], vi9: ['vi11', 'vi7'], bVImaj7: ['bVImaj9'] },
       },
@@ -1202,6 +1224,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         pedals: [['V7sus4', 'V7alt', 'V7sus4', 'V7b9']],
         codas: [['bVImaj7', 'bVII', 'i11', 'i_add6'], ['ii_half_dim7', 'bII7', 'i9', 'i9']],
         finals: ['i9', 'i11', 'i_add6', 'i_add9'],
+        splits: [['ii_half_dim7', 'V7alt'], ['bVImaj7', 'V7sus4'], ['bVImaj9', 'V7alt'], ['ii_half_dim7', 'bII7']],
         surprises: ['bIImaj7', 'IV7', 'I', 'bVImaj9', 'bII7'],
         subs: { i9: ['i11', 'i_add9', 'i7'], iv9: ['iv7'], bVImaj9: ['bVImaj7'], V7alt: ['V7b9', 'bII7'] },
       },

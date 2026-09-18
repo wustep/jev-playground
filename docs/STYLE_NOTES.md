@@ -295,12 +295,75 @@ the 2000s–2020s (ostinato builds, pedal drones, minor-key gravity, late surges
 
 ---
 
+## Harmonic rhythm and motif (second pass, 2026-09-18)
+
+A repertoire-vs-output gap pass found two structural holes that no amount of
+harmony-book breadth fixes: every bar carried exactly one chord, and a
+`sequence` or `restatement` bar reused the previous bar's *rhythm* but drew a
+fresh, unrelated line for its pitches. Evidence, from public-domain MIDI
+analysed locally (Mutopia encodings; nothing under `docs/ref-midi/` ships):
+
+| Piece | Bars with two harmonies | Bars on the previous bar's harmony | Longest hold |
+| --- | --- | --- | --- |
+| Bach, WTC I prelude in C (BWV 846) | 0 % | 9 % | 2 |
+| Bach, Invention 1 (BWV 772) | 41 % | 10 % | 3 |
+| Chopin, Prelude Op. 28/4 | 27 % | 16 % | 3 |
+| Chopin, Prelude Op. 28/6 | 31 % | 36 % | 4 |
+
+In the prelude 33 of 34 bar pairs share the top line's rhythm exactly: the
+whole piece is one figure carried onto each new chord. In the invention 15 of
+21 pairs do, mostly as sequences. (The DCML Beethoven corpus notes above
+already said "one chord is often held 2–4 bars"; the living-artist styles are
+inferred from the traits in their sections, not from transcriptions.)
+
+**Changed**
+- `BarPlan.chord2` (optional): a second harmony from the half bar (the third
+  beat in 3/4). Each harmony book has `splits` — [approach, arrival] pairs such
+  as ii6/5–V7, I6/4–V, ii7–V7 — and the heuristic planner applies one to the
+  bar that arrives on a matching chord where a phrase closes, pauses or runs
+  on. Glass and Zimmer have none: their harmony never moves faster than the
+  bar. Jev gets an extra Choice on those bars only (in the same request, so
+  no extra round trip): keep one harmony, or name the approach chord.
+- `holds: true` now does something: a piece decides once whether its opening
+  idea sits on one chord for two bars, whether its chord cycle moves at half
+  speed (each chord two bars — the drone, the held block), and whether a
+  phrase may open on the chord the last one closed on.
+- The renderer plays a split bar by rendering it on both chords with the same
+  random draws and memory, then splicing at the split tick; a crossing note
+  holds through only when every pitch is a common tone. No texture had to learn
+  about mid-bar harmony.
+- Motif memory: a line remembers its statement (with its chord) and its
+  previous bar's figure. `sequence` / `echo` move the previous figure onto the
+  new chord by the interval between the roots, diatonically, so a tonal
+  sequence changes quality with the harmony. A `restatement` over a related
+  chord (two common tones) keeps the tune and settles strong beats on the new
+  harmony; over a distant chord it is transposed. `development` states the
+  head of the motif on the new chord and repeats the fragment a step on.
+
+Measured over 40 sampled 16-bar plans per style (heuristic planner):
+
+| Style | Held bars before → after | Split bars | Sequence/echo with the previous bar's shape | Restatement with the statement's shape |
+| --- | --- | --- | --- | --- |
+| Bach | 0 → 0 % | 8 % | 10 → 22 % | 42 → 57 % |
+| Beethoven | 5 → 8 % | 9 % | 28 → 62 % | 56 → 82 % |
+| Chopin | 1 → 9 % | 8 % | 19 → 57 % | 36 → 60 % |
+| Debussy | 3 → 20 % | 3 % | 29 → 61 % | 46 → 48 % |
+| Glass | 9 → 30 % | 0 % | 56 → 81 % | 41 → 45 % |
+| Zimmer | 6 → 25 % | 0 % | 33 → 80 % | 23 → 41 % |
+| Laufey | 2 → 12 % | 7 % | 18 → 65 % | 25 → 73 % |
+| Fox | 2 → 20 % | 2 % | 19 → 40 % | 28 → 44 % |
+
+Bach's low sequence figure is the measure, not the music: its running lines
+are stepwise fills between transposed anchors, and the prelude figure has no
+melody line at all (it is transposed by construction).
+
 ## Left out, on purpose
 
 - **New meters.** Every report asked for them (2/4 and cut time for Beethoven,
   9/8 for Debussy, 3/8 and 12/8 for Bach). Each texture carries per-meter tables
   and the engraver has per-meter beaming rules, so this is its own change.
-- **Two chords in a bar.** Cadential 6/4–V7 and ii–V want it; the renderer is
-  one-harmony-per-bar throughout.
+- **Two chords in a bar beyond cadences.** Cadence bars can now split (see
+  above); the invention's 41 % two-chord bars are sequence-driven, and a
+  travelling unit at two chords a bar is still to do.
 - **Tuplets.** Moonlight's triplets and Glass's 2-against-3 in 4/4 are
   approximated on the sixteenth grid.

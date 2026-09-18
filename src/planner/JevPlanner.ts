@@ -30,6 +30,7 @@ import {
   type FormId,
   type CompositionPlan,
   type GlobalField,
+  type KeyId,
   type OptionTable,
   type PlanGlobals,
   type StyleId,
@@ -38,7 +39,8 @@ import {
 import { formRoles } from '../plan/forms'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
 import { marginConfidence, normalize, pickFrom, rng, withNovelty } from './pick'
-import { buildRequest, characterQuestionId, scoreQuestionId, type JevOp } from './jev/requests'
+import { rootDegree } from '../render/harmony'
+import { approachOptionsFor, asksApproach, buildRequest, characterQuestionId, NO_APPROACH, scoreQuestionId, type JevOp } from './jev/requests'
 import { callSystemOne, DEFAULT_MODEL, type Answer, type ChoiceAnswer, type SystemOneResponse } from './jev/systemOne'
 
 /** noul ** this: 0.95 → 0.81, 0.75 → 0.32, 0.5 → 0.06, 0.2 → 0.002. */
@@ -166,6 +168,7 @@ export class JevPlanner implements Planner {
 
     // 3 ─ chords, sequentially: each bar sees the ones before it
     const chords: ChordId[] = []
+    const chord2s: (ChordId | null)[] = []
     const bars: BarPlan[] = []
     for (let index = 0; index < barCount; index++) {
       const answers = await ask(`bar ${index + 1} chord`, {
@@ -175,6 +178,7 @@ export class JevPlanner implements Planner {
         globals: globals as PlanGlobals,
         roles,
         chords: [...chords],
+        chord2s: [...chord2s],
         index,
       })
       // Policy: keep a sampled progression moving (Jev likes to sit on the tonic through
@@ -184,8 +188,14 @@ export class JevPlanner implements Planner {
       // The last chord is never a dice roll: a piece that ends on V7 because a 40 % option came up just sounds broken.
       const chord = decide(answers, 'chord', `bars[${index}].chord`, CHORDS, settles ? undefined : (given) => withNovelty(given, chords), isLast ? 'argmax' : input.pick)
       const contour = decide(answers, 'contour', `bars[${index}].contour`, CONTOURS)
-      chords.push(chord)
-      bars.push({ chord, role: roles[index], contour })
+      // A cadence bar may take two harmonies: Jev's chord arrives in the second half behind an
+      // approach chord it also chose — unless the approach is the same harmony under another name.
+      const approach = asksApproach(roles, index) ? decide(answers, 'approach', `bars[${index}].approach`, approachOptionsFor(globals.key as KeyId)) : NO_APPROACH
+      const split = approach !== NO_APPROACH && rootDegree(approach as ChordId) !== rootDegree(chord)
+      const bar: BarPlan = split ? { chord: approach as ChordId, chord2: chord, role: roles[index], contour } : { chord, role: roles[index], contour }
+      chords.push(bar.chord)
+      chord2s.push(bar.chord2 ?? null)
+      bars.push(bar)
     }
 
     const plan: CompositionPlan = { version: 1, style: input.style, ...(globals as PlanGlobals), bars }
