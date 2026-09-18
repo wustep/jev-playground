@@ -167,22 +167,32 @@ export type PaletteId = keyof typeof PALETTES
 export const PALETTE_IDS = keysOf<PaletteId>(PALETTES)
 
 export const TEMPOS = {
+  larghissimo: 'Extremely slow, almost still, about 16 quarter notes per minute',
+  grave: 'Slow, solemn and heavy, about 30 quarter notes per minute',
   largo: 'Very slow and broad, about 50 quarter notes per minute',
+  larghetto: 'Broad but a little less slow than largo, about 63 quarter notes per minute',
   adagio: 'Slow and expressive, about 66 quarter notes per minute',
   andante: 'Walking pace, about 84 quarter notes per minute',
   moderato: 'Moderate, about 104 quarter notes per minute',
   allegro: 'Fast and lively, about 132 quarter notes per minute',
+  vivace: 'Lively and brisk, about 160 quarter notes per minute',
   presto: 'Very fast and driving, about 168 quarter notes per minute',
+  prestissimo: 'As fast as possible, about 208 quarter notes per minute',
 } as const
 export type TempoId = keyof typeof TEMPOS
 export const TEMPO_IDS = keysOf<TempoId>(TEMPOS)
 export const TEMPO_BPM: Record<TempoId, number> = {
+  larghissimo: 16,
+  grave: 30,
   largo: 50,
+  larghetto: 63,
   adagio: 66,
   andante: 84,
   moderato: 104,
   allegro: 132,
+  vivace: 160,
   presto: 168,
+  prestissimo: 208,
 }
 
 export const DYNAMICS = {
@@ -238,6 +248,14 @@ export const OPENINGS = {
 } as const
 export type OpeningId = keyof typeof OPENINGS
 export const OPENING_IDS = keysOf<OpeningId>(OPENINGS)
+
+export const PEDALS = {
+  dry: 'No sustain pedal — notes cut at their written length; dry, detached, clear',
+  half: 'Half pedal — chords overlap and bloom a little, but the texture stays readable',
+  full: 'Sustain pedal held — sonorities ring through the bar, a wash of overlapping tones',
+} as const
+export type PedalId = keyof typeof PEDALS
+export const PEDAL_IDS = keysOf<PedalId>(PEDALS)
 
 export const BAR_COUNTS = {
   '4': 'Four bars — one short phrase, a single gesture',
@@ -472,6 +490,11 @@ export interface CompositionPlan {
    * Vamp and pickup prepend extra Score.bars; plan.bars stays 4/8/16/32.
    */
   opening?: OpeningId
+  /**
+   * Sustain pedal for the piece. Optional on hand-edited plans; planners always
+   * write it. The renderer defaults from the texture (washed textures ring).
+   */
+  pedal?: PedalId
   /** 4, 8, 16 or 32 bars, one harmony each — two where a bar carries a `chord2`. */
   bars: BarPlan[]
 }
@@ -490,6 +513,7 @@ export const GLOBAL_FIELDS = {
   defaultInstrument: INSTRUMENTS,
   arrangement: ARRANGEMENTS,
   opening: OPENINGS,
+  pedal: PEDALS,
 } as const
 export type GlobalField = keyof typeof GLOBAL_FIELDS
 export const GLOBAL_FIELD_IDS = Object.keys(GLOBAL_FIELDS) as GlobalField[]
@@ -545,6 +569,7 @@ export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
     defaultInstrument: parseOption(INSTRUMENTS, obj.defaultInstrument, `${path}.defaultInstrument`),
     arrangement: obj.arrangement != null ? parseOption(ARRANGEMENTS, obj.arrangement, `${path}.arrangement`) : 'lift_on_return',
     opening: obj.opening != null ? parseOption(OPENINGS, obj.opening, `${path}.opening`) : 'straight_in',
+    pedal: obj.pedal != null ? parseOption(PEDALS, obj.pedal, `${path}.pedal`) : 'half',
   }
 }
 

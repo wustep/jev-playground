@@ -13,6 +13,7 @@ import {
   TEXTURE_IDS,
   parsePlan,
   type CompositionPlan,
+  type PedalId,
 } from '../plan/schema'
 import { HeuristicPlanner } from '../planner/HeuristicPlanner'
 import { rng } from '../planner/pick'
@@ -164,6 +165,48 @@ describe('renderPlan', () => {
     expect(notes.length).toBeGreaterThan(20)
     expect(notes[0].time).toBeGreaterThanOrEqual(0)
     expect(notes.every((n, i) => i === 0 || n.time >= notes[i - 1].time)).toBe(true)
+  })
+
+  it('realises the pedal global as written, overlapping, or ringing hold', () => {
+    const bars = [
+      { chord: 'I' as const, role: 'statement' as const, contour: 'arch' as const },
+      { chord: 'V7' as const, role: 'cadence' as const, contour: 'fall' as const },
+    ]
+    const at = (pedal: PedalId) => {
+      const score = renderPlan(
+        {
+          version: 1,
+          style: 'chopin',
+          character: 'lyrical_song',
+          form: 'period',
+          key: 'Db_major',
+          meter: 'four_four',
+          texture: 'rolling_nocturne',
+          palette: 'chromatic_approach',
+          tempo: 'adagio',
+          dynamics: 'p',
+          dynamicShape: 'arch',
+          defaultInstrument: 'grand_piano',
+          pedal,
+          bars,
+        },
+        2,
+      )
+      expect(score.pedal).toBe(pedal)
+      return timeline(score)
+    }
+    const dry = at('dry')
+    const half = at('half')
+    const full = at('full')
+    const mean = (notes: ReturnType<typeof timeline>) => notes.reduce((sum, n) => sum + n.duration, 0) / notes.length
+    expect(mean(half)).toBeGreaterThan(mean(dry))
+    expect(mean(full)).toBeGreaterThan(mean(half))
+    const dryDurations = timeline({ ...renderPlan({
+      version: 1, style: 'chopin', character: 'lyrical_song', form: 'period', key: 'Db_major', meter: 'four_four',
+      texture: 'rolling_nocturne', palette: 'chromatic_approach', tempo: 'adagio', dynamics: 'p', dynamicShape: 'arch',
+      defaultInstrument: 'grand_piano', pedal: 'full', bars,
+    }, 2), pedal: 'full' }, { sustain: false }).map((n) => n.duration)
+    expect(dryDurations).toEqual(dry.map((n) => n.duration))
   })
 })
 

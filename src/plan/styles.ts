@@ -22,6 +22,7 @@
 import type {
   ArrangementId,
   OpeningId,
+  PedalId,
   CharacterId,
   ChordId,
   ContourId,
@@ -53,6 +54,7 @@ export interface StylePriors {
   contour: Weights<ContourId>
   arrangement: Weights<ArrangementId>
   opening: Weights<OpeningId>
+  pedal: Weights<PedalId>
 }
 
 export interface Archetype {
@@ -115,13 +117,14 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       meter: { four_four: 42, three_four: 24, six_eight: 14, twelve_eight: 12, nine_eight: 8 },
       texture: { two_voice_counterpoint: 25, broken_chord_prelude: 20, chorale: 15, aria_walking_bass: 15, toccata_perpetual: 15, stride_dance: 10 },
       palette: { diatonic: 60, chromatic_approach: 40 },
-      tempo: { andante: 30, moderato: 40, allegro: 30 },
+      tempo: { andante: 28, moderato: 36, allegro: 26, vivace: 6, larghetto: 2, grave: 2 },
       dynamics: { mf: 50, mp: 25, f: 25 },
       dynamicShape: { terraced: 50, steady: 30, waves: 10, late_surge: 10 },
       defaultInstrument: { harpsichord: 50, church_organ: 25, grand_piano: 25 },
       contour: { rise: 18, fall: 20, arch: 16, pendulum: 14, wave: 12, leap_fall: 10, dip: 6, drop_rise: 2, static: 2 },
       arrangement: { constant: 70, lift_on_return: 20, terraced_blocks: 10 },
       opening: { straight_in: 80, pickup: 15, vamp_intro: 5 },
+      pedal: { dry: 70, half: 25, full: 5 },
     },
     archetypes: {
       // Preludes in unbroken figuration (WTC I/1, I/2).
@@ -133,6 +136,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           meter: { four_four: 58, three_four: 12, six_eight: 12, twelve_eight: 12, nine_eight: 6 },
           tempo: { andante: 35, moderato: 40, allegro: 25 },
           dynamics: { mp: 45, mf: 45, p: 10 },
+          pedal: { dry: 75, half: 25 },
           dynamicShape: { steady: 35, terraced: 25, late_surge: 25, waves: 15 },
           contour: { static: 30, arch: 25, rise: 15, fall: 15, wave: 15 },
         },
@@ -143,9 +147,10 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         priors: {
           form: { spinning_out: 45, binary_dance: 25, sentence: 15, call_and_response: 15 },
           texture: { two_voice_counterpoint: 80, toccata_perpetual: 20 },
-          tempo: { allegro: 55, moderato: 35, presto: 10 },
+          tempo: { allegro: 50, moderato: 32, presto: 10, vivace: 8 },
           dynamics: { mf: 60, f: 25, mp: 15 },
           contour: { pendulum: 22, leap_fall: 18, rise: 18, fall: 18, wave: 14, arch: 10 },
+          pedal: { dry: 85, half: 15 },
         },
       },
       // Four-part chorales.
@@ -155,7 +160,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { period: 60, binary_dance: 20, call_and_response: 10, sentence: 10 },
           texture: { chorale: 90, aria_walking_bass: 10 },
           meter: { four_four: 80, three_four: 20 },
-          tempo: { andante: 45, adagio: 35, moderato: 20 },
+          tempo: { andante: 40, adagio: 30, moderato: 18, grave: 12 },
           dynamicShape: { steady: 60, terraced: 40 },
           defaultInstrument: { church_organ: 50, choir: 20, harpsichord: 15, grand_piano: 15 },
           contour: { arch: 30, fall: 30, rise: 20, dip: 10, static: 10 },
@@ -168,7 +173,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { binary_dance: 50, period: 35, arch_return: 15 },
           texture: { aria_walking_bass: 70, chorale: 15, stride_dance: 15 },
           meter: { three_four: 55, four_four: 30, six_eight: 15 },
-          tempo: { adagio: 45, andante: 40, largo: 15 },
+          tempo: { adagio: 40, andante: 36, largo: 12, larghetto: 12 },
           dynamics: { mp: 50, p: 30, mf: 20 },
           dynamicShape: { terraced: 40, waves: 30, steady: 30 },
           contour: { arch: 28, fall: 22, leap_fall: 18, wave: 16, rise: 10, dip: 6 },
@@ -181,8 +186,9 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { binary_dance: 70, period: 20, spinning_out: 10 },
           texture: { two_voice_counterpoint: 40, stride_dance: 35, aria_walking_bass: 25 },
           meter: { six_eight: 36, three_four: 32, twelve_eight: 20, nine_eight: 12 },
-          tempo: { allegro: 50, moderato: 35, presto: 15 },
+          tempo: { allegro: 42, moderato: 30, presto: 12, vivace: 16 },
           contour: { leap_fall: 25, pendulum: 20, rise: 18, fall: 17, wave: 12, arch: 8 },
+          pedal: { dry: 80, half: 20 },
         },
       },
       // Minor-key toccatas.
@@ -192,7 +198,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { spinning_out: 60, free_fantasia: 25, sentence: 15 },
           key: { C_minor: 25, D_minor: 25, G_minor: 18, A_minor: 12, E_minor: 10, F_minor: 10 },
           texture: { toccata_perpetual: 70, two_voice_counterpoint: 20, dramatic_chords: 10 },
-          tempo: { allegro: 60, presto: 30, moderato: 10 },
+          tempo: { allegro: 50, presto: 24, vivace: 16, prestissimo: 6, moderato: 4 },
           dynamics: { f: 55, mf: 45 },
           dynamicShape: { terraced: 45, late_surge: 35, steady: 20 },
         },
@@ -260,13 +266,14 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       meter: { four_four: 32, three_four: 26, two_four: 24, six_eight: 18 },
       texture: { dramatic_chords: 18, alberti_melody: 18, tremolo_storm: 14, rolling_nocturne: 12, pulsing_chords: 12, scherzo_staccato: 12, chorale: 8, aria_walking_bass: 6 },
       palette: { diatonic: 50, chromatic_approach: 50 },
-      tempo: { allegro: 35, presto: 15, adagio: 20, andante: 15, moderato: 10, largo: 5 },
+      tempo: { allegro: 30, presto: 12, adagio: 18, andante: 14, moderato: 10, largo: 4, vivace: 6, grave: 3, larghetto: 2, prestissimo: 1 },
       dynamics: { f: 30, ff: 15, p: 35, pp: 20 },
       dynamicShape: { sudden_contrast: 35, build_then_drop: 20, crescendo: 20, arch: 10, late_surge: 10, waves: 5 },
       defaultInstrument: { grand_piano: 90, strings: 10 },
       contour: { rise: 24, fall: 16, arch: 14, leap_fall: 12, static: 12, drop_rise: 8, wave: 8, dip: 4, pendulum: 2 },
       arrangement: { lift_on_return: 55, build: 20, peak_then_bare: 15, constant: 10 },
       opening: { straight_in: 55, pickup: 30, vamp_intro: 15 },
+      pedal: { half: 40, dry: 35, full: 25 },
     },
     archetypes: {
       // Pathétique / Tempest / Appassionata allegros.
@@ -277,7 +284,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           key: { C_minor: 30, F_minor: 18, D_minor: 16, Cs_minor: 8, G_minor: 8, A_minor: 8, E_minor: 6, Eb_major: 6 },
           texture: { tremolo_storm: 40, dramatic_chords: 35, pulsing_chords: 15, toccata_perpetual: 10 },
           meter: { four_four: 36, two_four: 32, three_four: 18, six_eight: 14 },
-          tempo: { allegro: 55, presto: 35, moderato: 10 },
+          tempo: { allegro: 48, presto: 28, vivace: 12, prestissimo: 6, moderato: 6 },
           dynamics: { f: 40, ff: 25, p: 25, pp: 10 },
           dynamicShape: { sudden_contrast: 45, build_then_drop: 25, crescendo: 20, late_surge: 10 },
           contour: { rise: 35, leap_fall: 15, fall: 15, drop_rise: 12, arch: 13, static: 10 },
@@ -290,7 +297,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { period: 55, arch_return: 25, sentence: 20 },
           key: { Ab_major: 25, Eb_major: 20, Db_major: 10, E_major: 10, F_major: 10, C_major: 10, A_major: 8, G_major: 7 },
           texture: { alberti_melody: 40, rolling_nocturne: 20, chorale: 20, aria_walking_bass: 20 },
-          tempo: { adagio: 55, andante: 35, largo: 10 },
+          tempo: { adagio: 48, andante: 30, largo: 10, larghetto: 12 },
           dynamics: { p: 50, pp: 25, f: 25 },
           dynamicShape: { arch: 35, waves: 25, build_then_drop: 25, crescendo: 15 },
           contour: { arch: 30, fall: 20, wave: 18, rise: 16, leap_fall: 10, dip: 6 },
@@ -304,8 +311,9 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           key: { Cs_minor: 35, C_minor: 15, F_minor: 15, A_minor: 10, D_minor: 10, E_minor: 10, B_minor: 5 },
           meter: { four_four: 50, six_eight: 35, three_four: 15 },
           texture: { rolling_nocturne: 80, chorale: 20 },
-          tempo: { adagio: 60, largo: 30, andante: 10 },
+          tempo: { adagio: 50, largo: 24, andante: 8, grave: 10, larghissimo: 8 },
           dynamics: { pp: 55, p: 45 },
+          pedal: { full: 70, half: 30 },
           dynamicShape: { steady: 40, arch: 30, waves: 30 },
           contour: { static: 45, fall: 20, arch: 20, dip: 10, rise: 5 },
         },
@@ -413,13 +421,14 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       meter: { three_four: 45, four_four: 35, six_eight: 20 },
       texture: { rolling_nocturne: 22, alberti_melody: 18, chordal_melody: 14, stride_dance: 14, dramatic_chords: 12, broken_chord_prelude: 12, wash_arpeggio: 8 },
       palette: { chromatic_approach: 55, diatonic: 45 },
-      tempo: { adagio: 28, andante: 24, moderato: 18, allegro: 16, largo: 8, presto: 6 },
+      tempo: { adagio: 24, andante: 22, moderato: 16, allegro: 14, largo: 6, larghetto: 8, presto: 5, vivace: 3, grave: 2 },
       dynamics: { p: 35, mp: 20, pp: 15, f: 15, mf: 10, ff: 5 },
       dynamicShape: { arch: 30, waves: 20, sudden_contrast: 15, crescendo: 15, late_surge: 10, terraced: 10 },
       defaultInstrument: { grand_piano: 95, strings: 5 },
       contour: { arch: 24, fall: 18, wave: 16, leap_fall: 12, rise: 12, dip: 8, drop_rise: 6, static: 4 },
       arrangement: { lift_on_return: 60, build: 15, constant: 15, peak_then_bare: 10 },
       opening: { pickup: 45, vamp_intro: 30, straight_in: 25 },
+      pedal: { full: 55, half: 35, dry: 10 },
     },
     archetypes: {
       // Nocturnes: singing cantabile over rolling left-hand figuration.
@@ -568,13 +577,14 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       meter: { six_eight: 28, four_four: 28, three_four: 22, nine_eight: 22 },
       texture: { parallel_planing: 20, wash_arpeggio: 20, melody_over_ostinato: 15, chordal_melody: 15, bell_organum: 10, displaced_arpeggio: 5, toccata_perpetual: 5, broken_chord_prelude: 5, stride_dance: 5 },
       palette: { pentatonic: 35, whole_tone: 15, modal: 20, modal_dark: 15, diatonic: 15 },
-      tempo: { adagio: 35, andante: 40, largo: 15, moderato: 10 },
+      tempo: { adagio: 30, andante: 34, largo: 12, larghetto: 10, moderato: 8, larghissimo: 4, grave: 2 },
       dynamics: { pp: 50, p: 40, mp: 10 },
       dynamicShape: { arch: 40, waves: 20, steady: 15, decrescendo: 15, late_surge: 10 },
       defaultInstrument: { grand_piano: 85, strings: 8, choir: 7 },
       contour: { fall: 22, arch: 22, wave: 16, static: 14, dip: 10, rise: 8, drop_rise: 5, leap_fall: 3 },
       arrangement: { lift_on_return: 40, constant: 30, terraced_blocks: 20, build: 10 },
       opening: { vamp_intro: 50, straight_in: 35, pickup: 15 },
+      pedal: { full: 70, half: 25, dry: 5 },
     },
     archetypes: {
       dreamy_haze: {
@@ -717,13 +727,14 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       meter: { four_four: 45, six_eight: 30, three_four: 25 },
       texture: { melody_over_ostinato: 22, minimal_cells: 20, displaced_arpeggio: 14, pulsing_chords: 12, interlocking_hands: 10, wash_arpeggio: 8, toccata_perpetual: 8, broken_chord_prelude: 6 },
       palette: { diatonic: 70, modal: 20, modal_dark: 10 },
-      tempo: { moderato: 40, allegro: 25, andante: 25, adagio: 10 },
+      tempo: { moderato: 36, allegro: 22, andante: 24, adagio: 10, vivace: 6, larghetto: 2 },
       dynamics: { mp: 40, mf: 30, p: 25, f: 5 },
       dynamicShape: { terraced: 35, steady: 30, waves: 15, build_then_drop: 20 },
       defaultInstrument: { grand_piano: 55, church_organ: 20, strings: 15, choir: 5, electric_piano: 5 },
       contour: { static: 28, rise: 22, wave: 18, arch: 16, fall: 16 },
       arrangement: { terraced_blocks: 55, build: 25, constant: 15, peak_then_bare: 5 },
       opening: { vamp_intro: 65, straight_in: 30, pickup: 5 },
+      pedal: { half: 45, dry: 40, full: 15 },
     },
     archetypes: {
       hypnotic_pulse: {
@@ -850,13 +861,14 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       meter: { four_four: 70, three_four: 18, six_eight: 12 },
       texture: { melody_over_ostinato: 28, pulsing_chords: 22, dramatic_chords: 16, wash_arpeggio: 12, minimal_cells: 10, chorale: 8, rolling_nocturne: 4 },
       palette: { diatonic: 55, modal: 20, modal_dark: 15, chromatic_approach: 10 },
-      tempo: { andante: 30, adagio: 22, moderato: 22, largo: 12, allegro: 10, presto: 4 },
+      tempo: { andante: 26, adagio: 18, moderato: 20, largo: 10, grave: 6, larghissimo: 4, allegro: 8, presto: 3, vivace: 3, larghetto: 2 },
       dynamics: { p: 30, mp: 25, mf: 20, pp: 15, f: 8, ff: 2 },
       dynamicShape: { crescendo: 30, late_surge: 25, build_then_drop: 15, arch: 15, waves: 10, steady: 5 },
       defaultInstrument: { grand_piano: 55, strings: 30, electric_piano: 10, choir: 5 },
       contour: { static: 26, rise: 22, arch: 16, fall: 14, wave: 10, leap_fall: 6, dip: 6 },
       arrangement: { peak_then_bare: 50, build: 35, lift_on_return: 10, constant: 5 },
       opening: { vamp_intro: 70, straight_in: 25, pickup: 5 },
+      pedal: { full: 50, half: 35, dry: 15 },
     },
     archetypes: {
       // Layered ostinato that thickens without becoming a cell-process étude.
@@ -1013,13 +1025,14 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       meter: { four_four: 62, three_four: 26, six_eight: 12 },
       texture: { chordal_melody: 22, alberti_melody: 18, stride_dance: 16, lush_voicings: 14, rolling_nocturne: 12, aria_walking_bass: 8, syncopated_ostinato: 6, melody_over_ostinato: 4 },
       palette: { diatonic: 50, chromatic_approach: 32, modal: 10, blues: 8 },
-      tempo: { andante: 38, adagio: 28, moderato: 22, largo: 8, allegro: 4 },
+      tempo: { andante: 34, adagio: 24, moderato: 20, largo: 6, larghetto: 8, allegro: 4, grave: 2, vivace: 2 },
       dynamics: { p: 42, mp: 32, pp: 16, mf: 10 },
       dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 12, terraced: 8 },
       defaultInstrument: { grand_piano: 82, electric_piano: 18 },
       contour: { arch: 26, fall: 20, wave: 16, rise: 14, dip: 10, leap_fall: 8, static: 6 },
       arrangement: { lift_on_return: 55, build: 20, constant: 15, peak_then_bare: 10 },
       opening: { vamp_intro: 55, pickup: 25, straight_in: 20 },
+      pedal: { half: 50, full: 30, dry: 20 },
     },
     archetypes: {
       // Standards-shaped songs: a sung tune over piano accompaniment.
@@ -1142,13 +1155,14 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       meter: { three_four: 35, four_four: 45, six_eight: 20 },
       texture: { displaced_arpeggio: 25, chordal_melody: 22, lush_voicings: 18, melody_over_ostinato: 12, wash_arpeggio: 10, rolling_nocturne: 5, stride_dance: 4, syncopated_ostinato: 4 },
       palette: { pentatonic: 35, diatonic: 20, blues: 15, chromatic_approach: 15, modal: 15 },
-      tempo: { andante: 40, adagio: 30, moderato: 25, largo: 5 },
+      tempo: { andante: 36, adagio: 26, moderato: 22, largo: 4, larghetto: 8, grave: 2, vivace: 2 },
       dynamics: { p: 45, mp: 35, pp: 15, mf: 5 },
       dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 20 },
       defaultInstrument: { grand_piano: 55, electric_piano: 35, strings: 5, choir: 5 },
       contour: { arch: 22, fall: 20, wave: 18, rise: 14, static: 10, leap_fall: 8, dip: 8 },
       arrangement: { build: 40, lift_on_return: 35, peak_then_bare: 15, terraced_blocks: 10 },
       opening: { vamp_intro: 45, straight_in: 35, pickup: 20 },
+      pedal: { full: 50, half: 40, dry: 10 },
     },
     archetypes: {
       dreamy_haze: {

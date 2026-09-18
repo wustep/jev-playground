@@ -51,6 +51,7 @@ import {
   DYNAMICS,
   DYNAMIC_SHAPES,
   ARRANGEMENTS,
+  PEDALS,
   OPENINGS,
   PlanValidationError,
   parseBarPlan,
@@ -145,6 +146,7 @@ function describeGlobals(globals: PlanGlobals): Json {
     instrument: INSTRUMENTS[globals.defaultInstrument],
     ...(globals.arrangement ? { arrangement: ARRANGEMENTS[globals.arrangement] } : {}),
     ...(globals.opening ? { opening: OPENINGS[globals.opening] } : {}),
+    ...(globals.pedal ? { sustain_pedal: PEDALS[globals.pedal] } : {}),
   }
 }
 
@@ -182,6 +184,7 @@ const GLOBAL_INSTRUCTIONS: Record<Exclude<GlobalField, 'character'>, string> = {
   defaultInstrument: 'Which of these instruments would `requested_style.name` most plausibly use for a piece with the character in `piece_character`?',
   arrangement: 'How would the keyboard arrangement change as phrases return in a piece with the character in `piece_character`, in the style of `requested_style.name`? The options describe density over the form, not which notes to write.',
   opening: 'How would a short piece with the character in `piece_character` begin, in the style of `requested_style.name`? Straight in, a bar or two of accompaniment alone, or a short pickup into the first downbeat.',
+  pedal: 'How much sustain pedal would a piece with the character in `piece_character` use, in the style of `requested_style.name`? Dry cuts notes at their written length; half lets chords overlap a little; full holds the pedal so sonorities ring through the bar.',
 }
 
 const choice = (instructions: string, criteria: Record<string, string>): ChoiceQuestion => ({

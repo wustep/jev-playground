@@ -18,7 +18,7 @@ import { applyEnding, applyOpening } from './framing'
 import { applyPhraseBreath, breathes, isPhraseFinalBar } from './phrasing'
 import { clamp, midiOf } from './pitch'
 import { METER_INFO, type Bar, type Note, type Score, type TimedNote, type Voice } from './score'
-import { PEDALLED, TEXTURE_RENDERERS } from './textures'
+import { pedalOf, TEXTURE_RENDERERS } from './textures'
 
 const DYNAMIC_VELOCITY: Record<DynamicId, number> = { pp: 36, p: 50, mp: 64, mf: 78, f: 94, ff: 110 }
 
@@ -243,7 +243,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     meter,
     bpm: TEMPO_BPM[plan.tempo],
     bars,
-    pedal: PEDALLED.has(plan.texture),
+    pedal: pedalOf(plan),
     articulation: feel.articulation,
     introBars: 0,
     ritardando: false,
@@ -270,13 +270,12 @@ export function scoreDuration(score: Score): number {
 const ROLL_SPREAD = 0.028
 
 /**
- * Flatten to sounding notes. With `sustain` (default: the score's pedal flag)
- * notes ring to the end of their bar regardless of written length — the sheet
- * still shows what's written. MIDI export passes `sustain: false` and writes
- * real CC64 pedal events instead.
+ * Flatten to sounding notes. The score's pedal level holds notes past their
+ * written length (half overlaps, full rings to the barline). MIDI export
+ * passes `sustain: false` and writes real CC64 events instead.
  */
 export function timeline(score: Score, options: { sustain?: boolean } = {}): TimedNote[] {
-  const sustain = options.sustain ?? score.pedal
+  const pedal = options.sustain === false ? 'dry' : options.sustain === true ? 'full' : score.pedal
   const tick = secondsPerTick(score)
   const lastIndex = score.bars.length - 1
   const stretch = score.ritardando ? 1.28 : 1
@@ -293,7 +292,9 @@ export function timeline(score: Score, options: { sustain?: boolean } = {}): Tim
           // Character touch: short notes are clipped (staccato wit) or held (legato song); long ones always sing.
           const held = n.dur <= score.meter.beatTicks / 2 ? score.articulation : Math.max(score.articulation, 0.9)
           const written = n.dur * localTick * 0.96 * held
-          const duration = sustain ? Math.max(written, barEnd - time + 0.15) : written
+          const remain = barEnd - time
+          const duration =
+            pedal === 'dry' ? written : pedal === 'half' ? Math.max(written, written + Math.max(0, remain) * 0.5) : Math.max(written, remain + 0.15)
           out.push({ midi: midiOf(pitch), time, duration, velocity: n.velocity, bar: bar.index, hand })
         })
       }

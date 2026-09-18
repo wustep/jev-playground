@@ -25,6 +25,7 @@ const FIELD_LABEL: Record<GlobalField, string> = {
   defaultInstrument: 'Instrument',
   arrangement: 'Arrangement',
   opening: 'Opening',
+  pedal: 'Pedal',
 }
 
 function pretty(field: GlobalField, plan: CompositionPlan): string {
