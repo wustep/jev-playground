@@ -2,7 +2,7 @@ import { Midi } from '@tonejs/midi'
 import { describe, expect, it } from 'vitest'
 import { handleJev } from '../../server/jevHandler'
 import { scoreToMidi } from '../midi/exportMidi'
-import { BAR_COUNT_VALUES, BAR_ROLE_IDS, CHARACTER_IDS, FORM_IDS, STYLE_IDS, parsePlan } from '../plan/schema'
+import { BAR_COUNT_VALUES, BAR_ROLE_IDS, CHARACTER_IDS, FORM_IDS, PEDAL_IDS, STYLE_IDS, TEMPO_IDS, parsePlan } from '../plan/schema'
 import { formRoles, formSlots } from '../plan/forms'
 import { STYLE_PROFILES } from '../plan/styles'
 import { keyInfo, resolveChord } from '../render/harmony'
@@ -72,9 +72,12 @@ describe('JevPlanner', () => {
     expect(seen[0].state).toMatchObject({ requested_style: { name: 'Philip Glass' } })
     expect(JSON.stringify(seen[0].state)).not.toContain('minimalism')
     // Request 2 fans out form + the other globals, conditioned on that character. Length is never asked.
-    expect(Object.keys(seen[1].questions)).toHaveLength(11)
+    expect(Object.keys(seen[1].questions)).toHaveLength(12)
     expect(Object.keys(seen[1].questions)).toContain('arrangement')
     expect(Object.keys(seen[1].questions)).toContain('opening')
+    expect(Object.keys(seen[1].questions)).toContain('pedal')
+    expect(Object.keys(seen[1].questions.tempo.criteria as object)).toEqual(TEMPO_IDS)
+    expect(Object.keys(seen[1].questions.pedal.criteria as object)).toEqual(PEDAL_IDS)
     expect(Object.keys(seen[1].questions)).not.toContain('barCount')
     expect(JSON.stringify(seen[1].state)).toContain('steady motoric pulse')
     // Phrase requests carry the book options and prior-slot contour context.
@@ -179,6 +182,8 @@ describe('HeuristicPlanner', () => {
     expect(trace.exchanges.every((exchange) => !exchange.sent && !exchange.response)).toBe(true)
     expect(trace.exchanges[0].request.model).toBe('jev-latest')
     expect(trace.latencyMs).toBeGreaterThan(0)
+    expect(PEDAL_IDS).toContain(plan.pedal)
+    expect(trace.decisions.some((d) => d.field === 'pedal')).toBe(true)
   })
 
 
@@ -371,8 +376,16 @@ describe('MIDI export', () => {
     expect(midi.header.timeSignatures[0].timeSignature).toEqual([score.meter.num, score.meter.den])
     expect(midi.tracks.map((track) => track.name)).toEqual(['Right hand', 'Left hand'])
     expect(midi.tracks.reduce((sum, track) => sum + track.notes.length, 0)).toBe(timeline(score).length)
-    // A pedalled texture exports real sustain-pedal events.
-    expect(score.pedal).toBe(true)
+    // Debussy's washed textures pick half/full; dry would skip CC64.
+    expect(score.pedal).not.toBe('dry')
     expect(midi.tracks[0].controlChanges[64]?.length).toBe(score.bars.length * 2)
+  })
+
+  it('skips sustain CC when the plan is dry', async () => {
+    const { plan } = await new HeuristicPlanner().plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 2, brief: true })
+    const score = renderPlan({ ...plan, pedal: 'dry' }, 2)
+    const midi = new Midi(scoreToMidi(score, 'harpsichord'))
+    expect(score.pedal).toBe('dry')
+    expect(midi.tracks[0].controlChanges[64]).toBeUndefined()
   })
 })

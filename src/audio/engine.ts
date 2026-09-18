@@ -20,6 +20,7 @@ import { ElectricPiano, Reverb, Soundfont, SplendidGrandPiano } from 'smplr'
 import type { InstrumentId } from '../plan/schema'
 import { scoreDuration, timeline } from '../render/renderPlan'
 import type { Score, TimedNote } from '../render/score'
+import { ROOM, tuneRoom } from './room'
 
 /** The slice of smplr's instrument surface the engine relies on. */
 interface Sampler {
@@ -32,7 +33,6 @@ interface Sampler {
 
 interface InstrumentSpec {
   create(context: AudioContext, options: { destination: AudioNode; onLoadProgress: (p: LoadProgress) => void }): Sampler
-  reverb: number
 }
 
 export interface LoadProgress {
@@ -41,13 +41,13 @@ export interface LoadProgress {
 }
 
 const INSTRUMENT_SPECS: Record<InstrumentId, InstrumentSpec> = {
-  grand_piano: { create: (ctx, o) => SplendidGrandPiano(ctx, { ...o, volume: 100 }), reverb: 0.16 },
-  electric_piano: { create: (ctx, o) => ElectricPiano(ctx, { ...o, instrument: 'WurlitzerEP200', volume: 92 }), reverb: 0.2 },
-  harpsichord: { create: (ctx, o) => Soundfont(ctx, { ...o, instrument: 'harpsichord', volume: 96 }), reverb: 0.14 },
+  grand_piano: { create: (ctx, o) => SplendidGrandPiano(ctx, { ...o, volume: 100 }) },
+  electric_piano: { create: (ctx, o) => ElectricPiano(ctx, { ...o, instrument: 'WurlitzerEP200', volume: 92 }) },
+  harpsichord: { create: (ctx, o) => Soundfont(ctx, { ...o, instrument: 'harpsichord', volume: 96 }) },
   // Sustained instruments load loop points so whole-bar notes at largo don't run out of sample.
-  church_organ: { create: (ctx, o) => Soundfont(ctx, { ...o, instrument: 'church_organ', loadLoopData: true, volume: 84 }), reverb: 0.3 },
-  strings: { create: (ctx, o) => Soundfont(ctx, { ...o, instrument: 'string_ensemble_1', loadLoopData: true, volume: 96 }), reverb: 0.28 },
-  choir: { create: (ctx, o) => Soundfont(ctx, { ...o, instrument: 'choir_aahs', loadLoopData: true, volume: 100 }), reverb: 0.32 },
+  church_organ: { create: (ctx, o) => Soundfont(ctx, { ...o, instrument: 'church_organ', loadLoopData: true, volume: 84 }) },
+  strings: { create: (ctx, o) => Soundfont(ctx, { ...o, instrument: 'string_ensemble_1', loadLoopData: true, volume: 96 }) },
+  choir: { create: (ctx, o) => Soundfont(ctx, { ...o, instrument: 'choir_aahs', loadLoopData: true, volume: 100 }) },
 }
 
 export type EngineStatus =
@@ -133,6 +133,10 @@ export class AudioEngine {
         const reverb = Reverb(context)
         reverb.connect(master)
         this.reverb = reverb
+        void reverb.ready().then(() => {
+          if (this.disposed || this.reverb !== reverb) return
+          tuneRoom(reverb)
+        })
       } catch {
         this.reverb = undefined // no AudioWorklet: play dry rather than not at all
       }
@@ -161,7 +165,7 @@ export class AudioEngine {
           },
         })
         await sampler.ready
-        if (this.reverb) sampler.output.addEffect('reverb', this.reverb, spec.reverb)
+        if (this.reverb) sampler.output.addEffect('reverb', this.reverb, ROOM.wet)
         return sampler
       })()
       this.pending.set(id, loading)

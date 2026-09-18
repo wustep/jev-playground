@@ -76,6 +76,8 @@ const marginX = (width: number) => (width >= 720 ? 34 : 20)
 const SYSTEM_TOP = 46 // room above the treble staff for chord symbols
 const STAFF_GAP = 96
 const SYSTEM_HEIGHT = 292
+/** Extra pixels either side of a notehead. VexFlow's default (3) makes dense 16ths look like one bar. */
+export const LEDGER_STROKE_PX = 1
 
 /** VexFlow wants "eb/4"; tonal gives "Eb4". */
 function vexKey(pitch: string): string {
@@ -89,7 +91,7 @@ function restKey(clef: 'treble' | 'bass', voiceIndex: number, voiceCount: number
   return voiceIndex === 0 ? 'b/3' : 'f/2'
 }
 
-interface BuiltVoice {
+export interface BuiltVoice {
   voice: VexVoice
   notes: StaveNote[]
   ties: StaveTie[]
@@ -97,7 +99,7 @@ interface BuiltVoice {
   onsets: { tick: number; note: StaveNote }[]
 }
 
-function buildVoice(source: Voice, clef: 'treble' | 'bass', voiceIndex: number, voiceCount: number, meter: MeterInfo): BuiltVoice {
+export function buildVoice(source: Voice, clef: 'treble' | 'bass', voiceIndex: number, voiceCount: number, meter: MeterInfo): BuiltVoice {
   const stemDirection = voiceCount > 1 ? (voiceIndex === 0 ? Stem.UP : Stem.DOWN) : undefined
   const engraved = engraveVoice(source, meter)
   const notes: StaveNote[] = []
@@ -112,9 +114,10 @@ function buildVoice(source: Voice, clef: 'treble' | 'bass', voiceIndex: number, 
           duration,
           dots,
           clef,
+          strokePx: LEDGER_STROKE_PX,
           ...(stemDirection === undefined ? { autoStem: true } : { stemDirection }),
         })
-      : new StaveNote({ keys: [restKey(clef, voiceIndex, voiceCount)], duration: `${duration}r`, dots, clef })
+      : new StaveNote({ keys: [restKey(clef, voiceIndex, voiceCount)], duration: `${duration}r`, dots, clef, strokePx: LEDGER_STROKE_PX })
     if (dots > 0) Dot.buildAndAttach([staveNote], { all: true })
     if (piece.note && piece.head) {
       if (piece.note.accent) staveNote.addModifier(new Articulation('a>').setPosition(clef === 'treble' ? Modifier.Position.ABOVE : Modifier.Position.BELOW), 0)
@@ -135,6 +138,27 @@ function buildVoice(source: Voice, clef: 'treble' | 'bass', voiceIndex: number, 
     ...(stemDirection === undefined ? {} : { stemDirection, maintainStemDirections: true }),
   })
   return { voice, notes, ties, beams, onsets }
+}
+
+/**
+ * VexFlow keys ModifierContexts by `tickable.getStave()`. Notes that still have
+ * no stave (the default here before this helper) all share `undefined`, so a
+ * treble whole note and a bass 16th at tick 0 are formatted as one staff —
+ * stems flip mid-beam (filled black rectangles) and ledger lines stretch.
+ */
+export function attachVoicesToStave(voices: BuiltVoice[], stave: Stave) {
+  for (const built of voices) {
+    built.voice.setStave(stave)
+    for (const note of built.notes) note.setStave(stave)
+  }
+}
+
+/** Keep every note in a beam on the beam's stem direction after Formatter has run. */
+export function unifyBeamStems(beam: Beam) {
+  const direction = beam.getStemDirection()
+  for (const note of beam.getNotes()) {
+    if (!note.isRest()) note.setStemDirection(direction)
+  }
 }
 
 /** How much horizontal room a bar wants, from its busiest voice. */
@@ -215,6 +239,8 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       const noteStart = Math.max(treble.getNoteStartX(), bass.getNoteStartX())
       treble.setNoteStartX(noteStart)
       bass.setNoteStartX(noteStart)
+      treble.setDefaultLedgerLineStyle({ strokeStyle: theme.ink, lineWidth: 1 })
+      bass.setDefaultLedgerLineStyle({ strokeStyle: theme.ink, lineWidth: 1 })
       treble.setContext(context).draw()
       bass.setContext(context).draw()
 
@@ -226,6 +252,8 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
 
       const upper = bar.treble.map((voice, i) => buildVoice(voice, 'treble', i, bar.treble.length, meter))
       const lower = bar.bass.map((voice, i) => buildVoice(voice, 'bass', i, bar.bass.length, meter))
+      attachVoicesToStave(upper, treble)
+      attachVoicesToStave(lower, bass)
       if (upper.length) Accidental.applyAccidentals(upper.map((b) => b.voice), score.keySignature)
       if (lower.length) Accidental.applyAccidentals(lower.map((b) => b.voice), score.keySignature)
 
@@ -234,6 +262,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       if (lower.length) formatter.joinVoices(lower.map((b) => b.voice))
       const all = [...upper, ...lower]
       formatter.format(all.map((b) => b.voice), Math.max(40, x + staveWidth - noteStart - 14))
+      all.forEach((b) => b.beams.forEach(unifyBeamStems))
 
       upper.forEach((b) => b.voice.draw(context, treble))
       lower.forEach((b) => b.voice.draw(context, bass))
