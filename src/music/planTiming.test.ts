@@ -3,7 +3,7 @@ import type { PlanResult } from '../planner'
 import { formatPlanSeconds, generatedPlanStatus, planHeuristicSample, stampWallClockLatency } from './planTiming'
 
 const stubResult = (latencyMs: number): PlanResult => ({
-  plan: { version: 1, style: 'bach', bars: [] } as PlanResult['plan'],
+  plan: { version: 1, style: 'bach', bars: [] } as unknown as PlanResult['plan'],
   trace: { planner: 'heuristic', requests: 0, latencyMs, decisions: [], exchanges: [] },
 })
 
