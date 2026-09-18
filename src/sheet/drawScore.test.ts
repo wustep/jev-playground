@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { Formatter, Stave } from 'vexflow/bravura'
 import { METER_INFO, type Voice } from '../render/score'
-import { attachVoicesToStave, buildVoice, LEDGER_STROKE_PX, unifyBeamStems, usablePitches, vexKey, type BuiltVoice } from './drawScore'
+import {
+  attachVoicesToStave,
+  buildVoice,
+  flattenWideBeams,
+  LEDGER_STROKE_PX,
+  settleRests,
+  systemPadding,
+  tieIndexes,
+  unifyBeamStems,
+  usablePitches,
+  vexKey,
+  voicesForStaff,
+  type BuiltVoice,
+} from './drawScore'
 
 const meter = METER_INFO.four_four
 
@@ -138,6 +151,14 @@ describe('NoYValues hardening', () => {
     for (const row of ysAfterFormat([built], 136)) expect(row.length).toBeGreaterThan(0)
   })
 
+  it('engraves an empty staff as a full-bar rest', () => {
+    const built = voicesForStaff([], 'treble', meter)
+    expect(built).toHaveLength(1)
+    expect(built[0].notes.length).toBeGreaterThan(0)
+    expect(built[0].notes.every((note) => note.isRest())).toBe(true)
+    for (const row of ysAfterFormat(built)) expect(row.length).toBeGreaterThan(0)
+  })
+
   it('formats a weird beam group (16ths, empty pitch, rest gap) without NoYValues', () => {
     const voice: Voice = [
       { start: 0, dur: 1, pitches: ['G5'], velocity: 70 },
@@ -152,5 +173,91 @@ describe('NoYValues hardening', () => {
     formatTogether(upper, lower, true)
     for (const row of upper[0].notes.map((note) => note.getYs())) expect(row.length).toBeGreaterThan(0)
     for (const row of lower[0].notes.map((note) => note.getYs())) expect(row.length).toBeGreaterThan(0)
+  })
+})
+
+describe('rest placement', () => {
+  it('sits a rest in a low bass run next to those notes, not on the middle line', () => {
+    const voice: Voice = [
+      { start: 0, dur: 1, pitches: ['C2'], velocity: 70 },
+      { start: 2, dur: 1, pitches: ['C2'], velocity: 70 },
+      { start: 3, dur: 1, pitches: ['Eb2'], velocity: 70 },
+    ]
+    const [built] = voicesForStaff([voice], 'bass', meter)
+    settleRests([built])
+    const rest = built.notes.find((note) => note.isRest())
+    expect(rest).toBeTruthy()
+    const restLine = rest!.getKeyLine(0)
+    const noteLine = built.notes.find((note) => !note.isRest())!.getKeyLine(0)
+    expect(Math.abs(restLine - noteLine)).toBeLessThan(2)
+  })
+
+  it('pushes a two-voice rest off the other voice\'s noteheads', () => {
+    const upper: Voice = [{ start: 8, dur: 8, pitches: ['C5'], velocity: 80 }]
+    const inner: Voice = [
+      { start: 0, dur: 2, pitches: ['G5'], velocity: 64 },
+      { start: 2, dur: 2, pitches: ['Bb5'], velocity: 64 },
+      { start: 4, dur: 2, pitches: ['D6'], velocity: 64 },
+      { start: 6, dur: 2, pitches: ['G5'], velocity: 64 },
+      { start: 8, dur: 8, pitches: ['G5'], velocity: 64 },
+    ]
+    const voices = voicesForStaff([upper, inner], 'treble', meter)
+    const before = voices[0].notes[0]
+    expect(before.isRest()).toBe(true)
+    const colliding = inner.flatMap((n) => n.pitches)
+    expect(colliding.some((p) => p === 'G5' || p === 'Bb5')).toBe(true)
+    settleRests(voices)
+    const restLine = voices[0].notes[0].getKeyLine(0)
+    const otherLines = voices[1].notes.filter((note) => !note.isRest()).flatMap((note) => note.getKeys().map((_, i) => note.getKeyLine(i)))
+    expect(otherLines.some((line) => Math.abs(line - restLine) < 1.5)).toBe(false)
+  })
+})
+
+describe('beams, ties, and system padding', () => {
+  it('beams a middle 16th rest instead of leaving flagged orphans', () => {
+    const voice: Voice = [
+      { start: 0, dur: 1, pitches: ['G4'], velocity: 70 },
+      { start: 2, dur: 1, pitches: ['G4'], velocity: 70 },
+      { start: 3, dur: 1, pitches: ['A4'], velocity: 70 },
+    ]
+    const [built] = voicesForStaff([voice], 'treble', meter)
+    const beamed = built.beams.some((beam) => beam.getNotes().some((note) => note.isRest()) && beam.getNotes().some((note) => !note.isRest()))
+    expect(beamed).toBe(true)
+  })
+
+  it('flattens a beam that leaps more than an octave on the staff', () => {
+    const voice: Voice = [
+      { start: 0, dur: 1, pitches: ['C6'], velocity: 70 },
+      { start: 1, dur: 1, pitches: ['C4'], velocity: 70 },
+      { start: 2, dur: 1, pitches: ['C6'], velocity: 70 },
+      { start: 3, dur: 1, pitches: ['C4'], velocity: 70 },
+    ]
+    const [built] = voicesForStaff([voice], 'treble', meter)
+    expect(built.beams.length).toBeGreaterThan(0)
+    built.beams.forEach(flattenWideBeams)
+    expect(built.beams.some((beam) => beam.renderOptions.flatBeams)).toBe(true)
+  })
+
+  it('ties only shared keys and keeps the tie on the voice\'s stem side', () => {
+    const voice: Voice = [{ start: 0, dur: 5, pitches: ['C4', 'G4'], velocity: 70 }]
+    const [built] = voicesForStaff([voice], 'treble', meter)
+    expect(built.ties.length).toBeGreaterThan(0)
+    const first = built.ties[0]
+    const notes = first.getNotes()
+    const { firstIndexes, lastIndexes } = tieIndexes(notes.firstNote as never, notes.lastNote as never)
+    expect(firstIndexes.length).toBeGreaterThan(0)
+    expect(firstIndexes).toEqual(lastIndexes)
+    expect(first.getDirection()).toBeDefined()
+  })
+
+  it('widens the grand-staff gap when bass climbs into the treble', () => {
+    const quiet = systemPadding([
+      { index: 0, plan: { chord: 'I', role: 'statement', contour: 'arch' }, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['C3'], velocity: 64 }]], dynamic: 'mf' },
+    ])
+    const crowded = systemPadding([
+      { index: 0, plan: { chord: 'I', role: 'statement', contour: 'arch' }, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['E4', 'F#4'], velocity: 64 }]], dynamic: 'mf' },
+    ])
+    expect(quiet.gap).toBe(0)
+    expect(crowded.gap).toBeGreaterThan(quiet.gap)
   })
 })

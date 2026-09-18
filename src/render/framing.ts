@@ -107,10 +107,20 @@ function vampBars(score: Score, count: number): Bar[] {
   }))
 }
 
+function firstTunePitch(score: Score, fallback: Bar): string | undefined {
+  // Prefer a bar that actually has a sung line (two treble voices). Opening
+  // tacet / vamp-like first bars would otherwise aim the pickup at the
+  // accompaniment and write it on the treble staff in the wrong octave.
+  for (const bar of score.bars) {
+    if (bar.treble.length >= 2 && bar.treble[0]?.length) return firstMelodyPitch(bar)
+  }
+  return firstMelodyPitch(fallback)
+}
+
 function pickupBar(score: Score): Bar {
   const source = score.bars[0]
   const meter = score.meter
-  const target = firstMelodyPitch(source)
+  const target = firstTunePitch(score, source)
   const from = firstBassPitch(source) ?? target
   const pickupTicks = Math.min(4, meter.beatTicks)
   const restFrom = meter.ticksPerBar - pickupTicks

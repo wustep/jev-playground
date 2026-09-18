@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { formRoles } from '../plan/forms'
 import type { ChordId, CompositionPlan, ContourId } from '../plan/schema'
 import { midiOf } from './pitch'
-import { isPhraseFinalBar, phrasingOf, withEndRest } from './phrasing'
+import { isPhraseFinalBar, phrasingOf, pickupNotes, withEndRest } from './phrasing'
 import { renderPlan } from './renderPlan'
 import { METER_INFO } from './score'
 
@@ -43,6 +43,15 @@ describe('phrasing helpers', () => {
 
   it('treats every fourth bar as a phrase end', () => {
     expect([0, 1, 2, 3, 4, 7, 15].map((i) => isPhraseFinalBar(i, 16))).toEqual([false, false, false, true, false, true, true])
+  })
+
+  it('keeps an anacrusis in the destination octave instead of climbing from the bass', () => {
+    const notes = pickupNotes('C2', 'C5', 12, 16, ['C', 'D', 'E', 'F', 'G', 'A', 'B'], 64)
+    expect(notes.length).toBeGreaterThan(0)
+    for (const n of notes) {
+      expect(midiOf(n.pitches[0])).toBeGreaterThanOrEqual(55)
+      expect(midiOf(n.pitches[0])).toBeLessThan(midiOf('C5'))
+    }
   })
 
   it('carves a rest from the end of a bar-filling rhythm', () => {

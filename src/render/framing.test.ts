@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { formRoles } from '../plan/forms'
 import type { ChordId, CompositionPlan, ContourId } from '../plan/schema'
 import { introBarCount, openingOf } from './framing'
+import { midiOf } from './pitch'
 import { renderPlan, scoreDuration, timeline } from './renderPlan'
 import { scoreBarForPlan } from './score'
 
@@ -52,11 +53,26 @@ describe('opening bar-count contract', () => {
     expect(pickupVoice.every((n) => n.start >= pickup.meter.ticksPerBar - 6)).toBe(true)
     const firstBody = pickup.bars[1].treble[0][0]
     expect(firstBody).toBeTruthy()
+    for (const n of pickupVoice) {
+      for (const pitch of n.pitches) {
+        expect(midiOf(pitch), `pickup ${pitch} belongs on the treble staff`).toBeGreaterThanOrEqual(55)
+      }
+    }
     expect(scoreBarForPlan(vamp, 0)).toBe(vamp.bars[2])
     expect(scoreBarForPlan(vamp, 5)).toBe(vamp.bars[7])
     expect(scoreBarForPlan(pickup, 0)).toBe(pickup.bars[1])
     const straight = renderPlan(songPlan({ opening: 'straight_in' }), 2)
     expect(scoreBarForPlan(straight, 0)).toBe(straight.bars[0])
+  })
+
+  it('keeps a Chopin nocturne pickup on the treble staff', () => {
+    const score = renderPlan(songPlan({ opening: 'pickup', texture: 'rolling_nocturne', character: 'lyrical_song' }), 7)
+    expect(score.introBars).toBe(1)
+    for (const voice of score.bars[0].treble) {
+      for (const n of voice) {
+        for (const pitch of n.pitches) expect(midiOf(pitch)).toBeGreaterThanOrEqual(55)
+      }
+    }
   })
 })
 
