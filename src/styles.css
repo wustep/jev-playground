@@ -281,8 +281,10 @@ button.small {
 
 .dial-name {
   font-family: var(--serif);
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 600;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .dial-stop.selected .dial-name {
@@ -330,13 +332,14 @@ button.small {
   padding-bottom: 10px;
   font-size: 12.5px;
   color: var(--muted);
-  max-width: 42ch;
+  max-width: 48ch;
 }
 
 .controls-actions {
   display: flex;
   gap: 8px;
   margin-left: auto;
+  align-items: stretch;
 }
 
 .controls-actions .primary {
@@ -344,6 +347,15 @@ button.small {
   height: 40px;
   font-size: 14.5px;
   font-weight: 600;
+}
+
+.controls-actions .best-of {
+  min-width: 0;
+  width: auto;
+  height: 40px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 /* Policy knobs (decide-by, style brief, seed): only with Debug on. */
@@ -1530,8 +1542,9 @@ button.small {
   }
 
   .dial-name {
-    font-size: 16px;
-    line-height: 1.15;
+    font-size: 13.5px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
   }
 
   .dial-tag {
@@ -1539,7 +1552,7 @@ button.small {
     line-height: 1.25;
   }
 
-  /* Controls: a two-column grid of full-width fields, then one big Generate. */
+  /* Controls: a two-column grid of full-width fields, then Generate + compact Best. */
   .controls {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1564,7 +1577,8 @@ button.small {
     grid-column: 1 / -1;
     margin-left: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
   }
 
   .controls-actions .primary {
@@ -1575,6 +1589,13 @@ button.small {
 
   .controls-actions .ghost {
     height: 48px;
+  }
+
+  .controls-actions .best-of {
+    height: 48px;
+    min-width: 52px;
+    padding: 0 12px;
+    font-size: 14px;
   }
 
 

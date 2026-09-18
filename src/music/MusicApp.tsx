@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { AudioEngine, type EngineStatus } from '../audio/engine'
 import { downloadMidi } from '../midi/exportMidi'
 import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from '../plan/schema'
-import { detectJev, heuristicPlanner, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from '../planner'
+import { BEST_OF_N, detectJev, heuristicPlanner, selectBestOfN, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from '../planner'
 import { shadowExchanges } from '../planner/HeuristicPlanner'
 import { renderPlan, secondsPerTick } from '../render/renderPlan'
 import { DebugPanel } from '../ui/DebugPanel'
@@ -10,6 +10,7 @@ import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
 import { DIAL_PLANNER, autoplayAfterStyleSwitch, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
+import { generateStatusLatencyMs, generatedPlanStatus, planHeuristicSample, stampGenerateLatency } from './planTiming'
 import { styleCache, type Generated } from './styleCache'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
@@ -81,10 +82,12 @@ export default function MusicApp() {
   // other styles never completed.
   const [pendingStyle, setPendingStyle] = useState<StyleId | null>(null)
   const [pendingAsksJev, setPendingAsksJev] = useState(false)
+  const [picking, setPicking] = useState(false)
   const [planStatus, setPlanStatus] = useState<string | null>(null)
 
   const generate = useCallback(
     async (overrides: Partial<PlanInput> & { planner?: PlannerId } = {}, opts: { cancelPrior?: boolean } = {}) => {
+      const started = performance.now()
       if (opts.cancelPrior !== false) abortRef.current?.abort()
       const abort = new AbortController()
       abortRef.current = abort
@@ -97,6 +100,7 @@ export default function MusicApp() {
         engine.stop()
         setPlaying(false)
         setError(null)
+        setPicking(false)
         setProgress([])
         setMatches(null)
         setPendingStyle(input.style)
@@ -111,7 +115,6 @@ export default function MusicApp() {
         }
       })
       styleCache.setInflight(input.style, successOnly)
-      const started = performance.now()
       let result: PlanResult
       let notice: string | null = null
       try {
@@ -148,10 +151,10 @@ export default function MusicApp() {
         settle.fn?.(null)
         return
       }
-      const made: Generated = { ...result, input, notice }
+      const ended = performance.now()
+      const made = stampGenerateLatency({ ...result, input, notice }, started, ended)
       styleCache.set(input.style, made)
       settle.fn?.(made)
-      const seconds = Math.max(result.trace.latencyMs, performance.now() - started) / 1000
       if (!mountedRef.current) return
       setProgress(null)
       setPendingStyle(null)
@@ -160,10 +163,87 @@ export default function MusicApp() {
       setMatches(null)
       setGenerated(made)
       setInstrument(result.plan.defaultInstrument)
-      setPlanStatus(`Generated plan and ${input.bars} bars in ${seconds.toFixed(2)}s`)
+      // Always the wall clock of this Generate — never a leftover stub/cache stamp.
+      setPlanStatus(generatedPlanStatus(input.bars, generateStatusLatencyMs(ended - started, result.trace.latencyMs)))
     },
     [style, bars, pick, brief, seed, plannerChoice, jev, engine],
   )
+
+  /** Cheap heuristic candidates + one score each (Jev when available). */
+  const bestOf = useCallback(async () => {
+    abortRef.current?.abort()
+    const abort = new AbortController()
+    abortRef.current = abort
+    const scorer = jev?.planner?.score ? jev.planner : heuristicPlanner
+    const inputStyle = style
+
+    if (mountedRef.current) {
+      resumePlayRef.current = false
+      engine.stop()
+      setPlaying(false)
+      setError(null)
+      setProgress(null)
+      setMatches(null)
+      setPicking(true)
+      setPendingStyle(inputStyle)
+      setPendingAsksJev(scorer !== heuristicPlanner)
+      setPlanStatus(`Sampling ${BEST_OF_N}…`)
+    }
+
+    const settle = { fn: null as null | ((value: Generated | null) => void) }
+    const successOnly = new Promise<Generated>((resolve, reject) => {
+      settle.fn = (value) => {
+        if (value) resolve(value)
+        else reject(new DOMException('aborted', 'AbortError'))
+      }
+    })
+    styleCache.setInflight(inputStyle, successOnly)
+    const started = performance.now()
+    try {
+      const picked = await selectBestOfN({
+        input: { style: inputStyle, bars, pick: 'sample', brief },
+        planner: heuristicPlanner,
+        scorer,
+        fallback: heuristicPlanner,
+        signal: abort.signal,
+        onProgress: (scored, n) => {
+          if (mountedRef.current) setPlanStatus(`Scoring ${scored} of ${n}…`)
+        },
+      })
+      if (abort.signal.aborted) {
+        settle.fn?.(null)
+        return
+      }
+      const made: Generated = {
+        ...picked.winner.result,
+        input: picked.winner.input,
+        notice: null,
+        matches: picked.winner.scores,
+      }
+      styleCache.set(inputStyle, made)
+      settle.fn?.(made)
+      const seconds = (performance.now() - started) / 1000
+      if (!mountedRef.current) return
+      setSeed(picked.winner.input.seed)
+      setEditedPlan(null)
+      setGenerated(made)
+      setMatches(picked.winner.scores)
+      setInstrument(picked.winner.result.plan.defaultInstrument)
+      setPlanStatus(`Picked ${picked.index + 1} of ${picked.n} in ${seconds.toFixed(2)}s`)
+    } catch (cause) {
+      settle.fn?.(null)
+      if (abort.signal.aborted) return
+      if (mountedRef.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setPicking(false)
+        setPendingStyle(null)
+        setPendingAsksJev(false)
+      }
+    }
+  }, [style, bars, brief, jev, engine])
 
   // First paint: restore session cache / in-flight plan, else stub once.
   const bootedRef = useRef(false)
@@ -189,7 +269,7 @@ export default function MusicApp() {
         setGenerated(made)
         setInstrument(made.plan.defaultInstrument)
         setPendingStyle(null)
-        setPlanStatus(`Generated plan and ${made.input.bars} bars in ${(made.trace.latencyMs / 1000).toFixed(2)}s`)
+        setPlanStatus(generatedPlanStatus(made.input.bars, made.trace.latencyMs))
       }).catch(() => {
         if (mountedRef.current) void generate({ planner: DIAL_PLANNER }, { cancelPrior: false })
       })
@@ -207,8 +287,7 @@ export default function MusicApp() {
       for (const id of STYLE_IDS) {
         if (cancelled || styleCache.has(id) || styleCache.getInflight(id)) continue
         const input: PlanInput = { style: id, bars: 16, pick: 'sample', brief: true, seed: newSeed() }
-        const work = heuristicPlanner.plan(input).then((result) => {
-          const made: Generated = { ...result, input, notice: null }
+        const work = planHeuristicSample(input).then((made) => {
           if (!styleCache.has(id)) styleCache.set(id, made)
           return styleCache.get(id) ?? made
         })
@@ -242,7 +321,7 @@ export default function MusicApp() {
         setInstrument(cached.plan.defaultInstrument)
         setPendingStyle(null)
         setPendingAsksJev(false)
-        setPlanStatus(`Generated plan and ${cached.input.bars} bars in ${(cached.trace.latencyMs / 1000).toFixed(2)}s`)
+        setPlanStatus(generatedPlanStatus(cached.input.bars, cached.trace.latencyMs))
       }).catch(() => {
         /* aborted or superseded */
         if (mountedRef.current) {
@@ -263,7 +342,7 @@ export default function MusicApp() {
       setSeed(action.cached.input.seed)
       setGenerated(action.cached)
       setInstrument(action.cached.plan.defaultInstrument)
-      setPlanStatus(`Generated plan and ${action.cached.input.bars} bars in ${(action.cached.trace.latencyMs / 1000).toFixed(2)}s`)
+      setPlanStatus(generatedPlanStatus(action.cached.input.bars, action.cached.trace.latencyMs))
       setPendingStyle(null)
       setPendingAsksJev(false)
       // Same cached object → score identity does not change, so restart now.
@@ -286,8 +365,13 @@ export default function MusicApp() {
 
   // Optional style-match scoring — skip while a plan is in flight so latency stays honest.
   // Jev score only when the displayed plan came from Jev, not because the picker is on Jev.
+  // Best-of already scored the winner; reuse that instead of a second request.
   useEffect(() => {
-    if (!plan || !generated || progress !== null) return
+    if (!plan || !generated || progress !== null || picking) return
+    if (!editedPlan && generated.matches) {
+      setMatches(generated.matches)
+      return
+    }
     const scorer = displayedPlanUsesJevScore(generated.trace.planner) && jev?.planner?.score ? jev.planner : heuristicPlanner
     const abort = new AbortController()
     scorer
@@ -295,7 +379,7 @@ export default function MusicApp() {
       .then((result) => !abort.signal.aborted && setMatches(result))
       .catch(() => !abort.signal.aborted && setMatches(null))
     return () => abort.abort()
-  }, [plan, generated, jev, progress])
+  }, [plan, generated, jev, progress, picking, editedPlan])
 
   // ── transport ─────────────────────────────────────────────────────────────
 
@@ -375,7 +459,7 @@ export default function MusicApp() {
   // ── view ──────────────────────────────────────────────────────────────────
 
   const accent = STYLE_THEME[plan?.style ?? style].accent
-  const busy = progress !== null
+  const busy = progress !== null || picking
   // Decisions landed so far over the number a plan of this length makes (character + 9 globals + role/chord/contour per bar).
   const planProgress = busy ? Math.min(1, (progress?.length ?? 0) / (10 + bars * 3)) : 0
   const edited = editedPlan !== null
@@ -466,7 +550,17 @@ export default function MusicApp() {
               void generate({ seed: next })
             }}
           >
-            {busy ? 'Generating…' : 'Generate'}
+            {progress !== null && !picking ? 'Generating…' : 'Generate'}
+          </button>
+          <button
+            type="button"
+            className="ghost best-of"
+            disabled={busy}
+            title={`Sample ${BEST_OF_N} plans for this style and keep the one that matches it most — and the others least`}
+            aria-label={`Best of ${BEST_OF_N}: pick the plan that best matches this style`}
+            onClick={() => void bestOf()}
+          >
+            Best
           </button>
         </div>
       </div>
@@ -528,7 +622,6 @@ export default function MusicApp() {
                     {INSTRUMENT_IDS.map((id) => (
                       <option key={id} value={id}>
                         {INSTRUMENTS[id].split(' — ')[0]}
-                        {id === plan.defaultInstrument ? '  ← plan' : ''}
                       </option>
                     ))}
                   </select>

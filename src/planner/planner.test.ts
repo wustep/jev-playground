@@ -99,10 +99,11 @@ describe('JevPlanner', () => {
     expect(first.probabilities.I).toBeCloseTo(0.8)
   })
 
-  it('hands Chopin and Hans Zimmer briefs to Jev when asked', () => {
+  it('hands Chopin, Hans Zimmer and Laufey briefs to Jev when asked', () => {
     for (const [style, name, snippet] of [
-      ['chopin', 'Chopin', 'cantabile'],
+      ['chopin', 'Frédéric Chopin', 'cantabile'],
       ['hans_zimmer', 'Hans Zimmer', 'ostinato'],
+      ['laufey', 'Laufey', 'jazz-pop'],
     ] as const) {
       const on = buildRequest({ op: 'concept', style, brief: true }, 'jev-latest')
       const off = buildRequest({ op: 'concept', style, brief: false }, 'jev-latest')
@@ -120,7 +121,7 @@ describe('JevPlanner', () => {
     ]
     const criteria = JSON.stringify(requests.flatMap((request) => Object.values(request.questions).map((q) => [q.criteria, q.instructions])))
     const chords = JSON.stringify([chordOptionsFor('C_major'), chordOptionsFor('C_minor')])
-    for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Nahre', 'Fox', 'Chopin', 'Zimmer', 'Satie', 'Reich']) {
+    for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Laufey', 'Fox', 'Chopin', 'Zimmer', 'Satie', 'Reich']) {
       expect(criteria).not.toContain(name)
       expect(chords).not.toContain(name)
     }
@@ -144,6 +145,7 @@ describe('HeuristicPlanner', () => {
     expect(trace.exchanges).toHaveLength(2 + plan.bars.length)
     expect(trace.exchanges.every((exchange) => !exchange.sent && !exchange.response)).toBe(true)
     expect(trace.exchanges[0].request.model).toBe('jev-latest')
+    expect(trace.latencyMs).toBeGreaterThan(0)
   })
 
 

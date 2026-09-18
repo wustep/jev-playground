@@ -15,13 +15,13 @@ const keysOf = <K extends string>(table: OptionTable<K>) => Object.keys(table) a
 // ── Styles (the dial) ───────────────────────────────────────────────────────
 
 export const STYLE_LABELS = {
-  bach: 'Bach',
-  beethoven: 'Beethoven',
-  chopin: 'Chopin',
-  debussy: 'Debussy',
+  bach: 'Johann Sebastian Bach',
+  beethoven: 'Ludwig van Beethoven',
+  chopin: 'Frédéric Chopin',
+  debussy: 'Claude Debussy',
   glass: 'Philip Glass',
   hans_zimmer: 'Hans Zimmer',
-  nahre_sol: 'Nahre Sol',
+  laufey: 'Laufey',
   elijah_fox: 'Elijah Fox',
 } as const
 export type StyleId = keyof typeof STYLE_LABELS
@@ -213,7 +213,7 @@ export const INSTRUMENTS = {
   harpsichord: 'Harpsichord — plucked, bright, no touch dynamics',
   church_organ: 'Pipe organ — sustained, no decay',
   strings: 'Bowed string ensemble — sustained, swelling',
-  choir: 'Wordless choir singing "aah"',
+  choir: 'Wordless choir',
 } as const
 export type InstrumentId = keyof typeof INSTRUMENTS
 export const INSTRUMENT_IDS = keysOf<InstrumentId>(INSTRUMENTS)
