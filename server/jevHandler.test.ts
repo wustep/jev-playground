@@ -154,5 +154,7 @@ describe('trolley ops', () => {
     expect(Object.keys(judge.questions)).toEqual(['decision', 'difficulty', 'absurdity', 'most_people_pull'])
     expect(JSON.stringify(judge.state)).toContain('A stranger')
     expect(JSON.stringify(judge.state)).not.toContain('"stranger"')
+    expect(String(cast.questions.ahead_1_trait.instructions)).toMatch(/Prefer no extra detail/)
+    expect(String(cast.questions.twist.instructions)).toMatch(/Prefer no twist/)
   })
 })
