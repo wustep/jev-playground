@@ -15,10 +15,10 @@ const keysOf = <K extends string>(table: OptionTable<K>) => Object.keys(table) a
 // ── Styles (the dial) ───────────────────────────────────────────────────────
 
 export const STYLE_LABELS = {
-  bach: 'Bach',
-  beethoven: 'Beethoven',
-  chopin: 'Chopin',
-  debussy: 'Debussy',
+  bach: 'Johann Sebastian Bach',
+  beethoven: 'Ludwig van Beethoven',
+  chopin: 'Frédéric Chopin',
+  debussy: 'Claude Debussy',
   glass: 'Philip Glass',
   hans_zimmer: 'Hans Zimmer',
   nahre_sol: 'Nahre Sol',

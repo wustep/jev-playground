@@ -7,7 +7,7 @@ Can a **System One** model steer music across styles?
 - **Jev** (or an offline stub behind the same interface) decides *only enum labels*: the piece's character and form, key, meter, texture, palette, tempo, dynamics, instrument, and per bar a chord, a phrase role and a melodic contour.
 - **App code** expands that plan into notes, engraves it (VexFlow), plays it (smplr) and exports it (`.mid`).
 
-Styles on the dial: **Bach · Beethoven · Chopin · Debussy · Philip Glass · Hans Zimmer · Nahre Sol · Elijah Fox**.
+Styles on the dial: **Johann Sebastian Bach · Ludwig van Beethoven · Frédéric Chopin · Claude Debussy · Philip Glass · Hans Zimmer · Nahre Sol · Elijah Fox**.
 
 ## Routes
 
