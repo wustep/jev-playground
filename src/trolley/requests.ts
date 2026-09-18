@@ -43,9 +43,12 @@ function castRequest(op: Extract<TrolleyOp, { op: 'trolley_cast' }>, model: stri
       ENTITIES,
     )
     questions[`${slot}_count`] = choice(`How many of them should be ${where} to make the dilemma on the premise in \`premise\` as agonising and as silly as possible?`, COUNTS)
-    questions[`${slot}_trait`] = choice(`What detail about whoever is ${where} would make the choice harder or funnier, on the premise in \`premise\`?`, TRAITS)
+    questions[`${slot}_trait`] = choice(
+      `What detail about whoever is ${where} would make the choice harder, on the premise in \`premise\`? Prefer no extra detail unless a trait clearly helps and could plausibly apply to that kind of being or object — skip human-only details (owing money, volunteering, filming) on animals, plants and objects.`,
+      TRAITS,
+    )
   }
-  questions.twist = choice('Which extra twist best suits an absurd trolley problem on the premise in `premise`?', TWISTS)
+  questions.twist = choice('Which extra twist best suits a trolley problem on the premise in `premise`? Prefer no twist unless one clearly improves the dilemma.', TWISTS)
   return { model, state: { task: 'Cast an absurd trolley problem from fixed option tables.', note: FRAME, premise: THEMES[op.theme] }, questions }
 }
 

@@ -64,6 +64,75 @@ export const TRAITS = {
 export type TraitId = keyof typeof TRAITS
 export const TRAIT_IDS = keysOf<TraitId>(TRAITS)
 
+/**
+ * Coarse kind of thing, so random details stay coherent. A goldfish cannot
+ * owe you money; a pizza cannot volunteer. The editor still offers every
+ * trait — this table is only for generated casts.
+ */
+export type EntityKind = 'person' | 'animal' | 'plant' | 'object' | 'construct'
+
+export const ENTITY_KIND: Record<EntityId, EntityKind> = {
+  stranger: 'person',
+  your_wife: 'person',
+  your_best_friend: 'person',
+  your_boss: 'person',
+  grandma: 'person',
+  dog: 'animal',
+  cat: 'animal',
+  goldfish: 'animal',
+  robot: 'construct',
+  clone_of_you: 'person',
+  philosopher: 'person',
+  mime: 'person',
+  billionaire: 'person',
+  influencer: 'person',
+  tax_auditor: 'person',
+  nobel_scientist: 'person',
+  time_traveller: 'person',
+  priceless_painting: 'object',
+  last_pizza: 'object',
+  your_phone: 'object',
+  production_database: 'object',
+  lottery_ticket: 'object',
+  houseplant: 'plant',
+  rubber_ducks: 'object',
+}
+
+/** Kinds a non-plain trait can plausibly attach to. `plain` always fits. */
+const TRAIT_KINDS: Record<Exclude<TraitId, 'plain'>, readonly EntityKind[]> = {
+  asleep: ['person', 'animal', 'construct'],
+  waving: ['person', 'animal', 'construct'],
+  volunteered: ['person'],
+  owes_you_money: ['person'],
+  secret_villain: ['person', 'construct'],
+  about_to_do_good: ['person', 'animal', 'construct'],
+  filming: ['person'],
+  insured: ['person', 'animal', 'object', 'construct', 'plant'],
+}
+
+/** Extra traits an entity can wear beyond its kind (a phone can film you). */
+const TRAIT_ALLOW: Partial<Record<EntityId, readonly TraitId[]>> = {
+  your_phone: ['filming'],
+}
+
+/** Traits a kind would allow that still read as nonsense on this entity. */
+const TRAIT_DENY: Partial<Record<EntityId, readonly TraitId[]>> = {
+  goldfish: ['waving', 'about_to_do_good'],
+}
+
+/** Traits that can plausibly apply to this entity. Always includes `plain`. */
+export function traitsFor(entity: EntityId | 'custom'): readonly TraitId[] {
+  if (entity === 'custom') return TRAIT_IDS
+  return TRAIT_IDS.filter((trait) => {
+    if (trait === 'plain') return true
+    if (TRAIT_DENY[entity]?.includes(trait)) return false
+    if (TRAIT_ALLOW[entity]?.includes(trait)) return true
+    return TRAIT_KINDS[trait].includes(ENTITY_KIND[entity])
+  })
+}
+
+export const traitFits = (entity: EntityId | 'custom', trait: TraitId) => traitsFor(entity).includes(trait)
+
 /** The twist sentence, exactly as the scenario prints it. */
 export const TWISTS = {
   none: 'No twist',
@@ -166,6 +235,9 @@ export const CLASSIC: Scenario = {
   siding: [{ entity: 'stranger', count: 1, trait: 'plain' }],
   twist: 'none',
 }
+
+/** One click: whoever was straight ahead is now on the side track, and vice versa. */
+export const swapTracks = (scenario: Scenario): Scenario => ({ ...scenario, ahead: scenario.siding, siding: scenario.ahead })
 
 // ── Validation (the server re-validates everything the browser sends) ───────
 

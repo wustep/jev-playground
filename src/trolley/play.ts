@@ -6,7 +6,7 @@ import { pickFrom, rng } from '../planner/pick'
 import type { Answer, SystemOneRequest, SystemOneResponse } from '../planner/jev/systemOne'
 import { DEFAULT_MODEL } from '../planner/jev/systemOne'
 import { buildTrolleyRequest, CAST_SLOTS, type TrolleyOp } from './requests'
-import { COUNTS, ENTITIES, ENTITY_IDS, THEME_IDS, TRAITS, TRAIT_IDS, TWISTS, TWIST_IDS, type DecisionId, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
+import { COUNTS, ENTITIES, ENTITY_IDS, THEME_IDS, TRAITS, TWISTS, TWIST_IDS, traitsFor, type DecisionId, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
 
 export interface Exchange {
   label: string
@@ -64,10 +64,41 @@ const choiceOf = (answers: Record<string, Answer>, id: string) => {
 
 export const randomTheme = (random: () => number): ThemeId => THEME_IDS[Math.floor(random() * THEME_IDS.length)]
 
-/** Jev casts the tracks for a premise; code samples its distributions and removes duplicates. */
-export async function castWithJev(theme: ThemeId, seed: number, signal?: AbortSignal): Promise<{ scenario: Scenario; exchange: Exchange }> {
-  const exchange = await ask('cast the tracks', { op: 'trolley_cast', theme }, signal)
-  const answers = exchange.response.answers
+/**
+ * Bias generated scenarios toward the textbook shape. Extra detail and a
+ * twist still happen, just less often than a coin flip — so "goldfish, who
+ * owes you money, and the lever is sticky" is no longer the default draw.
+ */
+export const PLAIN_CHANCE = 0.72
+export const NO_TWIST_CHANCE = 0.7
+
+const anyOf = <T>(items: readonly T[], random: () => number) => items[Math.floor(random() * items.length)]
+
+/** Pick a trait that can plausibly apply, defaulting to no detail. */
+export function pickTraitFor(entity: EntityId, random: () => number, probabilities?: Record<string, number>): TraitId {
+  const allowed = traitsFor(entity).filter((trait) => trait !== 'plain')
+  if (allowed.length === 0 || random() < PLAIN_CHANCE) return 'plain'
+  if (probabilities) {
+    const offered = Object.fromEntries(Object.entries(probabilities).filter(([id]) => allowed.includes(id as TraitId)))
+    if (Object.keys(offered).length === 0) return 'plain'
+    return pickFrom(offered, 'sample', random) as TraitId
+  }
+  return anyOf(allowed, random)
+}
+
+export function pickTwist(random: () => number, probabilities?: Record<string, number>): TwistId {
+  const twists = TWIST_IDS.filter((twist) => twist !== 'none')
+  if (random() < NO_TWIST_CHANCE) return 'none'
+  if (probabilities) {
+    const offered = Object.fromEntries(Object.entries(probabilities).filter(([id]) => id !== 'none'))
+    if (Object.keys(offered).length === 0) return 'none'
+    return pickFrom(offered, 'sample', random) as TwistId
+  }
+  return anyOf(twists, random)
+}
+
+/** Sample a scenario from a trolley_cast answer map (live Jev or a fixture). */
+export function scenarioFromCastAnswers(answers: Record<string, Answer>, seed: number): Scenario {
   const random = rng(seed)
   const used = new Set<string>()
   const groupFor = (slot: (typeof CAST_SLOTS)[number]): Group => {
@@ -76,13 +107,18 @@ export async function castWithJev(theme: ThemeId, seed: number, signal?: AbortSi
     const entity = pickFrom(offered, 'sample', random) as EntityId
     used.add(entity)
     const count = Number(pickFrom(choiceOf(answers, `${slot}_count`).probabilities, 'sample', random))
-    const trait = pickFrom(choiceOf(answers, `${slot}_trait`).probabilities, 'sample', random) as TraitId
+    const trait = pickTraitFor(entity, random, choiceOf(answers, `${slot}_trait`).probabilities)
     return { entity, count: Number.isInteger(count) && count > 0 ? count : 1, trait }
   }
   const ahead = [groupFor('ahead_1'), ...(random() < 0.35 ? [groupFor('ahead_2')] : [])]
   const siding = [groupFor('siding_1'), ...(random() < 0.25 ? [groupFor('siding_2')] : [])]
-  const twist = pickFrom(choiceOf(answers, 'twist').probabilities, 'sample', random) as TwistId
-  return { scenario: { ahead, siding, twist }, exchange }
+  return { ahead, siding, twist: pickTwist(random, choiceOf(answers, 'twist').probabilities) }
+}
+
+/** Jev casts the tracks for a premise; code samples its distributions and removes duplicates. */
+export async function castWithJev(theme: ThemeId, seed: number, signal?: AbortSignal): Promise<{ scenario: Scenario; exchange: Exchange }> {
+  const exchange = await ask('cast the tracks', { op: 'trolley_cast', theme }, signal)
+  return { scenario: scenarioFromCastAnswers(exchange.response.answers, seed), exchange }
 }
 
 const THEME_POOLS: Record<ThemeId, EntityId[]> = {
@@ -99,11 +135,13 @@ const THEME_POOLS: Record<ThemeId, EntityId[]> = {
 /** Offline stand-in for the cast: draws from a per-theme pool with the same seed discipline. */
 export function castOffline(theme: ThemeId, seed: number): { scenario: Scenario; exchange: Exchange } {
   const random = rng(seed)
-  const any = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)]
   const pool = [...THEME_POOLS[theme]]
-  const take = (): EntityId => pool.splice(Math.floor(random() * pool.length), 1)[0] ?? any(ENTITY_IDS)
-  const group = (): Group => ({ entity: take(), count: Number(any(Object.keys(COUNTS))), trait: random() < 0.5 ? 'plain' : any(TRAIT_IDS) })
-  const scenario: Scenario = { ahead: [group(), ...(random() < 0.35 ? [group()] : [])], siding: [group()], twist: random() < 0.45 ? 'none' : any(TWIST_IDS) }
+  const take = (): EntityId => pool.splice(Math.floor(random() * pool.length), 1)[0] ?? anyOf(ENTITY_IDS, random)
+  const group = (): Group => {
+    const entity = take()
+    return { entity, count: Number(anyOf(Object.keys(COUNTS), random)), trait: pickTraitFor(entity, random) }
+  }
+  const scenario: Scenario = { ahead: [group(), ...(random() < 0.35 ? [group()] : [])], siding: [group()], twist: pickTwist(random) }
   const op: TrolleyOp = { op: 'trolley_cast', theme }
   return { scenario, exchange: { label: 'cast the tracks', op, request: buildTrolleyRequest(op, DEFAULT_MODEL), sent: false } }
 }

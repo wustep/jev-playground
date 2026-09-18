@@ -10,7 +10,7 @@ import { Outcome } from './Outcome'
 import { castOffline, castWithJev, jevAvailable, judgeOffline, judgeWithJev, randomTheme, type Exchange, type Verdict } from './play'
 import { rng } from '../planner/pick'
 import { Diamond } from '../ui/Diamond'
-import { CLASSIC, ENTITIES, ENTITY_IDS, MAX_COUNT, MAX_CUSTOM_LABEL, MAX_GROUPS_PER_TRACK, THEMES, TRAITS, TRAIT_IDS, TWISTS, TWIST_IDS, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
+import { CLASSIC, ENTITIES, ENTITY_IDS, MAX_COUNT, MAX_CUSTOM_LABEL, MAX_GROUPS_PER_TRACK, THEMES, TRAITS, TRAIT_IDS, TWISTS, TWIST_IDS, swapTracks, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
 const ACCENT = '#b3261e'
@@ -328,6 +328,21 @@ export default function TrolleyApp() {
 
       <div className="tracks">
         <TrackEditor id="ahead" title="Straight ahead" hint="if you do nothing" groups={scenario.ahead} onChange={(ahead) => edit({ ...scenario, ahead })} />
+        <div className="track-swap">
+          <button
+            type="button"
+            className="ghost swap-tracks"
+            disabled={busy !== null}
+            title="Exchange who is on which track"
+            aria-label="Swap tracks: move the side-track cast straight ahead, and the ahead cast to the side track"
+            onClick={() => edit(swapTracks(scenario))}
+          >
+            <span className="swap-icon" aria-hidden="true">
+              ⇄
+            </span>
+            Swap tracks
+          </button>
+        </div>
         <TrackEditor id="siding" title="Side track" hint="if you pull the lever" groups={scenario.siding} onChange={(siding) => edit({ ...scenario, siding })} />
       </div>
 
