@@ -117,7 +117,7 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
   // piece is consistent with itself: its opening idea sits on one chord for
   // two bars, and its chord cycle moves at half speed — each chord two bars,
   // the drone and the held block rather than a chord a bar.
-  const holdHeads = holds && (sample ? random() < 0.45 : true)
+  const holdHeads = holds && (sample ? random() < 0.55 : true)
   const stretch = holds && (sample ? random() < 0.5 : true) ? 2 : 1
   // Loop-built pieces don't sit on one cycle: a second cycle takes over for
   // the middle of the piece (a harmonic shift every eight bars or so) and the
@@ -128,10 +128,15 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
   const loopB = others.length && slots.length >= 4 ? { unit: sample ? others[Math.floor(random() * others.length)] : others[0], pool: others } : loopA
   let loopAt = 0
 
-  /** One unit from `units`, preferring those that don't just repeat the chord we are coming from. */
+  /**
+   * One unit from `units`. Without holds, prefer units that don't just repeat
+   * the chord we are coming from; with a holding piece, a phrase may open on
+   * the chord the last one closed on (the cadence chord carried over).
+   */
   function pickUnit<U extends readonly ChordId[]>(units: readonly U[], after: ChordId | undefined): { unit: U; pool: readonly U[] } {
+    const staying = holdHeads && after !== undefined && (sample ? random() < 0.5 : true) ? units.filter((unit) => unit[0] === after) : []
     const moving = holds || after === undefined ? units : units.filter((unit) => unit[0] !== after)
-    const pool = moving.length ? moving : units
+    const pool = staying.length ? staying : moving.length ? moving : units
     return { unit: sample ? pool[Math.floor(random() * pool.length)] : pool[0], pool }
   }
   const push = (unit: readonly ChordId[], pool: readonly (readonly ChordId[])[]) => {
@@ -165,8 +170,11 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
         // First appearance of an idea may be a whole phrase lifted from the repertoire.
         if (!heads.has(slot.material) && whole.length && (!sample || random() < 0.5)) {
           const picked = pickUnit(whole, last())
-          heads.set(slot.material, picked.unit.slice(0, 2))
-          push(picked.unit, picked.pool)
+          // A holding piece lets the phrase's opening chord sit through its second bar as well.
+          const held = holdHeads && !PUNCTUATION.has(slot.roles[1]) && picked.unit[0] !== picked.unit[1]
+          const phrase: readonly ChordId[] = held ? [picked.unit[0], picked.unit[0], picked.unit[2], picked.unit[3]] : picked.unit
+          heads.set(slot.material, phrase.slice(0, 2))
+          push(phrase, held ? [phrase, ...picked.pool] : picked.pool)
           break
         }
         const head = headFor(slot)
@@ -265,12 +273,13 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
   // I6/4–V), so cadences move at the pace of the repertoire, not the barline.
   const seconds: (ChordId | undefined)[] = chords.map(() => undefined)
   slots.forEach((slot, s) => {
-    if (slot.end === 'open' || !book.splits.length) return
-    const at = slot.end === 'closed' ? s * 4 + 2 : s * 4 + 3
+    if (!book.splits.length) return
+    // A half cadence splits its own bar (I6/4 | V); a phrase that closes, or runs on, splits the bar before its arrival.
+    const at = slot.end === 'half' ? s * 4 + 3 : s * 4 + 2
     if (at >= end) return
     const arrival = chords[at]
     const options = book.splits.filter(([approach, target]) => target === arrival && approach !== chords[at - 1])
-    if (!options.length || (sample && random() >= 0.6)) return
+    if (!options.length || (sample && random() >= 0.7)) return
     const [approach] = sample ? options[Math.floor(random() * options.length)] : options[0]
     candidates[at] = [...new Set([approach, ...options.map(([first]) => first), arrival])]
     chords[at] = approach
