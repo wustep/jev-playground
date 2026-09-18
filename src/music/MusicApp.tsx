@@ -10,7 +10,7 @@ import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
 import { DIAL_PLANNER, autoplayAfterStyleSwitch, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
-import { generateStatusLatencyMs, generatedPlanStatus, planHeuristicSample, stampGenerateLatency } from './planTiming'
+import { generateStatusLatencyMs, generatedPlanStatus, planHeuristicSample, readyPlanStatus, restoredPlanStatus, stampGenerateLatency } from './planTiming'
 import { styleCache, type Generated } from './styleCache'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
@@ -163,8 +163,12 @@ export default function MusicApp() {
       setMatches(null)
       setGenerated(made)
       setInstrument(result.plan.defaultInstrument)
-      // Always the wall clock of this Generate — never a leftover stub/cache stamp.
-      setPlanStatus(generatedPlanStatus(input.bars, generateStatusLatencyMs(ended - started, result.trace.latencyMs)))
+      // Dial/boot stubs land quietly. Only a user Generate click shows wall-clock seconds.
+      setPlanStatus(
+        overrides.planner === DIAL_PLANNER
+          ? readyPlanStatus(input.bars)
+          : generatedPlanStatus(input.bars, generateStatusLatencyMs(ended - started, result.trace.latencyMs)),
+      )
     },
     [style, bars, pick, brief, seed, plannerChoice, jev, engine],
   )
@@ -256,7 +260,7 @@ export default function MusicApp() {
       setSeed(cached.input.seed)
       setGenerated(cached)
       setInstrument(cached.plan.defaultInstrument)
-      setPlanStatus(`Restored plan and ${cached.input.bars} bars`)
+      setPlanStatus(restoredPlanStatus(cached.input.bars))
       return
     }
     const pending = styleCache.getInflight(id)
@@ -269,7 +273,7 @@ export default function MusicApp() {
         setGenerated(made)
         setInstrument(made.plan.defaultInstrument)
         setPendingStyle(null)
-        setPlanStatus(generatedPlanStatus(made.input.bars, made.trace.latencyMs))
+        setPlanStatus(readyPlanStatus(made.input.bars))
       }).catch(() => {
         if (mountedRef.current) void generate({ planner: DIAL_PLANNER }, { cancelPrior: false })
       })
@@ -321,7 +325,7 @@ export default function MusicApp() {
         setInstrument(cached.plan.defaultInstrument)
         setPendingStyle(null)
         setPendingAsksJev(false)
-        setPlanStatus(generatedPlanStatus(cached.input.bars, cached.trace.latencyMs))
+        setPlanStatus(readyPlanStatus(cached.input.bars))
       }).catch(() => {
         /* aborted or superseded */
         if (mountedRef.current) {
@@ -342,7 +346,7 @@ export default function MusicApp() {
       setSeed(action.cached.input.seed)
       setGenerated(action.cached)
       setInstrument(action.cached.plan.defaultInstrument)
-      setPlanStatus(generatedPlanStatus(action.cached.input.bars, action.cached.trace.latencyMs))
+      setPlanStatus(readyPlanStatus(action.cached.input.bars))
       setPendingStyle(null)
       setPendingAsksJev(false)
       // Same cached object → score identity does not change, so restart now.
