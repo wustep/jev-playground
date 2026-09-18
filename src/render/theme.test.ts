@@ -123,10 +123,11 @@ describe('a returning phrase', () => {
     for (const style of STYLE_IDS) for (let seed = 1; seed <= 6; seed++) {
       const { plan } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: false })
       const score = renderPlan(plan, seed)
+      const body = score.bars.slice(score.introBars)
       themeSources(plan.form, 16).forEach((source, i) => {
-        if (source === undefined || !score.bars[i].treble[0] || !score.bars[source].treble[0]) return
+        if (source === undefined || !body[i].treble[0] || !body[source].treble[0]) return
         expected++
-        if (rhythm(score.bars[i].treble[0]) === rhythm(score.bars[source].treble[0])) returned++
+        if (rhythm(body[i].treble[0]) === rhythm(body[source].treble[0])) returned++
       })
     }
     expect(expected).toBeGreaterThan(100)

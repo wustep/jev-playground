@@ -14,6 +14,7 @@ import { newMemory, type BarContext, type BarNotes, type RenderMemory, type Text
 import { applyCadenceOrnament, STYLE_DIALECTS, timingOffsetSeconds } from './dialect'
 import { keyInfo, resolveChord, scaleFor, type ResolvedChord } from './harmony'
 import { applyArrangement, arrangementLevels, arrangementOf } from './arrangement'
+import { applyEnding, applyOpening } from './framing'
 import { applyPhraseBreath, breathes, isPhraseFinalBar } from './phrasing'
 import { clamp, midiOf } from './pitch'
 import { METER_INFO, type Bar, type Note, type Score, type TimedNote, type Voice } from './score'
@@ -244,9 +245,13 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     bars,
     pedal: PEDALLED.has(plan.texture),
     articulation: feel.articulation,
+    introBars: 0,
+    ritardando: false,
   }
   applyPhraseBreath(score)
   applyArrangement(score, levels)
+  applyEnding(score)
+  applyOpening(score)
   return score
 }
 
@@ -255,7 +260,10 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
 export const secondsPerTick = (score: Score) => 60 / score.bpm / 4
 
 export function scoreDuration(score: Score): number {
-  return score.bars.length * score.meter.ticksPerBar * secondsPerTick(score)
+  const tick = secondsPerTick(score)
+  const body = score.bars.length * score.meter.ticksPerBar * tick
+  // Ritardando stretches the last bar; a little ring after the last attack.
+  return score.ritardando ? body + score.meter.ticksPerBar * tick * 0.28 + 0.35 : body
 }
 
 /** Seconds between successive notes of a rolled chord. */
@@ -270,18 +278,21 @@ const ROLL_SPREAD = 0.028
 export function timeline(score: Score, options: { sustain?: boolean } = {}): TimedNote[] {
   const sustain = options.sustain ?? score.pedal
   const tick = secondsPerTick(score)
+  const lastIndex = score.bars.length - 1
+  const stretch = score.ritardando ? 1.28 : 1
   const out: TimedNote[] = []
   for (const bar of score.bars) {
     const barStart = bar.index * score.meter.ticksPerBar * tick
-    const barEnd = barStart + score.meter.ticksPerBar * tick
+    const localTick = bar.index === lastIndex ? tick * stretch : tick
+    const barEnd = barStart + score.meter.ticksPerBar * localTick
     const voices = [...bar.treble.map((voice) => ['right', voice] as const), ...bar.bass.map((voice) => ['left', voice] as const)]
     for (const [hand, voice] of voices) {
       for (const n of voice) {
         n.pitches.forEach((pitch, k) => {
-          const time = barStart + n.start * tick + (n.roll ? k * ROLL_SPREAD : 0) + timingOffsetSeconds(score, n.start, tick)
+          const time = barStart + n.start * localTick + (n.roll ? k * ROLL_SPREAD : 0) + timingOffsetSeconds(score, n.start, tick)
           // Character touch: short notes are clipped (staccato wit) or held (legato song); long ones always sing.
           const held = n.dur <= score.meter.beatTicks / 2 ? score.articulation : Math.max(score.articulation, 0.9)
-          const written = n.dur * tick * 0.96 * held
+          const written = n.dur * localTick * 0.96 * held
           const duration = sustain ? Math.max(written, barEnd - time + 0.15) : written
           out.push({ midi: midiOf(pitch), time, duration, velocity: n.velocity, bar: bar.index, hand })
         })

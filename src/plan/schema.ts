@@ -231,6 +231,14 @@ export const ARRANGEMENTS = {
 export type ArrangementId = keyof typeof ARRANGEMENTS
 export const ARRANGEMENT_IDS = keysOf<ArrangementId>(ARRANGEMENTS)
 
+export const OPENINGS = {
+  straight_in: 'The tune begins on the first downbeat — no introduction',
+  vamp_intro: 'One or two bars of accompaniment alone before the tune enters, the pattern starting before anybody sings',
+  pickup: 'A short upbeat into the first downbeat, the tune leaning in from the bar before',
+} as const
+export type OpeningId = keyof typeof OPENINGS
+export const OPENING_IDS = keysOf<OpeningId>(OPENINGS)
+
 export const BAR_COUNTS = {
   '4': 'Four bars — one short phrase, a single gesture',
   '8': 'Eight bars — a full period: a phrase and its answer',
@@ -458,6 +466,12 @@ export interface CompositionPlan {
    * planners always write it, and the renderer defaults from style + character.
    */
   arrangement?: ArrangementId
+  /**
+   * How the piece starts. Optional on hand-edited plans (default straight_in,
+   * so a 16-bar plan stays 16 score bars). Planners always write it.
+   * Vamp and pickup prepend extra Score.bars; plan.bars stays 4/8/16/32.
+   */
+  opening?: OpeningId
   /** 4, 8, 16 or 32 bars, one harmony each — two where a bar carries a `chord2`. */
   bars: BarPlan[]
 }
@@ -475,6 +489,7 @@ export const GLOBAL_FIELDS = {
   dynamicShape: DYNAMIC_SHAPES,
   defaultInstrument: INSTRUMENTS,
   arrangement: ARRANGEMENTS,
+  opening: OPENINGS,
 } as const
 export type GlobalField = keyof typeof GLOBAL_FIELDS
 export const GLOBAL_FIELD_IDS = Object.keys(GLOBAL_FIELDS) as GlobalField[]
@@ -529,6 +544,7 @@ export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
     dynamicShape: parseOption(DYNAMIC_SHAPES, obj.dynamicShape, `${path}.dynamicShape`),
     defaultInstrument: parseOption(INSTRUMENTS, obj.defaultInstrument, `${path}.defaultInstrument`),
     arrangement: obj.arrangement != null ? parseOption(ARRANGEMENTS, obj.arrangement, `${path}.arrangement`) : 'lift_on_return',
+    opening: obj.opening != null ? parseOption(OPENINGS, obj.opening, `${path}.opening`) : 'straight_in',
   }
 }
 
