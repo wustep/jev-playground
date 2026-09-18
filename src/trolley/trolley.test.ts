@@ -59,7 +59,7 @@ describe('offline judge', () => {
     const classic = judgeOffline(CLASSIC)
     expect(classic.decision).toBe('pull_lever')
     expect(classic.pull).toBeGreaterThan(0.6)
-    const reversed = judgeOffline({ ...CLASSIC, ahead: CLASSIC.siding, siding: CLASSIC.ahead })
+    const reversed = judgeOffline(swapTracks(CLASSIC))
     expect(reversed.decision).toBe('do_nothing')
     const even = judgeOffline({ ...CLASSIC, siding: CLASSIC.ahead })
     expect(even.difficulty).toBeGreaterThan(judgeOffline({ ...CLASSIC, ahead: [{ entity: 'stranger', count: 100, trait: 'plain' }], siding: [{ entity: 'rubber_ducks', count: 1, trait: 'plain' }] }).difficulty)
@@ -80,6 +80,14 @@ describe('swap tracks', () => {
       twist: 'livestreamed',
     })
     expect(swapTracks(swapTracks(CLASSIC))).toEqual(CLASSIC)
+  })
+
+  it('lets the offline judge answer the swapped dilemma immediately', () => {
+    const swapped = swapTracks(CLASSIC)
+    const verdict = judgeOffline(swapped)
+    expect(verdict.decision).toBe('do_nothing')
+    expect(verdict.pull).toBeLessThan(0.5)
+    expect(verdict.exchange.op).toEqual({ op: 'trolley_judge', scenario: swapped })
   })
 })
 

@@ -15,6 +15,8 @@ import { CLASSIC, ENTITIES, ENTITY_IDS, MAX_COUNT, MAX_CUSTOM_LABEL, MAX_GROUPS_
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
 const ACCENT = '#b3261e'
 
+const incompleteOf = (scenario: Scenario) => [...scenario.ahead, ...scenario.siding].some((group) => group.entity === 'custom' && !group.custom?.label.trim())
+
 type TrackId = 'ahead' | 'siding'
 
 /** The picker's palette. A new custom entry starts on a random one of these. */
@@ -224,7 +226,7 @@ export default function TrolleyApp() {
     }
   }, [live])
 
-  const judge = useCallback(async () => {
+  const judge = useCallback(async (target: Scenario) => {
     abortRef.current?.abort()
     const abort = new AbortController()
     abortRef.current = abort
@@ -232,17 +234,25 @@ export default function TrolleyApp() {
     setNotice(null)
     let result: Verdict
     try {
-      result = live ? await judgeWithJev(scenario, abort.signal) : judgeOffline(scenario)
+      result = live ? await judgeWithJev(target, abort.signal) : judgeOffline(target)
     } catch (cause) {
       if (abort.signal.aborted) return
       setNotice(`Jev could not judge this one (${cause instanceof Error ? cause.message : String(cause)}). Showing the offline stub’s arithmetic instead.`)
-      result = judgeOffline(scenario)
+      result = judgeOffline(target)
     }
     if (abort.signal.aborted) return
     setVerdict(result)
     setVerdictCount((n) => n + 1)
     setBusy(null)
-  }, [live, scenario])
+  }, [live])
+
+  // Swap is a complete action: exchange the casts and immediately recompute
+  // the verdict (same live-Jev / offline-stub path as the Judge button).
+  const swap = () => {
+    const next = swapTracks(scenario)
+    edit(next)
+    if (!incompleteOf(next)) void judge(next)
+  }
 
   const toggleDebug = (on: boolean) => {
     setDebug(on)
@@ -252,7 +262,7 @@ export default function TrolleyApp() {
     window.history.replaceState(null, '', url)
   }
 
-  const incomplete = [...scenario.ahead, ...scenario.siding].some((group) => group.entity === 'custom' && !group.custom?.label.trim())
+  const incomplete = incompleteOf(scenario)
   const pullPercent = verdict ? Math.round(verdict.pull * 100) : null
 
   return (
@@ -284,7 +294,7 @@ export default function TrolleyApp() {
           <button type="button" className="ghost" disabled={busy !== null} onClick={() => edit(CLASSIC)}>
             Classic
           </button>
-          <button type="button" className="primary" disabled={busy !== null || incomplete} title={incomplete ? 'Name your own entry first' : undefined} onClick={() => void judge()}>
+          <button type="button" className="primary" disabled={busy !== null || incomplete} title={incomplete ? 'Name your own entry first' : undefined} onClick={() => void judge(scenario)}>
             {busy === 'judge' ? <><Diamond className="diamond" aria-label="Asking" /> Asking…</> : live ? 'What would Jev do?' : 'What would the stub do?'}
           </button>
         </div>
@@ -335,7 +345,7 @@ export default function TrolleyApp() {
             disabled={busy !== null}
             title="Exchange who is on which track"
             aria-label="Swap tracks: move the side-track cast straight ahead, and the ahead cast to the side track"
-            onClick={() => edit(swapTracks(scenario))}
+            onClick={swap}
           >
             <span className="swap-icon" aria-hidden="true">
               ⇄
