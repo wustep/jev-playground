@@ -13,12 +13,14 @@ export interface MeterInfo {
   ticksPerBar: number
   /** Length of one felt beat: a quarter (4) or, in 6/8, a dotted quarter (6). */
   beatTicks: number
+  /** Where a bar's second harmony (`chord2`) takes over: the half bar, or the third beat of 3/4. */
+  splitTick: number
 }
 
 export const METER_INFO: Record<MeterId, MeterInfo> = {
-  four_four: { id: 'four_four', num: 4, den: 4, ticksPerBar: 16, beatTicks: 4 },
-  three_four: { id: 'three_four', num: 3, den: 4, ticksPerBar: 12, beatTicks: 4 },
-  six_eight: { id: 'six_eight', num: 6, den: 8, ticksPerBar: 12, beatTicks: 6 },
+  four_four: { id: 'four_four', num: 4, den: 4, ticksPerBar: 16, beatTicks: 4, splitTick: 8 },
+  three_four: { id: 'three_four', num: 3, den: 4, ticksPerBar: 12, beatTicks: 4, splitTick: 8 },
+  six_eight: { id: 'six_eight', num: 6, den: 8, ticksPerBar: 12, beatTicks: 6, splitTick: 6 },
 }
 
 export interface Note {
@@ -43,6 +45,8 @@ export interface Bar {
   plan: BarPlan
   /** Absolute chord name in the chosen key, e.g. "Abmaj7". */
   chordSymbol: string
+  /** The bar's second harmony, when the plan gave it one: its symbol and the tick it starts on. */
+  split?: { tick: number; chordSymbol: string }
   /** Up to two voices per staff (first = stems up). */
   treble: Voice[]
   bass: Voice[]
