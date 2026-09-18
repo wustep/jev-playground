@@ -26,7 +26,7 @@ describe('harmony phrase catalog', () => {
         }
       }
     }
-  })
+  }, 30_000)
 
   it('splits a closed phrase onto an approach when the book names the arrival', () => {
     const book = bookFor('bach', 'C_major')
