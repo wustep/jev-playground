@@ -4,7 +4,7 @@
 //                  this composer writes at all (one Noul each); code combines them
 //   request 2      form + globals, given that character            (fan-out)
 //   requests 3..   one per 4-bar form slot: a HarmonyBook phrase + four contours
-//   score()        one request, one Score question per style
+//   score()        one request: one Score per style + song_quality (0–3)
 //
 // Bar roles are not asked: they are the chosen form, expanded by code
 // (src/plan/forms.ts).
@@ -42,7 +42,7 @@ import { formRoles, formSlots, themeSources } from '../plan/forms'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
 import { marginConfidence, normalize, pickFrom, rng } from './pick'
-import { buildRequest, characterQuestionId, scoreQuestionId, type JevOp } from './jev/requests'
+import { buildRequest, characterQuestionId, scoreQuestionId, SONG_SCORE_QUESTION_ID, type JevOp } from './jev/requests'
 import { callSystemOne, DEFAULT_MODEL, type Answer, type ChoiceAnswer, type SystemOneResponse } from './jev/systemOne'
 
 /** noul ** this: 0.95 → 0.81, 0.75 → 0.32, 0.5 → 0.06, 0.2 → 0.002. */
@@ -243,15 +243,22 @@ export class JevPlanner implements Planner {
     const exchange = await this.exchange('style match', { op: 'score', plan, styles: [...styles] }, options?.signal)
     const response = exchange.response
     const result: Partial<Record<StyleId, StyleMatchScore>> = {}
-    for (const style of styles) {
-      const answer = response.answers[scoreQuestionId(style)]
-      if (!answer || answer.type !== 'score') continue
+    const fromScore = (answer: { score: number; confidence: number } | undefined): StyleMatchScore | undefined => {
+      if (!answer) return undefined
       // `score` is a probability-weighted position on the 0..2 level scale;
       // round to the nearest level when code needs a single label.
       const level = Math.max(0, Math.min(MATCH_LEVELS.length - 1, Math.round(answer.score)))
-      result[style] = { match: MATCH_LEVELS[level], confidence: answer.confidence, raw: answer.score }
+      return { match: MATCH_LEVELS[level], confidence: answer.confidence, raw: answer.score }
     }
-    return { scores: result, exchanges: [exchange] }
+    for (const style of styles) {
+      const answer = response.answers[scoreQuestionId(style)]
+      if (!answer || answer.type !== 'score') continue
+      result[style] = fromScore(answer)
+    }
+    const songAnswer = response.answers[SONG_SCORE_QUESTION_ID]
+    const songQuality =
+      songAnswer?.type === 'score' ? { raw: songAnswer.score, confidence: songAnswer.confidence } : undefined
+    return { scores: result, songQuality, exchanges: [exchange] }
   }
 
   /**
