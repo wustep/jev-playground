@@ -121,7 +121,7 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
         const top = nextFollowScroll(follow, useFrame ? frameScrollBox(frame) : documentScrollBox(), useFrame ? bar : barRangeInDocument(frame, bar), requested)
         if (top != null) {
           requested = top
-          follow.markProgrammatic(performance.now())
+          follow.markProgrammatic(performance.now(), undefined, top)
           if (useFrame) frame.scrollTo({ top, behavior: followBehavior() })
           else window.scrollTo({ top, behavior: followBehavior() })
         }

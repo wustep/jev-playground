@@ -64,31 +64,49 @@ export function isScrollbarPointer(
 export type FollowSession = {
   following: boolean
   programmaticUntil: number
+  targetTop: number | null
+  lastScrollTop: number | null
   enable: () => void
   cancel: () => void
-  markProgrammatic: (now: number, holdMs?: number) => void
+  markProgrammatic: (now: number, holdMs?: number, targetTop?: number) => void
   isProgrammatic: (now: number) => boolean
-  onScroll: (now: number) => void
+  onScroll: (now: number, currentTop?: number) => void
 }
 
 export function createFollowSession(): FollowSession {
   return {
     following: true,
     programmaticUntil: 0,
+    targetTop: null,
+    lastScrollTop: null,
     enable() {
       this.following = true
+      this.targetTop = null
+      this.lastScrollTop = null
     },
     cancel() {
       this.following = false
     },
-    markProgrammatic(now, holdMs = PROGRAMMATIC_HOLD_MS) {
+    markProgrammatic(now, holdMs = PROGRAMMATIC_HOLD_MS, targetTop) {
       this.programmaticUntil = Math.max(this.programmaticUntil, now + holdMs)
+      if (targetTop != null) {
+        this.targetTop = targetTop
+        this.lastScrollTop = null
+      }
     },
     isProgrammatic(now) {
       return now < this.programmaticUntil
     },
-    onScroll(now) {
-      if (this.isProgrammatic(now)) return
+    onScroll(now, currentTop) {
+      if (this.isProgrammatic(now)) {
+        if (currentTop != null && this.targetTop != null) {
+          if (this.lastScrollTop != null && Math.abs(currentTop - this.targetTop) > Math.abs(this.lastScrollTop - this.targetTop) + 6) {
+            this.following = false
+          }
+          this.lastScrollTop = currentTop
+        }
+        return
+      }
       this.following = false
     },
   }
@@ -157,7 +175,7 @@ export function bindFollowInput(frame: HTMLElement, session: FollowSession, now:
   let frameTouchY: number | null = null
   let docTouchY: number | null = null
   const onUserIntent = () => session.cancel()
-  const onFrameScroll = () => session.onScroll(now())
+  const onFrameScroll = () => session.onScroll(now(), frame.scrollTop)
   const onFramePointer = (event: PointerEvent) => {
     if (scrollbarHit(frame, event)) session.cancel()
   }
@@ -171,7 +189,7 @@ export function bindFollowInput(frame: HTMLElement, session: FollowSession, now:
     if (touchMovedEnough(frameTouchY, event.touches[0]?.clientY ?? null)) session.cancel()
   }
   const onDocScroll = () => {
-    if (!frameCanScroll(frame)) session.onScroll(now())
+    if (!frameCanScroll(frame)) session.onScroll(now(), window.scrollY)
   }
   const onDocPointer = (event: PointerEvent) => {
     if (frameCanScroll(frame)) return

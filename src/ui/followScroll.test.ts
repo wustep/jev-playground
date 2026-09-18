@@ -95,6 +95,17 @@ describe('FollowSession', () => {
     expect(session.following).toBe(false)
   })
 
+  it('cancels if scroll moves away from the programmatic target during the hold', () => {
+    const session = createFollowSession()
+    session.markProgrammatic(1000, PROGRAMMATIC_HOLD_MS, 400)
+    session.onScroll(1050, 120)
+    expect(session.following).toBe(true)
+    session.onScroll(1100, 200)
+    expect(session.following).toBe(true)
+    session.onScroll(1150, 40)
+    expect(session.following).toBe(false)
+  })
+
   it('stays cancelled after a user scroll even if later scroll is programmatic', () => {
     const session = createFollowSession()
     session.onScroll(0)
