@@ -11,10 +11,17 @@ export interface RenderMemory {
   voicings: Record<string, string[]>
   /** Rhythm of the first statement, reused by restatements. */
   rhythms: Record<string, number[]>
-  /** Pitches of the first statement per line: a restatement over the same chord brings the tune back. */
-  motifs: Record<string, { chord: string; pitches: string[] }>
+  /**
+   * The first statement per line — its chord, the chord's root and its
+   * pitches. A restatement brings the tune back (reharmonised over a related
+   * chord, transposed onto a distant one); a development bar fragments it and
+   * sequences the fragment.
+   */
+  motifs: Record<string, { chord: string; root: string; core: string[]; pitches: string[] }>
   /** Rhythm of the previous bar per line, so `sequence` and `echo` bars can repeat its figure. */
   lastRhythms: Record<string, number[]>
+  /** Pitches of the previous bar per line, with that bar's chord root: what a `sequence` moves onto the new harmony. */
+  lastFigures: Record<string, { root: string; pitches: string[] }>
   /**
    * Per-piece pattern choices (which Alberti figure, which cell shape …),
    * rolled once from the seed so a piece is consistent with itself but two
@@ -24,7 +31,7 @@ export interface RenderMemory {
   bass?: string
 }
 
-export const newMemory = (): RenderMemory => ({ lines: {}, voicings: {}, rhythms: {}, motifs: {}, lastRhythms: {}, choices: {} })
+export const newMemory = (): RenderMemory => ({ lines: {}, voicings: {}, rhythms: {}, motifs: {}, lastRhythms: {}, lastFigures: {}, choices: {} })
 
 /** Pick one of `count` variants for this piece, once, and remember it. */
 export function pieceChoice(bar: BarContext, key: string, count: number): number {
