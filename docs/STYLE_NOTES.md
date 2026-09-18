@@ -362,6 +362,35 @@ Bach's low sequence figure is the measure, not the music: its running lines
 are stepwise fills between transposed anchors, and the prelude figure has no
 melody line at all (it is transposed by construction).
 
+## The theme is a phrase (third pass, 2026-09-18)
+
+Measured against song-shaped repertoire (Chopin Op. 9/2, *Träumerei*,
+Mendelssohn Op. 19/6 and 30/6, *Pathétique* II, Schubert and Foster songs —
+public-domain MIDI analysed locally; method and tables in
+`docs/fable-context/FIDELITY_FINDINGS.md`), the longest stretch of melody that
+ever came back in a generated piece was 1.8 bars. In the nocturne it is 4 (bars
+5–8 are bars 1–4, ornamented); in the *Pathétique* slow movement it is 8 (bars
+9–16 are the theme an octave higher). A `restatement` recalled the first bar's
+motif and the rest of the phrase was redrawn, so a period read a b c d / a e f g.
+
+**Changed**
+- `themeSources(form, bars)` in `src/plan/forms.ts` expands the form label into
+  "bar *n* brings back bar *m*": a phrase returns the first earlier phrase of
+  the same material that opened the same way, bar for bar up to its cadence.
+  Cadences, half cadences, surprises, dissolves and the last bar stay fresh; a
+  loop keeps a two-bar hook; a `duplicate` phrase says its idea twice; a
+  fantasia never repeats. No new label: the form already said all of this.
+- The renderer remembers every bar's figure and rhythm per line and recalls a
+  returning bar the way a restatement was recalled (kept over a related chord,
+  transposed onto a distant one), a third higher when it returns as the climax.
+- Both planners give a returning bar its source's contour.
+- Longest returning run over 192 sampled pieces: 2.8 → 3.3 bars (period
+  2.5 → 3.6, sentence 3.9 → 5.5, Chopin 2.5 → 4.0); bars 5–8 resembling bars
+  1–4 in a period: 0.50 → 0.70 (the nocturne: 0.81).
+
+Still missing, in order: the tune never rests and never starts before the
+barline; the arrangement does not change when the tune returns; no intro bars.
+
 ## Left out, on purpose
 
 - **More meters.** 2/4, 9/8 and 12/8 are in (Beethoven marches/allegros, Debussy
