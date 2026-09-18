@@ -26,6 +26,7 @@
 //  • Choice criteria are the enum descriptions from schema.ts; Score levels
 //    describe standalone situations because the model never sees the ordering.
 
+import { MELODY_DEGREES, PHRASE_NOTE_COUNT, pitchQuestionId, rhythmsFor } from '../../plan/notes.js'
 import {
   BAR_ROLES,
   CHARACTERS,
@@ -46,18 +47,24 @@ import {
   DYNAMICS,
   DYNAMIC_SHAPES,
   PlanValidationError,
+  parseBarPlan,
   parseGlobals,
   parseOption,
   parsePlan,
   parseStyle,
+  type BarPlan,
   type BarRoleId,
   type CharacterId,
   type ChordId,
   type CompositionPlan,
   type GlobalField,
   type KeyId,
+  type MeterId,
+  type PaletteId,
   type PlanGlobals,
   type StyleId,
+  type TempoId,
+  type TextureId,
 } from '../../plan/schema.js'
 import { STYLE_PROFILES } from '../../plan/styles.js'
 import type { ChoiceQuestion, Json, NoulQuestion, Question, ScoreQuestion, SystemOneRequest } from './systemOne.js'
@@ -78,6 +85,19 @@ export type JevOp =
       index: number
     }
   | { op: 'score'; plan: CompositionPlan; styles: StyleId[] }
+  /** Debug-only: one opening right-hand phrase. Small — first bar, closed enums. */
+  | {
+      op: 'notes'
+      style: StyleId
+      brief: boolean
+      character: CharacterId
+      key: KeyId
+      meter: MeterId
+      tempo: TempoId
+      texture: TextureId
+      palette: PaletteId
+      bar: BarPlan
+    }
 
 // ── State helpers ───────────────────────────────────────────────────────────
 
@@ -278,6 +298,44 @@ function styleMatchQuestion(style: StyleId): ScoreQuestion {
   }
 }
 
+function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): SystemOneRequest {
+  const questions: Record<string, Question> = {
+    rhythm: choice(
+      'Which rhythm should the opening right-hand melody of bar 1 use? Each option fills the bar with exactly four slots on the sixteenth-note grid.',
+      rhythmsFor(op.meter),
+    ),
+  }
+  for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
+    questions[pitchQuestionId(i)] = choice(
+      `Which scale degree (or rest) should slot ${i + 1} of that four-note opening melody sing? Degrees are relative to the key in \`piece.key\`, coloured by the harmony in \`opening_bar\`.`,
+      MELODY_DEGREES,
+    )
+  }
+  return {
+    model,
+    state: {
+      task: 'Write the opening right-hand melody for bar 1 of a short keyboard piece. Software will place your choices on a sixteenth-note grid; pick only from the options given — never invent pitches or durations.',
+      requested_style: styleState(op.style, op.brief),
+      piece_character: CHARACTERS[op.character],
+      piece: {
+        key: KEYS[op.key],
+        meter: METERS[op.meter],
+        tempo: TEMPOS[op.tempo],
+        texture: TEXTURES[op.texture],
+        melodic_palette: PALETTES[op.palette],
+      },
+      opening_bar: {
+        chord: `${op.bar.chord} — ${CHORDS[op.bar.chord]}`,
+        ...(op.bar.chord2 ? { second_half_chord: `${op.bar.chord2} — ${CHORDS[op.bar.chord2]}` } : {}),
+        role: `${op.bar.role} — ${BAR_ROLES[op.bar.role]}`,
+        melodic_shape: CONTOURS[op.bar.contour],
+      },
+      voice: 'treble — the singing right-hand line of bar 1 only',
+    },
+    questions,
+  }
+}
+
 function scoreRequest(op: Extract<JevOp, { op: 'score' }>, model: string): SystemOneRequest {
   // The plan's own `style` field is withheld: the model should judge the
   // musical content, not read the label.
@@ -300,6 +358,8 @@ export function buildRequest(op: JevOp, model: string): SystemOneRequest {
       return barRequest(op, model)
     case 'score':
       return scoreRequest(op, model)
+    case 'notes':
+      return notesRequest(op, model)
   }
 }
 
@@ -341,7 +401,20 @@ export function parseOp(raw: unknown): JevOp {
       if (unique.length === 0) throw new PlanValidationError('op.styles: expected at least one style')
       return { op: 'score', plan: parsePlan(obj.plan), styles: unique }
     }
+    case 'notes':
+      return {
+        op: 'notes',
+        style: parseStyle(obj.style),
+        brief: obj.brief === true,
+        character: parseOption(CHARACTERS, obj.character, 'op.character'),
+        key: parseOption(KEYS, obj.key, 'op.key'),
+        meter: parseOption(METERS, obj.meter, 'op.meter'),
+        tempo: parseOption(TEMPOS, obj.tempo, 'op.tempo'),
+        texture: parseOption(TEXTURES, obj.texture, 'op.texture'),
+        palette: parseOption(PALETTES, obj.palette, 'op.palette'),
+        bar: parseBarPlan(obj.bar, 'op.bar'),
+      }
     default:
-      throw new PlanValidationError('op.op: expected "concept", "globals", "bar" or "score"')
+      throw new PlanValidationError('op.op: expected "concept", "globals", "bar", "score" or "notes"')
   }
 }
