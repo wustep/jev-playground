@@ -1,6 +1,6 @@
 import { Note } from 'tonal'
 import type { BaseRoleId, MeterId } from '../../plan/schema'
-import { note, pieceChoice, type BarContext, type BarNotes, type Slot } from '../context'
+import { meterGrid, note, pieceChoice, type BarContext, type BarNotes, type Slot } from '../context'
 import { melodyPitches } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from '../pitch'
 import type { Voice } from '../score'
@@ -49,7 +49,7 @@ export function minimalCells(bar: BarContext): BarNotes {
   // speed; contrast turns the cell upside down. The ear hears one idea growing,
   // not one figure hammered for sixteen bars.
   const fast = role === 'development' || role === 'climax'
-  const base = role === 'contrast' ? CELLS.inverted : fast ? CELLS.additive : meter.ticksPerBar === 12 ? [0, 1, 2] : CELLS.plain
+  const base = role === 'contrast' ? CELLS.inverted : fast ? CELLS.additive : meter.beatTicks === 6 ? [0, 1, 2] : CELLS.plain
   const stage = Math.floor(bar.index / 2)
   const grown = stage % 2 === 1 ? [...base, base[1 % base.length], 3] : [...base]
   const rotation = stage % 4 >= 2 ? 1 + (stage % 3) : 0
@@ -75,7 +75,7 @@ export function minimalCells(bar: BarContext): BarNotes {
   // (the three-speed layering of the fast pieces).
   const left: Voice = []
   const slowBass = stage % 4 === 2 && role !== 'climax'
-  const leftStep = slowBass ? meter.ticksPerBar / 2 : meter.ticksPerBar === 12 ? 3 : 2
+  const leftStep = slowBass ? meter.ticksPerBar / 2 : meter.beatTicks === 6 ? 3 : 2
   for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += leftStep, k++) {
     const pitch = role === 'climax' ? [k % 2 === 0 ? low : fifth, octaveUp(k % 2 === 0 ? low : fifth, 12)] : [k % 2 === 0 ? low : fifth]
     left.push(note(tick, leftStep, pitch, velocity - 10))
@@ -89,7 +89,7 @@ type Hit = Slot & { kind: 'stab' | 'line' }
 const stab = (start: number, dur: number): Hit => ({ start, dur, kind: 'stab' })
 const line = (start: number, dur: number): Hit => ({ start, dur, kind: 'line' })
 
-const RIGHT_HAND: Record<'sixteen' | 'twelve', Record<BaseRoleId, Hit[]>> = {
+const RIGHT_HAND: Record<ReturnType<typeof meterGrid>, Record<BaseRoleId, Hit[]>> = {
   sixteen: {
     statement: [stab(3, 3), stab(6, 2), line(10, 2), line(12, 2), line(14, 2)],
     restatement: [stab(3, 3), stab(6, 2), line(10, 2), line(12, 2), line(14, 2)],
@@ -108,19 +108,49 @@ const RIGHT_HAND: Record<'sixteen' | 'twelve', Record<BaseRoleId, Hit[]>> = {
     half_cadence: [stab(0, 6), line(6, 6)],
     cadence: [stab(0, 2), stab(2, 10)],
   },
+  eight: {
+    statement: [stab(2, 2), line(4, 2), line(6, 2)],
+    restatement: [stab(2, 2), line(4, 2), line(6, 2)],
+    development: [line(0, 2), stab(2, 2), line(4, 2), stab(6, 2)],
+    contrast: [stab(0, 4), line(4, 4)],
+    climax: [stab(0, 2), stab(2, 2), stab(4, 2), stab(6, 2)],
+    half_cadence: [stab(0, 4), line(4, 4)],
+    cadence: [stab(0, 2), stab(2, 6)],
+  },
+  eighteen: {
+    statement: [stab(2, 4), line(6, 2), line(8, 2), line(12, 2), line(14, 4)],
+    restatement: [stab(2, 4), line(6, 2), line(8, 2), line(12, 6)],
+    development: [line(0, 2), line(2, 2), line(4, 2), stab(6, 4), line(10, 2), stab(12, 6)],
+    contrast: [stab(0, 6), line(6, 6), line(12, 6)],
+    climax: [stab(0, 4), stab(4, 2), stab(6, 6), stab(12, 6)],
+    half_cadence: [stab(0, 6), line(6, 12)],
+    cadence: [stab(0, 2), stab(2, 16)],
+  },
+  twentyfour: {
+    statement: [stab(3, 3), stab(6, 2), line(10, 2), line(12, 2), line(16, 2), line(20, 4)],
+    restatement: [stab(3, 3), stab(6, 2), line(12, 4), line(16, 8)],
+    development: [line(0, 2), line(2, 2), stab(6, 4), line(10, 2), stab(12, 6), line(20, 4)],
+    contrast: [stab(0, 8), line(8, 8), line(16, 8)],
+    climax: [stab(0, 4), stab(4, 4), stab(8, 4), stab(12, 4), stab(16, 4), stab(20, 4)],
+    half_cadence: [stab(0, 6), line(6, 18)],
+    cadence: [stab(0, 4), stab(4, 20)],
+  },
 }
 
 /** Left-hand groupings: 3+3+2 and its rotations in 4/4; 3+3 vs 2+2+2 hemiola in 12-tick bars. */
 const OSTINATO: Record<MeterId, number[][]> = {
   four_four: [[3, 3, 2, 3, 3, 2], [3, 3, 2, 3, 3, 2], [3, 2, 3, 3, 3, 2], [2, 3, 3, 2, 3, 3]],
   three_four: [[2, 2, 2, 2, 2, 2], [3, 3, 2, 2, 2]],
+  two_four: [[3, 3, 2], [2, 2, 2, 2], [4, 4]],
   six_eight: [[2, 2, 2, 2, 2, 2], [3, 3, 3, 3]],
+  nine_eight: [[3, 3, 3, 3, 3, 3], [2, 2, 2, 2, 2, 2, 2, 2, 2], [6, 6, 6]],
+  twelve_eight: [[3, 3, 2, 3, 3, 2, 3, 3, 2], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [6, 6, 6, 6]],
 }
 
 export function syncopatedOstinato(bar: BarContext): BarNotes {
   const { meter, velocity } = bar
   const role: BaseRoleId = bar.isLast ? 'cadence' : bar.role
-  const hits = RIGHT_HAND[meter.ticksPerBar === 16 ? 'sixteen' : 'twelve'][role]
+  const hits = RIGHT_HAND[meterGrid(meter)][role]
 
   // One contour-driven top line through every hit; stabs hang an open stack of
   // two scale fourths beneath it (quartal voicing).
@@ -146,7 +176,7 @@ export function syncopatedOstinato(bar: BarContext): BarNotes {
   }
   const groupings = OSTINATO[meter.id]
   // 4/4 keeps one grouping for the whole piece (a groove); triple metres alternate bar by bar (hemiola).
-  const grouping = meter.id === 'four_four' ? groupings[pieceChoice(bar, 'ostinato', groupings.length)] : groupings[bar.index % groupings.length]
+  const grouping = meter.id === 'four_four' || meter.id === 'two_four' ? groupings[pieceChoice(bar, 'ostinato', groupings.length)] : groupings[bar.index % groupings.length]
   const left: Voice = []
   let tick = 0
   grouping.forEach((dur, k) => {
@@ -165,7 +195,7 @@ interface LushShape {
 }
 const s = (start: number, dur: number): Slot => ({ start, dur })
 
-const LUSH: Record<'sixteen' | 'twelve', Record<BaseRoleId, LushShape>> = {
+const LUSH: Record<ReturnType<typeof meterGrid>, Record<BaseRoleId, LushShape>> = {
   sixteen: {
     statement: { chords: [s(0, 8)], fills: [s(10, 2), s(12, 2), s(14, 2)] },
     restatement: { chords: [s(0, 8)], fills: [s(10, 2), s(12, 2), s(14, 2)] },
@@ -184,12 +214,39 @@ const LUSH: Record<'sixteen' | 'twelve', Record<BaseRoleId, LushShape>> = {
     half_cadence: { chords: [s(0, 6), s(6, 6)], fills: [] },
     cadence: { chords: [s(0, 12)], fills: [] },
   },
+  eight: {
+    statement: { chords: [s(0, 4)], fills: [s(4, 2), s(6, 2)] },
+    restatement: { chords: [s(0, 4)], fills: [s(4, 2), s(6, 2)] },
+    development: { chords: [s(0, 2), s(2, 2)], fills: [s(4, 1), s(5, 1), s(6, 2)] },
+    contrast: { chords: [s(0, 6)], fills: [s(6, 2)] },
+    climax: { chords: [s(0, 2), s(2, 2), s(4, 2)], fills: [s(6, 1), s(7, 1)] },
+    half_cadence: { chords: [s(0, 4), s(4, 4)], fills: [] },
+    cadence: { chords: [s(0, 8)], fills: [] },
+  },
+  eighteen: {
+    statement: { chords: [s(0, 6)], fills: [s(6, 2), s(8, 2), s(12, 2), s(14, 4)] },
+    restatement: { chords: [s(0, 6)], fills: [s(6, 4), s(12, 6)] },
+    development: { chords: [s(0, 4), s(4, 2)], fills: [s(6, 2), s(8, 2), s(12, 2), s(14, 4)] },
+    contrast: { chords: [s(0, 12)], fills: [s(12, 6)] },
+    climax: { chords: [s(0, 6), s(6, 6)], fills: [s(12, 2), s(14, 2), s(16, 2)] },
+    half_cadence: { chords: [s(0, 6), s(6, 12)], fills: [] },
+    cadence: { chords: [s(0, 18)], fills: [] },
+  },
+  twentyfour: {
+    statement: { chords: [s(0, 8)], fills: [s(10, 2), s(12, 2), s(16, 2), s(20, 4)] },
+    restatement: { chords: [s(0, 8)], fills: [s(12, 4), s(16, 8)] },
+    development: { chords: [s(0, 6), s(6, 6)], fills: [s(12, 2), s(14, 2), s(16, 4), s(20, 4)] },
+    contrast: { chords: [s(0, 16)], fills: [s(16, 8)] },
+    climax: { chords: [s(0, 6), s(6, 6), s(12, 6)], fills: [s(18, 2), s(20, 2), s(22, 2)] },
+    half_cadence: { chords: [s(0, 12), s(12, 12)], fills: [] },
+    cadence: { chords: [s(0, 24)], fills: [] },
+  },
 }
 
 export function lushVoicings(bar: BarContext): BarNotes {
   const { meter, velocity } = bar
   const role: BaseRoleId = bar.isLast ? 'cadence' : bar.role
-  const shape = LUSH[meter.ticksPerBar === 16 ? 'sixteen' : 'twelve'][role]
+  const shape = LUSH[meterGrid(meter)][role]
 
   // Rootless four-note voicing: 3rd and 7th first, then the colour tones. The
   // left hand owns the root.

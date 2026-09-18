@@ -10,7 +10,7 @@
 
 import { Note } from 'tonal'
 import type { BaseRoleId, MeterId } from '../../plan/schema'
-import { note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
+import { meterGrid, note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches, stepwiseRun } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from '../pitch'
 import type { Voice } from '../score'
@@ -52,6 +52,27 @@ const ARIA: Record<MeterId, RhythmBank> = {
     sparse: [[6, 6], [12]],
     pause: [[6, 6]],
     close: [[12]],
+  },
+  two_four: {
+    main: [[4, 3, 1], [3, 1, 4], [2, 2, 4], [6, 2]],
+    busy: [[2, 1, 1, 2, 2], [3, 1, 2, 2]],
+    sparse: [[8], [4, 4]],
+    pause: [[4, 4]],
+    close: [[8]],
+  },
+  nine_eight: {
+    main: [[3, 1, 2, 3, 1, 2, 6], [6, 3, 1, 2, 6], [6, 6, 6]],
+    busy: [[3, 1, 2, 2, 2, 2, 6], [2, 2, 2, 3, 1, 2, 6]],
+    sparse: [[6, 12], [12, 6]],
+    pause: [[6, 12]],
+    close: [[12, 6]],
+  },
+  twelve_eight: {
+    main: [[3, 1, 2, 3, 1, 2, 3, 1, 2, 6], [6, 6, 6, 6], [6, 3, 1, 2, 6, 6]],
+    busy: [[3, 1, 2, 2, 2, 2, 3, 1, 2, 6], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]],
+    sparse: [[12, 12], [6, 6, 12]],
+    pause: [[12, 12]],
+    close: [[12, 12]],
   },
 }
 
@@ -170,6 +191,27 @@ const LILT: Record<MeterId, RhythmBank> = {
     pause: [[6, 6]],
     close: [[12]],
   },
+  two_four: {
+    main: [[4, 2, 2], [2, 2, 4], [3, 1, 4], [6, 2]],
+    busy: [[2, 2, 2, 2], [3, 1, 2, 2]],
+    sparse: [[8], [4, 4]],
+    pause: [[4, 4]],
+    close: [[8]],
+  },
+  nine_eight: {
+    main: [[4, 2, 4, 2, 6], [6, 4, 2, 6], [3, 1, 2, 4, 2, 6]],
+    busy: [[2, 2, 2, 2, 2, 2, 2, 2, 2], [4, 2, 2, 2, 2, 6]],
+    sparse: [[6, 12], [12, 6]],
+    pause: [[6, 12]],
+    close: [[12, 6]],
+  },
+  twelve_eight: {
+    main: [[4, 2, 4, 2, 4, 2, 4, 2], [6, 6, 6, 6], [3, 1, 2, 4, 2, 6, 6]],
+    busy: [[2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [4, 2, 2, 2, 2, 4, 2, 6]],
+    sparse: [[12, 12], [6, 6, 12]],
+    pause: [[12, 12]],
+    close: [[12, 12]],
+  },
 }
 
 export function strideDance(bar: BarContext): BarNotes {
@@ -195,16 +237,17 @@ export function strideDance(bar: BarContext): BarNotes {
 
   const left: Voice = []
   const alternate = nearestNote([bassPartner(bar.chord, low, bar.dialect.bassSpacing).replace(/-?\d+$/, '')], midiOf(low) + 5, 33, 52)
-  if (meter.id === 'six_eight') {
-    // Two swung groups: bass – chord – chord, the second bass on the partner tone.
-    for (let group = 0; group < 2; group++) {
+  if (meter.beatTicks === 6) {
+    // Swung compound groups: bass – chord – chord, later groups on the partner tone.
+    const groups = meter.ticksPerBar / 6
+    for (let group = 0; group < groups; group++) {
       const start = group * 6
       left.push(note(start, 2, group === 0 ? low : alternate, velocity - 2), note(start + 2, 2, chord, velocity - 14), note(start + 4, 2, chord, velocity - 14))
     }
   } else {
     const beats = meter.ticksPerBar / meter.beatTicks
     for (let beat = 0; beat < beats; beat++) {
-      const isBass = meter.id === 'three_four' ? beat === 0 : beat % 2 === 0
+      const isBass = meter.id === 'three_four' || meter.id === 'two_four' ? beat === 0 : beat % 2 === 0
       const pitch = isBass ? (beat === 0 ? low : alternate) : chord
       // A waltz lifts its after-beats; a quiet bar lets them ring.
       const dur = isBass || bar.role === 'contrast' ? meter.beatTicks : 2
@@ -221,6 +264,9 @@ const NOCTURNE_TOP: Record<MeterId, Record<'tacet' | 'plain' | 'upbeat' | 'movin
   four_four: { tacet: [-16], plain: [12, -4], upbeat: [12, 3, 1], moving: [8, 4, 3, 1] },
   three_four: { tacet: [-12], plain: [8, -4], upbeat: [8, 3, 1], moving: [4, 4, 3, 1] },
   six_eight: { tacet: [-12], plain: [6, -6], upbeat: [6, 3, 3], moving: [6, 2, 2, 2] },
+  two_four: { tacet: [-8], plain: [6, -2], upbeat: [4, 3, 1], moving: [4, 2, 1, 1] },
+  nine_eight: { tacet: [-18], plain: [12, -6], upbeat: [12, 3, 3], moving: [6, 6, 3, 3] },
+  twelve_eight: { tacet: [-24], plain: [12, -12], upbeat: [12, 6, 6], moving: [6, 6, 6, 6] },
 }
 
 export function rollingNocturne(bar: BarContext): BarNotes {
@@ -239,7 +285,7 @@ export function rollingNocturne(bar: BarContext): BarNotes {
   }
 
   // Rolling figure in even eighths: low–mid–high in triple groupings, low–mid–high–mid in duple.
-  const figure = meter.ticksPerBar === 12 ? [0, 1, 2] : [[0, 1, 2, 1], [0, 1, 2, 0]][pieceChoice(bar, 'rolling', 2)]
+  const figure = meter.beatTicks === 6 ? [0, 1, 2] : [[0, 1, 2, 1], [0, 1, 2, 0]][pieceChoice(bar, 'rolling', 2)]
   const rolling: Voice = []
   for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += 2, k++) rolling.push(note(tick, 2, triad[figure[k % figure.length]], velocity - 10))
 
@@ -315,7 +361,7 @@ interface Toss {
   accents?: number[]
 }
 
-const TOSSES: Record<'sixteen' | 'twelve', Record<BaseRoleId, Toss[]>> = {
+const TOSSES: Record<ReturnType<typeof meterGrid>, Record<BaseRoleId, Toss[]>> = {
   sixteen: {
     statement: [
       { left: [[0, 2]], right: [[2, 2], [6, 2], [8, 2], [12, 2]] },
@@ -340,12 +386,39 @@ const TOSSES: Record<'sixteen' | 'twelve', Record<BaseRoleId, Toss[]>> = {
     half_cadence: [{ left: [[0, 2]], right: [[0, 2], [10, 2]], accents: [1] }],
     cadence: [{ left: [[0, 2], [4, 8]], right: [[0, 2], [4, 8]] }],
   },
+  eight: {
+    statement: [{ left: [[0, 2]], right: [[2, 2], [6, 2]] }],
+    restatement: [{ left: [[0, 2]], right: [[2, 2], [6, 2]] }],
+    development: [{ left: [[2, 2], [6, 2]], right: [[0, 2], [2, 2], [4, 2], [6, 2]], figure: true }],
+    contrast: [{ left: [[0, 8]], right: [[4, 4]] }],
+    climax: [{ left: [[0, 2], [4, 2]], right: [[2, 2], [6, 2]], accents: [0, 1] }],
+    half_cadence: [{ left: [[0, 2]], right: [[0, 2], [6, 2]], accents: [1] }],
+    cadence: [{ left: [[0, 2], [2, 6]], right: [[0, 2], [2, 6]] }],
+  },
+  eighteen: {
+    statement: [{ left: [[0, 2]], right: [[4, 2], [8, 2], [12, 2]] }],
+    restatement: [{ left: [[0, 2]], right: [[4, 2], [8, 2], [12, 2]] }],
+    development: [{ left: [[4, 2], [10, 2], [16, 2]], right: [[0, 2], [2, 2], [4, 2], [6, 2], [8, 2], [10, 2], [12, 2], [14, 2], [16, 2]], figure: true }],
+    contrast: [{ left: [[0, 18]], right: [[6, 12]] }],
+    climax: [{ left: [[0, 2], [6, 2], [12, 2]], right: [[2, 2], [4, 2], [8, 2], [10, 2], [14, 2], [16, 2]], accents: [0, 2] }],
+    half_cadence: [{ left: [[0, 2]], right: [[0, 2], [16, 2]], accents: [1] }],
+    cadence: [{ left: [[0, 2], [4, 14]], right: [[0, 2], [4, 14]] }],
+  },
+  twentyfour: {
+    statement: [{ left: [[0, 2]], right: [[4, 2], [8, 2], [12, 2], [16, 2], [20, 2]] }],
+    restatement: [{ left: [[0, 2]], right: [[4, 2], [8, 2], [16, 2]] }],
+    development: [{ left: [[4, 2], [10, 2], [16, 2], [22, 2]], right: [[0, 2], [2, 2], [4, 2], [6, 2], [8, 2], [10, 2], [12, 2], [14, 2], [16, 2], [18, 2], [20, 2], [22, 2]], figure: true }],
+    contrast: [{ left: [[0, 24]], right: [[8, 16]] }],
+    climax: [{ left: [[0, 2], [6, 2], [12, 2], [18, 2]], right: [[2, 2], [6, 2], [10, 2], [14, 2], [18, 2], [22, 2]], accents: [0, 2, 4] }],
+    half_cadence: [{ left: [[0, 2]], right: [[0, 2], [22, 2]], accents: [1] }],
+    cadence: [{ left: [[0, 2], [4, 20]], right: [[0, 2], [4, 20]] }],
+  },
 }
 
 export function scherzoStaccato(bar: BarContext): BarNotes {
   const { meter, velocity } = bar
   const role: BaseRoleId = bar.isLast ? 'cadence' : bar.role
-  const options = TOSSES[meter.ticksPerBar === 16 ? 'sixteen' : 'twelve'][role]
+  const options = TOSSES[meterGrid(meter)][role]
   const toss = options[pieceChoice(bar, `toss-${role}`, options.length)]
 
   const rightSlots = toss.right.map(([start, dur]) => ({ start, dur }))

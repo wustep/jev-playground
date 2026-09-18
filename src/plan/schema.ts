@@ -97,7 +97,10 @@ export const FORM_IDS = keysOf<FormId>(FORMS)
 export const METERS = {
   four_four: '4/4 — four quarter-note beats; square, march- or song-like',
   three_four: '3/4 — three quarter-note beats; waltz or minuet lilt',
+  two_four: '2/4 — two quarter-note beats; compact march or allegro pulse',
   six_eight: '6/8 — two dotted-quarter beats; rolling, barcarolle or gigue feel',
+  nine_eight: '9/8 — three dotted-quarter beats; compound triple, a rocking 3+3+3',
+  twelve_eight: '12/8 — four dotted-quarter beats; compound common time, a broad gigue or siciliano',
 } as const
 export type MeterId = keyof typeof METERS
 export const METER_IDS = keysOf<MeterId>(METERS)

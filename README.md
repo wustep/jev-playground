@@ -91,7 +91,7 @@ interface CompositionPlan {
   character: CharacterId      // 12: lyrical_song, stormy_drama, dance_lilt, hypnotic_pulse … decided FIRST
   form: FormId                // 11: period, sentence, spinning_out, additive_loop, mosaic_pairs …
   key: KeyId                  // 21 keys, C_major … F_minor
-  meter: MeterId              // four_four | three_four | six_eight
+  meter: MeterId              // four_four | three_four | two_four | six_eight | nine_eight | twelve_eight
   texture: TextureId          // 22 textures: chorale … toccata_perpetual, rolling_nocturne, bell_organum
   palette: PaletteId          // diatonic | chromatic_approach | pentatonic | whole_tone | modal | modal_dark | blues
   tempo: TempoId              // largo … presto (bucketed bpm)

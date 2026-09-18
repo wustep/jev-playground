@@ -29,6 +29,27 @@ const FLOATING: Record<MeterId, RhythmBank> = {
     pause: [[6, 6]],
     close: [[6, 6]],
   },
+  two_four: {
+    main: [[4, 4], [6, 2], [2, 2, 4], [-2, 2, 4]],
+    busy: [[2, 2, 2, 2], [2, 2, 4]],
+    sparse: [[8], [4, 4], [-4, 4]],
+    pause: [[4, 4]],
+    close: [[4, 4]],
+  },
+  nine_eight: {
+    main: [[6, 6, 6], [4, 2, 6, 6], [6, 4, 2, 6], [-2, 4, 6, 6]],
+    busy: [[4, 2, 4, 2, 6], [2, 2, 2, 6, 6]],
+    sparse: [[12, 6], [6, 12], [-6, 12]],
+    pause: [[6, 12]],
+    close: [[6, 12]],
+  },
+  twelve_eight: {
+    main: [[6, 6, 6, 6], [4, 2, 6, 4, 2, 6], [6, 4, 2, 6, 6], [-2, 4, 6, 8, 8]],
+    busy: [[4, 2, 4, 2, 4, 2, 6], [2, 2, 2, 6, 2, 2, 2, 6]],
+    sparse: [[12, 12], [6, 6, 12], [-6, 18]],
+    pause: [[12, 12]],
+    close: [[12, 12]],
+  },
 }
 
 export function parallelPlaning(bar: BarContext): BarNotes {
@@ -66,8 +87,8 @@ export function parallelPlaning(bar: BarContext): BarNotes {
 
 export function washArpeggio(bar: BarContext): BarNotes {
   const { meter, velocity } = bar
-  const half = meter.ticksPerBar / 2
-  const leftCount = half / 2
+  const half = Math.floor(meter.ticksPerBar / 2)
+  const leftCount = Math.max(2, Math.floor(half / 2))
 
   // Left hand opens the sweep with the classic wide spacing: root, fifth,
   // (octave,) tenth.

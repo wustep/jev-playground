@@ -9,7 +9,7 @@
 
 import { Note } from 'tonal'
 import type { BaseRoleId, MeterId } from '../../plan/schema'
-import { note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
+import { meterGrid, note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote, spellMidi } from '../pitch'
 import type { Voice } from '../score'
@@ -18,7 +18,7 @@ import { bassPartner, essentialTones, leadVoicing, lowBass, sortAscending } from
 // ── pulsing chords ──────────────────────────────────────────────────────────
 
 /** Right-hand fragments over the pulse. Negative = rest. */
-const FRAGMENTS: Record<'sixteen' | 'twelve', Record<BaseRoleId, number[][]>> = {
+const FRAGMENTS: Record<ReturnType<typeof meterGrid>, Record<BaseRoleId, number[][]>> = {
   sixteen: {
     statement: [[-10, 2, 2, 2], [-8, 1, 1, 2, 4], [-12, 1, 1, 2]],
     restatement: [[-10, 2, 2, 2], [-8, 1, 1, 2, 4]],
@@ -36,6 +36,33 @@ const FRAGMENTS: Record<'sixteen' | 'twelve', Record<BaseRoleId, number[][]>> = 
     climax: [[2, 2, 2, 2, 2, 2]],
     half_cadence: [[4, 8]],
     cadence: [[12]],
+  },
+  eight: {
+    statement: [[-4, 2, 2], [-2, 2, 4]],
+    restatement: [[-4, 2, 2]],
+    development: [[-2, 2, 2, 2], [2, 2, 4]],
+    contrast: [[8], [-2, 6]],
+    climax: [[2, 2, 2, 2]],
+    half_cadence: [[4, 4], [-2, 2, 4]],
+    cadence: [[8]],
+  },
+  eighteen: {
+    statement: [[-6, 2, 2, 2, 6], [-8, 2, 2, 6]],
+    restatement: [[-6, 2, 2, 8]],
+    development: [[-2, 2, 2, -2, 2, 2, 6], [2, 2, 2, 2, 4, 6]],
+    contrast: [[18], [-6, 12]],
+    climax: [[2, 2, 2, 2, 2, 2, 6]],
+    half_cadence: [[6, 12]],
+    cadence: [[18]],
+  },
+  twentyfour: {
+    statement: [[-10, 2, 2, 2, 8], [-8, 2, 2, 4, 8]],
+    restatement: [[-10, 2, 2, 10]],
+    development: [[-2, 2, 2, 2, -2, 2, 2, 2, 8], [2, 2, 4, 2, 2, 4, 8]],
+    contrast: [[24], [-8, 16]],
+    climax: [[2, 2, 2, 2, 2, 2, 2, 2, 8]],
+    half_cadence: [[8, 16]],
+    cadence: [[24]],
   },
 }
 
@@ -61,7 +88,7 @@ export function pulsingChords(bar: BarContext): BarNotes {
   }
 
   // Above it: either flickering fragments, or one note repeated like a bell (fixed per piece).
-  const options = FRAGMENTS[meter.ticksPerBar === 16 ? 'sixteen' : 'twelve'][role]
+  const options = FRAGMENTS[meterGrid(meter)][role]
   const insistent = pieceChoice(bar, 'pulse-insistent', 3) === 0 && (role === 'statement' || role === 'restatement' || role === 'development')
   const rhythm = insistent ? Array<number>(meter.ticksPerBar / 2).fill(2) : options[Math.floor(bar.rand() * options.length)]
   const slots = slotsFrom(rhythm)
@@ -99,6 +126,27 @@ const SPARSE_TUNE: Record<MeterId, RhythmBank> = {
     pause: [[6, -6]],
     close: [[12]],
   },
+  two_four: {
+    main: [[-2, 4, 2], [4, -2, 2], [-4, 4]],
+    busy: [[2, 2, 4], [-1, 1, 2, 4]],
+    sparse: [[8], [-8]],
+    pause: [[4, -4]],
+    close: [[8]],
+  },
+  nine_eight: {
+    main: [[-6, 6, 6], [6, 6, 6], [-2, 4, 6, 6]],
+    busy: [[4, 2, 6, 6], [-2, 2, 2, 6, 6]],
+    sparse: [[18], [-18], [-6, 12]],
+    pause: [[6, -12]],
+    close: [[18]],
+  },
+  twelve_eight: {
+    main: [[-6, 6, 6, 6], [6, 6, 6, 6], [-2, 4, 6, 12]],
+    busy: [[4, 2, 6, 6, 6], [-2, 2, 2, 6, 12]],
+    sparse: [[24], [-24], [-12, 12]],
+    pause: [[12, -12]],
+    close: [[24]],
+  },
 }
 
 export function melodyOverOstinato(bar: BarContext): BarNotes {
@@ -130,7 +178,8 @@ export function melodyOverOstinato(bar: BarContext): BarNotes {
   } else {
     // Broken chord up and back: root – fifth – octave – tenth – …
     const tones = [low, partner, nearestNote([bar.chord.bass], midiOf(low) + 12), tenth]
-    const order = meter.ticksPerBar === 12 ? [0, 1, 2, 3, 2, 1] : [0, 1, 2, 3, 2, 3, 2, 1]
+    const pattern = meter.beatTicks === 6 ? [0, 1, 2, 3, 2, 1] : [0, 1, 2, 3, 2, 3, 2, 1]
+    const order = Array.from({ length: meter.ticksPerBar / 2 }, (_, k) => pattern[k % pattern.length])
     bass.push(order.map((index, k) => note(k * 2, 2, tones[index], velocity - 10 + (k === 0 ? 4 : 0))))
   }
 
@@ -149,9 +198,12 @@ export function melodyOverOstinato(bar: BarContext): BarNotes {
 // ── interlocking hands ──────────────────────────────────────────────────────
 
 /** Where the accents fall, as group lengths in sixteenths. */
-const ACCENT_GROUPS: Record<'sixteen' | 'twelve', number[][]> = {
+const ACCENT_GROUPS: Record<ReturnType<typeof meterGrid>, number[][]> = {
   sixteen: [[3, 3, 2, 3, 3, 2], [5, 3, 5, 3], [3, 3, 3, 3, 4], [4, 4, 4, 4], [2, 3, 3, 2, 3, 3]],
   twelve: [[3, 3, 3, 3], [2, 2, 2, 2, 2, 2], [5, 4, 3], [4, 3, 5]],
+  eight: [[3, 3, 2], [2, 2, 2, 2], [4, 4], [5, 3]],
+  eighteen: [[3, 3, 3, 3, 3, 3], [6, 6, 6], [5, 5, 4, 4], [2, 2, 2, 2, 2, 2, 2, 2, 2]],
+  twentyfour: [[3, 3, 2, 3, 3, 2, 3, 3, 2], [6, 6, 6, 6], [5, 5, 5, 5, 4], [4, 4, 4, 4, 4, 4]],
 }
 
 const groupStarts = (groups: number[]) => groups.reduce<number[]>((starts, length) => [...starts, starts[starts.length - 1] + length], [0]).slice(0, -1)
@@ -176,7 +228,7 @@ export function interlockingHands(bar: BarContext): BarNotes {
     }
   }
 
-  const table = ACCENT_GROUPS[meter.ticksPerBar === 16 ? 'sixteen' : 'twelve']
+  const table = ACCENT_GROUPS[meterGrid(meter)]
   // Development bars pick a fresh grouping every bar (off-kilter); otherwise the piece keeps one groove.
   const groups = role === 'development' ? table[Math.floor(bar.rand() * table.length)] : table[pieceChoice(bar, 'interlock-groups', table.length)]
   const accents = new Set(groupStarts(groups))
@@ -199,9 +251,12 @@ export function interlockingHands(bar: BarContext): BarNotes {
 // ── displaced arpeggio ──────────────────────────────────────────────────────
 
 /** 4+4+4+4 regrouped, after the pianist's own lesson on displacement: 5+5+6, 7+5+4, 4+3+5+4. */
-const DISPLACEMENTS: Record<'sixteen' | 'twelve', number[][]> = {
+const DISPLACEMENTS: Record<ReturnType<typeof meterGrid>, number[][]> = {
   sixteen: [[5, 5, 6], [7, 5, 4], [4, 3, 5, 4], [4, 4, 4, 4], [6, 5, 5]],
   twelve: [[5, 4, 3], [4, 3, 5], [3, 3, 3, 3], [5, 7], [4, 4, 4]],
+  eight: [[3, 5], [5, 3], [4, 4], [2, 3, 3]],
+  eighteen: [[5, 5, 8], [6, 6, 6], [7, 5, 6], [4, 5, 4, 5]],
+  twentyfour: [[5, 5, 6, 8], [7, 5, 6, 6], [6, 6, 6, 6], [5, 7, 5, 7]],
 }
 
 export function displacedArpeggio(bar: BarContext): BarNotes {
@@ -222,7 +277,7 @@ export function displacedArpeggio(bar: BarContext): BarNotes {
     }
   }
 
-  const table = DISPLACEMENTS[meter.ticksPerBar === 16 ? 'sixteen' : 'twelve']
+  const table = DISPLACEMENTS[meterGrid(meter)]
   const groups = role === 'development' ? table[(pieceChoice(bar, 'displacement', table.length) + 1 + (bar.index % 2)) % table.length] : table[pieceChoice(bar, 'displacement', table.length)]
   const right: Voice = []
   let tick = 0
@@ -267,6 +322,27 @@ const CHORDAL: Record<MeterId, RhythmBank> = {
     sparse: [[12]],
     pause: [[6, 6]],
     close: [[12]],
+  },
+  two_four: {
+    main: [[6, 2], [4, 4], [3, 3, 2]],
+    busy: [[2, 2, 4], [3, 1, 4]],
+    sparse: [[8]],
+    pause: [[4, 4]],
+    close: [[8]],
+  },
+  nine_eight: {
+    main: [[6, 6, 6], [6, 4, 2, 6], [4, 2, 6, 6]],
+    busy: [[4, 2, 4, 2, 6], [6, 2, 2, 2, 6]],
+    sparse: [[18]],
+    pause: [[6, 12]],
+    close: [[18]],
+  },
+  twelve_eight: {
+    main: [[6, 6, 6, 6], [8, 4, 6, 6], [6, 6, 4, 8]],
+    busy: [[4, 2, 4, 2, 6, 6], [6, 2, 2, 2, 6, 6]],
+    sparse: [[24]],
+    pause: [[12, 12]],
+    close: [[24]],
   },
 }
 
@@ -326,6 +402,27 @@ const TOLLING: Record<MeterId, RhythmBank> = {
     sparse: [[12]],
     pause: [[6, 6]],
     close: [[12]],
+  },
+  two_four: {
+    main: [[4, 4], [2, 2, 4], [4, 2, 2]],
+    busy: [[2, 2, 2, 2], [2, 2, 4]],
+    sparse: [[8]],
+    pause: [[4, 4]],
+    close: [[8]],
+  },
+  nine_eight: {
+    main: [[6, 6, 6], [6, 4, 2, 6], [4, 2, 6, 6]],
+    busy: [[4, 2, 4, 2, 6], [2, 2, 2, 6, 6]],
+    sparse: [[12, 6]],
+    pause: [[6, 12]],
+    close: [[18]],
+  },
+  twelve_eight: {
+    main: [[6, 6, 6, 6], [8, 4, 6, 6], [6, 6, 4, 8]],
+    busy: [[4, 2, 4, 2, 6, 6], [2, 2, 2, 6, 6, 6]],
+    sparse: [[12, 12]],
+    pause: [[12, 12]],
+    close: [[24]],
   },
 }
 

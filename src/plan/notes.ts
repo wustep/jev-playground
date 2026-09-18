@@ -17,6 +17,8 @@ export const NOTE_TICKS = {
   '8': 'Half note — 8 ticks',
   '12': 'Dotted half, or a full bar of 3/4 or 6/8 — 12 ticks',
   '16': 'Whole note, a full bar of 4/4 — 16 ticks',
+  '18': 'A full bar of 9/8 — 18 ticks (split on the page into a dotted half and a dotted quarter)',
+  '24': 'A full bar of 12/8 — 24 ticks (split on the page into two dotted halves)',
 } as const
 export type NoteTickId = keyof typeof NOTE_TICKS
 export const NOTE_TICK_IDS = Object.keys(NOTE_TICKS) as NoteTickId[]
@@ -68,6 +70,24 @@ export const PHRASE_RHYTHMS = {
   compound_rock: { meter: 'six_eight', ticks: [2, 4, 2, 4], label: 'Eighth, quarter, eighth, quarter' },
   compound_sway: { meter: 'six_eight', ticks: [4, 2, 4, 2], label: 'Quarter, eighth, quarter, eighth' },
   compound_split: { meter: 'six_eight', ticks: [4, 4, 2, 2], label: 'Two quarters and two eighths' },
+  two_even: { meter: 'two_four', ticks: [2, 2, 2, 2], label: 'Four even eighths filling a 2/4 bar' },
+  two_march: { meter: 'two_four', ticks: [4, 2, 1, 1], label: 'Quarter, eighth, two sixteenths' },
+  two_upbeat: { meter: 'two_four', ticks: [1, 1, 2, 4], label: 'Two sixteenths, eighth, quarter' },
+  two_swing: { meter: 'two_four', ticks: [3, 1, 3, 1], label: 'Two dotted-eighth / sixteenth pairs' },
+  two_split: { meter: 'two_four', ticks: [2, 4, 1, 1], label: 'Eighth, quarter, two sixteenths' },
+  two_close: { meter: 'two_four', ticks: [2, 2, 1, 3], label: 'Two eighths, sixteenth, dotted eighth' },
+  nine_even: { meter: 'nine_eight', ticks: [6, 4, 4, 4], label: 'Dotted quarter and three quarters' },
+  nine_long: { meter: 'nine_eight', ticks: [6, 6, 4, 2], label: 'Two dotted quarters, quarter, eighth' },
+  nine_close: { meter: 'nine_eight', ticks: [4, 2, 6, 6], label: 'Quarter, eighth, two dotted quarters' },
+  nine_rock: { meter: 'nine_eight', ticks: [4, 2, 4, 8], label: 'Quarter, eighth, quarter, half' },
+  nine_sway: { meter: 'nine_eight', ticks: [3, 3, 6, 6], label: 'Two dotted eighths and two dotted quarters' },
+  nine_split: { meter: 'nine_eight', ticks: [2, 4, 6, 6], label: 'Eighth, quarter, two dotted quarters' },
+  twelve_even: { meter: 'twelve_eight', ticks: [6, 6, 6, 6], label: 'Four dotted quarters filling 12/8' },
+  twelve_long: { meter: 'twelve_eight', ticks: [8, 4, 6, 6], label: 'Half, quarter, two dotted quarters' },
+  twelve_close: { meter: 'twelve_eight', ticks: [6, 6, 4, 8], label: 'Two dotted quarters, quarter, half' },
+  twelve_sway: { meter: 'twelve_eight', ticks: [4, 2, 6, 12], label: 'Quarter, eighth, dotted quarter, dotted half' },
+  twelve_split: { meter: 'twelve_eight', ticks: [8, 8, 4, 4], label: 'Two halves and two quarters' },
+  twelve_rock: { meter: 'twelve_eight', ticks: [6, 2, 8, 8], label: 'Dotted quarter, eighth, two halves' },
 } as const satisfies Record<string, PhraseRhythm>
 export type PhraseRhythmId = keyof typeof PHRASE_RHYTHMS
 

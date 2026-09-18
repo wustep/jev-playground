@@ -219,6 +219,15 @@ describe('HeuristicPlanner', () => {
     }
   })
 
+  it('puts 2/4, 9/8 and 12/8 on the styles that use them', () => {
+    expect(STYLE_PROFILES.beethoven.priors.meter).toMatchObject({ two_four: expect.any(Number) })
+    expect(STYLE_PROFILES.bach.priors.meter).toMatchObject({ nine_eight: expect.any(Number), twelve_eight: expect.any(Number) })
+    expect(STYLE_PROFILES.debussy.priors.meter).toMatchObject({ nine_eight: expect.any(Number) })
+    expect(STYLE_PROFILES.bach.archetypes.dance_lilt?.priors.meter).toMatchObject({ twelve_eight: expect.any(Number), nine_eight: expect.any(Number) })
+    expect(STYLE_PROFILES.beethoven.archetypes.heroic_bright?.priors.meter).toMatchObject({ two_four: expect.any(Number) })
+    expect(STYLE_PROFILES.debussy.archetypes.dreamy_haze?.priors.meter).toMatchObject({ nine_eight: expect.any(Number) })
+  })
+
   it('scores its own style at least as high as the others', async () => {
     const planner = new HeuristicPlanner()
     const order = { low: 0, medium: 1, high: 2 }

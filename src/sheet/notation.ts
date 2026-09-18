@@ -31,8 +31,9 @@ function limitAt(pos: number, remaining: number, meter: MeterInfo): number {
     return pos % 6 === 3 ? 3 : 1
   }
   if (pos % meter.beatTicks !== 0) return meter.beatTicks - (pos % meter.beatTicks)
-  // On a beat. 6/8 never hides its second beat unless the note fills the bar.
-  if (compound) return pos === 0 && remaining >= 12 ? 12 : 6
+  // On a beat. Compound meters may take a dotted half only on a 12-tick
+  // boundary (a full 6/8 bar, or half a 12/8 bar) so 9/8 still shows 12+6.
+  if (compound) return remaining >= 12 && pos % 12 === 0 ? 12 : 6
   return meter.ticksPerBar - pos
 }
 

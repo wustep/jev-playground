@@ -20,7 +20,10 @@ export interface MeterInfo {
 export const METER_INFO: Record<MeterId, MeterInfo> = {
   four_four: { id: 'four_four', num: 4, den: 4, ticksPerBar: 16, beatTicks: 4, splitTick: 8 },
   three_four: { id: 'three_four', num: 3, den: 4, ticksPerBar: 12, beatTicks: 4, splitTick: 8 },
+  two_four: { id: 'two_four', num: 2, den: 4, ticksPerBar: 8, beatTicks: 4, splitTick: 4 },
   six_eight: { id: 'six_eight', num: 6, den: 8, ticksPerBar: 12, beatTicks: 6, splitTick: 6 },
+  nine_eight: { id: 'nine_eight', num: 9, den: 8, ticksPerBar: 18, beatTicks: 6, splitTick: 12 },
+  twelve_eight: { id: 'twelve_eight', num: 12, den: 8, ticksPerBar: 24, beatTicks: 6, splitTick: 12 },
 }
 
 export interface Note {
