@@ -25,7 +25,7 @@ export const NOTE_TICK_IDS = Object.keys(NOTE_TICKS) as NoteTickId[]
 export const NOTE_TICK_VALUES = NOTE_TICK_IDS.map((id) => Number(id))
 export const isNoteTick = (value: number): boolean => Object.hasOwn(NOTE_TICKS, String(value))
 
-/** Four-note opening motif. One request, pitches asked in parallel. */
+/** Four-note bar phrase. One request per new plan bar; pitches asked in parallel. */
 export const PHRASE_NOTE_COUNT = 4
 
 export const MELODY_DEGREES = {

@@ -107,7 +107,7 @@ export type JevOp =
       contours: ContourId[]
     }
   | { op: 'score'; plan: CompositionPlan; styles: StyleId[] }
-  /** Debug-only: one opening right-hand phrase. Small — first bar, closed enums. */
+  /** Debug-only: one right-hand phrase. Closed enums; callers repeat per plan bar. */
   | {
       op: 'notes'
       style: StyleId
@@ -119,6 +119,8 @@ export type JevOp =
       texture: TextureId
       palette: PaletteId
       bar: BarPlan
+      /** 0-based plan bar this request writes. Omitted = bar 1 (legacy). */
+      barIndex?: number
     }
 
 // ── State helpers ───────────────────────────────────────────────────────────
@@ -390,22 +392,23 @@ function songQualityQuestion(): ScoreQuestion {
 }
 
 function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): SystemOneRequest {
+  const barNumber = (op.barIndex ?? 0) + 1
   const questions: Record<string, Question> = {
     rhythm: choice(
-      'Which rhythm should the opening right-hand melody of bar 1 use? Each option fills the bar with exactly four slots on the sixteenth-note grid.',
+      `Which rhythm should the right-hand melody of bar ${barNumber} use? Each option fills the bar with exactly four slots on the sixteenth-note grid.`,
       rhythmsFor(op.meter),
     ),
   }
   for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
     questions[pitchQuestionId(i)] = choice(
-      `Which scale degree (or rest) should slot ${i + 1} of that four-note opening melody sing? Degrees are relative to the key in \`piece.key\`, coloured by the harmony in \`opening_bar\`.`,
+      `Which scale degree (or rest) should slot ${i + 1} of that four-note melody sing? Degrees are relative to the key in \`piece.key\`, coloured by the harmony in \`this_bar\`.`,
       MELODY_DEGREES,
     )
   }
   return {
     model,
     state: {
-      task: 'Write the opening right-hand melody for bar 1 of a short keyboard piece. Software will place your choices on a sixteenth-note grid; pick only from the options given — never invent pitches or durations.',
+      task: `Write the right-hand melody for bar ${barNumber} of a short keyboard piece. Software will place your choices on a sixteenth-note grid; pick only from the options given — never invent pitches or durations.`,
       requested_style: styleState(op.style, op.brief),
       piece_character: CHARACTERS[op.character],
       piece: {
@@ -415,13 +418,14 @@ function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): Syste
         texture: TEXTURES[op.texture],
         melodic_palette: PALETTES[op.palette],
       },
-      opening_bar: {
+      this_bar: {
+        bar_number: barNumber,
         chord: `${op.bar.chord} — ${CHORDS[op.bar.chord]}`,
         ...(op.bar.chord2 ? { second_half_chord: `${op.bar.chord2} — ${CHORDS[op.bar.chord2]}` } : {}),
         role: `${op.bar.role} — ${BAR_ROLES[op.bar.role]}`,
         melodic_shape: CONTOURS[op.bar.contour],
       },
-      voice: 'treble — the singing right-hand line of bar 1 only',
+      voice: `treble — the singing right-hand line of bar ${barNumber}`,
     },
     questions,
   }
@@ -523,7 +527,11 @@ export function parseOp(raw: unknown): JevOp {
       if (unique.length === 0) throw new PlanValidationError('op.styles: expected at least one style')
       return { op: 'score', plan: parsePlan(obj.plan), styles: unique }
     }
-    case 'notes':
+    case 'notes': {
+      const barIndex = obj.barIndex
+      if (barIndex !== undefined && (typeof barIndex !== 'number' || !Number.isInteger(barIndex) || barIndex < 0)) {
+        throw new PlanValidationError('op.barIndex: expected a non-negative integer')
+      }
       return {
         op: 'notes',
         style: parseStyle(obj.style),
@@ -535,7 +543,9 @@ export function parseOp(raw: unknown): JevOp {
         texture: parseOption(TEXTURES, obj.texture, 'op.texture'),
         palette: parseOption(PALETTES, obj.palette, 'op.palette'),
         bar: parseBarPlan(obj.bar, 'op.bar'),
+        ...(barIndex !== undefined ? { barIndex } : {}),
       }
+    }
     default:
       throw new PlanValidationError('op.op: expected "concept", "globals", "bar", "phrase", "score" or "notes"')
   }
