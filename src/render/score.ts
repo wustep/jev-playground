@@ -78,6 +78,11 @@ export interface Score {
   ritardando: boolean
 }
 
+/** Body bar for plan index `i` — skips vamp/pickup framing. */
+export function scoreBarForPlan(score: Score, planIndex: number): Bar | undefined {
+  return score.bars[planIndex + (score.introBars ?? 0)]
+}
+
 /** A sounding note with absolute timing, for playback and MIDI export. */
 export interface TimedNote {
   midi: number

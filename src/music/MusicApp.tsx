@@ -4,7 +4,7 @@ import { downloadMidi } from '../midi/exportMidi'
 import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from '../plan/schema'
 import { BEST_OF_N, detectJev, heuristicPlanner, JevPlanner, selectBestOfN, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from '../planner'
 import { shadowExchanges } from '../planner/HeuristicPlanner'
-import { renderWithOptionalJevNotes } from '../render/jevNotes'
+import { notePhrasesCoverPlan, renderWithOptionalJevNotes } from '../render/jevNotes'
 import { secondsPerTick } from '../render/renderPlan'
 import { DebugPanel } from '../ui/DebugPanel'
 import { Confidence, PlanPanel } from '../ui/PlanPanel'
@@ -159,16 +159,17 @@ export default function MusicApp() {
         settle.fn?.(null)
         return
       }
-      let notePhrase = undefined as Generated['notePhrase']
+      let notePhrases = undefined as Generated['notePhrases']
       let noteExchanges = undefined as Generated['noteExchanges']
       if (wantJevNotes) {
         const writer = jev?.planner instanceof JevPlanner ? jev.planner : null
         if (!writer) {
           notice = [notice, 'Jev notes need a live Jev connection. Using the code renderer’s notes instead.'].filter(Boolean).join(' ')
+          notePhrases = []
         } else {
           if (mountedRef.current) {
             setPendingAsksJev(true)
-            setPlanStatus('Jev is writing the opening melody…')
+            setPlanStatus('Jev is writing the melody…')
           }
           try {
             const written = await writer.writeNotes(result.plan, input, { signal: abort.signal })
@@ -176,19 +177,20 @@ export default function MusicApp() {
               settle.fn?.(null)
               return
             }
-            notePhrase = written.phrase
-            noteExchanges = [written.exchange]
+            notePhrases = written.phrases
+            noteExchanges = written.exchanges
           } catch (cause) {
             if (abort.signal.aborted) {
               settle.fn?.(null)
               return
             }
             notice = [notice, `Jev notes failed (${cause instanceof Error ? cause.message : String(cause)}). Using the code renderer’s notes instead.`].filter(Boolean).join(' ')
+            notePhrases = []
           }
         }
       }
       const ended = performance.now()
-      const made = stampGenerateLatency({ ...result, input, notice, notePhrase, noteExchanges }, started, ended)
+      const made = stampGenerateLatency({ ...result, input, notice, notePhrases, noteExchanges }, started, ended)
       styleCache.set(input.style, made)
       settle.fn?.(made)
       if (!mountedRef.current) return
@@ -401,12 +403,64 @@ export default function MusicApp() {
 
   // ── THE SEAM: plan JSON → notes ───────────────────────────────────────────
   // Default: labels → renderPlan. Debug + Notes:Jev overlays a validated
-  // opening melody; illegal phrases fall back to renderPlan.
-  const applyJevNotes = debug && jevNotes && !editedPlan && Boolean(generated?.notePhrase)
+  // right-hand line on every plan bar; illegal phrases fall back to renderPlan.
+  // A stale one-bar cache is not applied — the notes pass must cover the piece.
+  const applyJevNotes = debug && jevNotes && !editedPlan && notePhrasesCoverPlan(generated?.notePhrases, plan?.bars.length ?? 0)
   const score = useMemo(
-    () => (plan && generated ? renderWithOptionalJevNotes(plan, generated.input.seed, applyJevNotes ? generated.notePhrase : null).score : null),
+    () => (plan && generated ? renderWithOptionalJevNotes(plan, generated.input.seed, applyJevNotes ? generated.notePhrases : null).score : null),
     [plan, generated, applyJevNotes],
   )
+
+  // Toggle / URL / restored cache may want Jev notes without a Generate click.
+  // `undefined` = not tried; `[]` = tried and failed (keep the existing notice).
+  useEffect(() => {
+    if (!debug || !jevNotes || !generated || editedPlan || progress !== null || picking) return
+    if (generated.notePhrases !== undefined) return
+    if (jev === null) return
+
+    const writer = jev.planner instanceof JevPlanner ? jev.planner : null
+    if (!writer) {
+      const next: Generated = {
+        ...generated,
+        notice: [generated.notice, 'Jev notes need a live Jev connection. Using the code renderer’s notes instead.'].filter(Boolean).join(' '),
+        notePhrases: [],
+      }
+      styleCache.set(generated.input.style, next)
+      setGenerated(next)
+      return
+    }
+
+    const abort = new AbortController()
+    abortRef.current = abort
+    if (mountedRef.current) {
+      setPendingAsksJev(true)
+      setPlanStatus('Jev is writing the melody…')
+    }
+    void writer
+      .writeNotes(generated.plan, generated.input, { signal: abort.signal })
+      .then((written) => {
+        if (abort.signal.aborted || !mountedRef.current) return
+        const next: Generated = { ...generated, notePhrases: written.phrases, noteExchanges: written.exchanges }
+        styleCache.set(generated.input.style, next)
+        setGenerated(next)
+        setPlanStatus(readyPlanStatus(generated.input.bars))
+      })
+      .catch((cause) => {
+        if (abort.signal.aborted || !mountedRef.current) return
+        const next: Generated = {
+          ...generated,
+          notice: [generated.notice, `Jev notes failed (${cause instanceof Error ? cause.message : String(cause)}). Using the code renderer’s notes instead.`].filter(Boolean).join(' '),
+          notePhrases: [],
+        }
+        styleCache.set(generated.input.style, next)
+        setGenerated(next)
+      })
+      .finally(() => {
+        if (mountedRef.current && !abort.signal.aborted) setPendingAsksJev(false)
+      })
+
+    return () => abort.abort()
+  }, [debug, jevNotes, generated, editedPlan, progress, picking, jev])
 
   // Optional style-match scoring — skip while a plan is in flight so latency stays honest.
   // Jev score only when the displayed plan came from Jev, not because the picker is on Jev.
@@ -513,6 +567,12 @@ export default function MusicApp() {
       url.searchParams.delete('notes')
     }
     window.history.replaceState(null, '', url)
+    // Re-run the notes pass when the cache is missing or only a partial overlay.
+    if (on && generated && !notePhrasesCoverPlan(generated.notePhrases, generated.plan.bars.length)) {
+      const next: Generated = { ...generated, notePhrases: undefined, noteExchanges: undefined }
+      styleCache.set(generated.input.style, next)
+      setGenerated(next)
+    }
   }
 
   // ── view ──────────────────────────────────────────────────────────────────
@@ -653,7 +713,7 @@ export default function MusicApp() {
             Seed
             <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
           </label>
-          <label title="Experimental: after the plan, Jev picks a closed-schema opening melody for bar 1. Off by default; illegal notes fall back to renderPlan.">
+          <label title="Experimental: after the plan, Jev picks a closed-schema right-hand melody for every plan bar. Off by default; illegal notes fall back to renderPlan.">
             Notes
             <select value={jevNotes ? 'jev' : 'code'} onChange={(event) => setNotesMode(event.target.value === 'jev')}>
               <option value="code">code (renderPlan)</option>

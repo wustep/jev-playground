@@ -357,6 +357,8 @@ describe('/api/jev handler', () => {
       bar: { chord: 'I', role: 'statement', contour: 'rise' },
     }
     expect(parseOp(notes)).toMatchObject({ op: 'notes', meter: 'four_four' })
+    expect(parseOp({ ...notes, barIndex: 3 })).toMatchObject({ op: 'notes', barIndex: 3 })
+    expect(() => parseOp({ ...notes, barIndex: -1 })).toThrow(/barIndex/)
     expect(() => parseOp({ ...notes, op: 'midi' })).toThrow(/notes/)
     expect(() => parseOp({ ...notes, palette: 'serial' })).toThrow()
   })

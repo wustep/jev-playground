@@ -10,7 +10,7 @@ import {
 } from '../plan/schema'
 import type { Decision } from '../planner'
 import { keyInfo } from '../render/harmony'
-import type { Score } from '../render/score'
+import { scoreBarForPlan, type Score } from '../render/score'
 
 const FIELD_LABEL: Record<GlobalField, string> = {
   character: 'Character',
@@ -111,11 +111,12 @@ export function PlanPanel({ plan, score, decisions, edited, onApply, debug = fal
       <ol className="bar-strip" data-cols="4">
         {plan.bars.map((bar, i) => {
           const decision = edited ? undefined : byField.get(`bars[${i}].chord`)
+          const body = scoreBarForPlan(score, i)
           return (
             <li key={i} className={`bar-cell role-${bar.role}`} title={runnersUp(decision)}>
               <span className="bar-number">{i + 1}</span>
               <span className="bar-chord">{bar.chord2 ? `${bar.chord} · ${bar.chord2}` : bar.chord}</span>
-              <span className="bar-symbol">{score.bars[i]?.split ? `${score.bars[i].chordSymbol} · ${score.bars[i].split.chordSymbol}` : score.bars[i]?.chordSymbol}</span>
+              <span className="bar-symbol">{body?.split ? `${body.chordSymbol} · ${body.split.chordSymbol}` : body?.chordSymbol}</span>
               <span className="bar-role">{bar.role.replace(/_/g, ' ')}</span>
               <span className="bar-contour">{CONTOUR_GLYPH[bar.contour]}</span>
               <Confidence value={decision?.confidence} />
