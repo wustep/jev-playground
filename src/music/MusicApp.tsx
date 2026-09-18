@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AudioEngine, type EngineStatus } from '../audio/engine'
 import { downloadMidi } from '../midi/exportMidi'
-import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from '../plan/schema'
+import { BAR_COUNT_VALUES, GLOBAL_FIELD_IDS, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from '../plan/schema'
 import { BEST_OF_N, detectJev, heuristicPlanner, JevPlanner, selectBestOfN, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from '../planner'
 import { shadowExchanges } from '../planner/HeuristicPlanner'
 import { renderWithOptionalJevNotes } from '../render/jevNotes'
@@ -519,8 +519,8 @@ export default function MusicApp() {
 
   const accent = STYLE_THEME[plan?.style ?? style].accent
   const busy = progress !== null || picking
-  // Decisions landed so far over the number a plan of this length makes (character + 9 globals + role/chord/contour per bar).
-  const planProgress = busy ? Math.min(1, (progress?.length ?? 0) / (10 + bars * 3)) : 0
+  // Decisions landed so far over the number a plan of this length makes (globals + role/chord/contour per bar).
+  const planProgress = busy ? Math.min(1, (progress?.length ?? 0) / (GLOBAL_FIELD_IDS.length + bars * 3)) : 0
   const edited = editedPlan !== null
   const exchanges = useMemo(() => {
     if (!generated || !plan) return []

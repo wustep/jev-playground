@@ -34,10 +34,11 @@ export function scoreToMidi(score: Score, instrument: InstrumentId): Uint8Array 
       if (n.hand !== hand) continue
       track.addNote({ midi: n.midi, time: n.time, duration: Math.max(0.03, n.duration), velocity: n.velocity / 127 })
     }
-    if (score.pedal) {
+    if (score.pedal !== 'dry') {
+      const value = score.pedal === 'full' ? 1 : 0.5
       score.bars.forEach((bar) => {
         const start = bar.index * secondsPerBar
-        track.addCC({ number: 64, value: 1, time: start + 0.02 })
+        track.addCC({ number: 64, value, time: start + 0.02 })
         track.addCC({ number: 64, value: 0, time: start + secondsPerBar - 0.02 })
       })
     }
