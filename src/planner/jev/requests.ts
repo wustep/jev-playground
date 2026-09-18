@@ -29,7 +29,18 @@
 
 import { formSlots } from '../../plan/forms.js'
 import { bookFor, phraseCriteria, PHRASE_ENDS, slotContourQuestionId } from '../../plan/harmonyPhrases.js'
-import { MELODY_DEGREES, PHRASE_NOTE_COUNT, pitchQuestionId, rhythmsFor } from '../../plan/notes.js'
+import {
+  BASS_PATTERNS,
+  BASS_PATTERN_QUESTION_ID,
+  MELODY_DEGREES,
+  PHRASE_NOTE_COUNT,
+  parseBassSoFar,
+  parseMelodySoFar,
+  pitchQuestionId,
+  rhythmsFor,
+  type BassPatternId,
+  type MelodyMemoryBar,
+} from '../../plan/notes.js'
 import {
   BAR_COUNT_VALUES,
   BAR_ROLES,
@@ -76,6 +87,13 @@ import {
   type TextureId,
 } from '../../plan/schema.js'
 import { STYLE_PROFILES } from '../../plan/styles.js'
+import {
+  bassPatternInstructions,
+  melodyPitchInstructions,
+  melodyRhythmInstructions,
+  notesContinuityState,
+  notesTask,
+} from './notesContinuity.js'
 import type { ChoiceQuestion, Json, NoulQuestion, Question, ScoreQuestion, SystemOneRequest } from './systemOne.js'
 
 export type JevOp =
@@ -107,7 +125,11 @@ export type JevOp =
       contours: ContourId[]
     }
   | { op: 'score'; plan: CompositionPlan; styles: StyleId[] }
-  /** Debug-only: one right-hand phrase. Closed enums; callers repeat per plan bar. */
+  /**
+   * Debug-only: one bar of closed-schema RH + bass. Callers repeat per new
+   * plan bar. Optional memory fields stay on this op so Coder’s allowlist
+   * does not need a new verb — parse them against the existing note enums.
+   */
   | {
       op: 'notes'
       style: StyleId
@@ -121,6 +143,12 @@ export type JevOp =
       bar: BarPlan
       /** 0-based plan bar this request writes. Omitted = bar 1 (legacy). */
       barIndex?: number
+      /** Prior bars’ closed RH choices (rhythm id + four degree ids). */
+      melodySoFar?: MelodyMemoryBar[]
+      /** Prior bars’ closed bass pattern ids. */
+      bassSoFar?: BassPatternId[]
+      /** Next plan bar’s chord, when known. */
+      nextChord?: ChordId
     }
 
 // ── State helpers ───────────────────────────────────────────────────────────
@@ -392,23 +420,27 @@ function songQualityQuestion(): ScoreQuestion {
 }
 
 function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): SystemOneRequest {
-  const barNumber = (op.barIndex ?? 0) + 1
+  const barIndex = op.barIndex ?? 0
+  const barNumber = barIndex + 1
+  const memory = notesContinuityState({
+    barIndex,
+    bar: op.bar,
+    nextChord: op.nextChord,
+    melodySoFar: op.melodySoFar ?? [],
+    bassSoFar: op.bassSoFar ?? [],
+  })
+  const hint = memory.melody_motion
   const questions: Record<string, Question> = {
-    rhythm: choice(
-      `Which rhythm should the right-hand melody of bar ${barNumber} use? Each option fills the bar with exactly four slots on the sixteenth-note grid.`,
-      rhythmsFor(op.meter),
-    ),
+    rhythm: choice(melodyRhythmInstructions(barNumber, hint), rhythmsFor(op.meter)),
   }
   for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
-    questions[pitchQuestionId(i)] = choice(
-      `Which scale degree (or rest) should slot ${i + 1} of that four-note melody sing? Degrees are relative to the key in \`piece.key\`, coloured by the harmony in \`this_bar\`.`,
-      MELODY_DEGREES,
-    )
+    questions[pitchQuestionId(i)] = choice(melodyPitchInstructions(i + 1, hint), MELODY_DEGREES)
   }
+  questions[BASS_PATTERN_QUESTION_ID] = choice(bassPatternInstructions(barNumber), BASS_PATTERNS)
   return {
     model,
     state: {
-      task: `Write the right-hand melody for bar ${barNumber} of a short keyboard piece. Software will place your choices on a sixteenth-note grid; pick only from the options given — never invent pitches or durations.`,
+      task: notesTask(barNumber, (op.melodySoFar?.length ?? 0) > 0),
       requested_style: styleState(op.style, op.brief),
       piece_character: CHARACTERS[op.character],
       piece: {
@@ -418,14 +450,14 @@ function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): Syste
         texture: TEXTURES[op.texture],
         melodic_palette: PALETTES[op.palette],
       },
-      this_bar: {
-        bar_number: barNumber,
-        chord: `${op.bar.chord} — ${CHORDS[op.bar.chord]}`,
-        ...(op.bar.chord2 ? { second_half_chord: `${op.bar.chord2} — ${CHORDS[op.bar.chord2]}` } : {}),
-        role: `${op.bar.role} — ${BAR_ROLES[op.bar.role]}`,
-        melodic_shape: CONTOURS[op.bar.contour],
+      melody_so_far: memory.melody_so_far,
+      last_sounding_degree: memory.last_sounding_degree,
+      bass_so_far: memory.bass_so_far,
+      this_bar: memory.this_bar,
+      voices: {
+        treble: `right-hand melody of bar ${barNumber}, continuing melody_so_far`,
+        bass: `left-hand bass of bar ${barNumber}, continuing bass_so_far`,
       },
-      voice: `treble — the singing right-hand line of bar ${barNumber}`,
     },
     questions,
   }
@@ -532,18 +564,33 @@ export function parseOp(raw: unknown): JevOp {
       if (barIndex !== undefined && (typeof barIndex !== 'number' || !Number.isInteger(barIndex) || barIndex < 0)) {
         throw new PlanValidationError('op.barIndex: expected a non-negative integer')
       }
+      const meter = parseOption(METERS, obj.meter, 'op.meter')
+      // New fields are optional so a Coder allowlist that only knows the
+      // original notes shape still validates. When present, check them
+      // against the closed note enums and (if barIndex is set) the prior count.
+      const priorLength = typeof barIndex === 'number' ? barIndex : 0
+      const melodySoFar = parseMelodySoFar(
+        obj.melodySoFar,
+        meter,
+        obj.melodySoFar === undefined ? undefined : priorLength,
+      )
+      const bassSoFar = parseBassSoFar(obj.bassSoFar, obj.bassSoFar === undefined ? undefined : priorLength)
+      const nextChord = obj.nextChord === undefined ? undefined : parseOption(CHORDS, obj.nextChord, 'op.nextChord')
       return {
         op: 'notes',
         style: parseStyle(obj.style),
         brief: obj.brief === true,
         character: parseOption(CHARACTERS, obj.character, 'op.character'),
         key: parseOption(KEYS, obj.key, 'op.key'),
-        meter: parseOption(METERS, obj.meter, 'op.meter'),
+        meter,
         tempo: parseOption(TEMPOS, obj.tempo, 'op.tempo'),
         texture: parseOption(TEXTURES, obj.texture, 'op.texture'),
         palette: parseOption(PALETTES, obj.palette, 'op.palette'),
         bar: parseBarPlan(obj.bar, 'op.bar'),
         ...(barIndex !== undefined ? { barIndex } : {}),
+        ...(melodySoFar && melodySoFar.length > 0 ? { melodySoFar } : {}),
+        ...(bassSoFar && bassSoFar.length > 0 ? { bassSoFar } : {}),
+        ...(nextChord ? { nextChord } : {}),
       }
     }
     default:
