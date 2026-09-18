@@ -10,6 +10,7 @@ import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
 import { DIAL_PLANNER, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
+import { generatedPlanStatus, planHeuristicSample, stampWallClockLatency } from './planTiming'
 import { styleCache, type Generated } from './styleCache'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
@@ -144,10 +145,9 @@ export default function MusicApp() {
         settle.fn?.(null)
         return
       }
-      const made: Generated = { ...result, input, notice }
+      const made = stampWallClockLatency({ ...result, input, notice }, started)
       styleCache.set(input.style, made)
       settle.fn?.(made)
-      const seconds = Math.max(result.trace.latencyMs, performance.now() - started) / 1000
       if (!mountedRef.current) return
       setProgress(null)
       setPendingStyle(null)
@@ -156,7 +156,7 @@ export default function MusicApp() {
       setMatches(null)
       setGenerated(made)
       setInstrument(result.plan.defaultInstrument)
-      setPlanStatus(`Generated plan and ${input.bars} bars in ${seconds.toFixed(2)}s`)
+      setPlanStatus(generatedPlanStatus(input.bars, made.trace.latencyMs))
     },
     [style, bars, pick, brief, seed, plannerChoice, jev, engine],
   )
@@ -185,7 +185,7 @@ export default function MusicApp() {
         setGenerated(made)
         setInstrument(made.plan.defaultInstrument)
         setPendingStyle(null)
-        setPlanStatus(`Generated plan and ${made.input.bars} bars in ${(made.trace.latencyMs / 1000).toFixed(2)}s`)
+        setPlanStatus(generatedPlanStatus(made.input.bars, made.trace.latencyMs))
       }).catch(() => {
         if (mountedRef.current) void generate({ planner: DIAL_PLANNER }, { cancelPrior: false })
       })
@@ -203,8 +203,7 @@ export default function MusicApp() {
       for (const id of STYLE_IDS) {
         if (cancelled || styleCache.has(id) || styleCache.getInflight(id)) continue
         const input: PlanInput = { style: id, bars: 16, pick: 'sample', brief: true, seed: newSeed() }
-        const work = heuristicPlanner.plan(input).then((result) => {
-          const made: Generated = { ...result, input, notice: null }
+        const work = planHeuristicSample(input).then((made) => {
           if (!styleCache.has(id)) styleCache.set(id, made)
           return styleCache.get(id) ?? made
         })
@@ -236,7 +235,7 @@ export default function MusicApp() {
         setInstrument(cached.plan.defaultInstrument)
         setPendingStyle(null)
         setPendingAsksJev(false)
-        setPlanStatus(`Generated plan and ${cached.input.bars} bars in ${(cached.trace.latencyMs / 1000).toFixed(2)}s`)
+        setPlanStatus(generatedPlanStatus(cached.input.bars, cached.trace.latencyMs))
       }).catch(() => {
         /* aborted or superseded */
         if (mountedRef.current) {
@@ -257,7 +256,7 @@ export default function MusicApp() {
       setSeed(action.cached.input.seed)
       setGenerated(action.cached)
       setInstrument(action.cached.plan.defaultInstrument)
-      setPlanStatus(`Generated plan and ${action.cached.input.bars} bars in ${(action.cached.trace.latencyMs / 1000).toFixed(2)}s`)
+      setPlanStatus(generatedPlanStatus(action.cached.input.bars, action.cached.trace.latencyMs))
       setPendingStyle(null)
       setPendingAsksJev(false)
       return

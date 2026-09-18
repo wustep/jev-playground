@@ -144,6 +144,7 @@ describe('HeuristicPlanner', () => {
     expect(trace.exchanges).toHaveLength(2 + plan.bars.length)
     expect(trace.exchanges.every((exchange) => !exchange.sent && !exchange.response)).toBe(true)
     expect(trace.exchanges[0].request.model).toBe('jev-latest')
+    expect(trace.latencyMs).toBeGreaterThan(0)
   })
 
 
