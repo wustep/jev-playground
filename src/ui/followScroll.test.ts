@@ -133,7 +133,7 @@ describe('FollowSession', () => {
     expect(session.following).toBe(false)
   })
 
-  it('does not propose a scroll after cancel until Play re-enables follow', () => {
+  it('does not propose a scroll after cancel until Play or seek re-enables follow', () => {
     const session = createFollowSession()
     const box = { scrollTop: 0, clientHeight: 400, scrollHeight: 2000 }
     const offscreen = { top: 800, bottom: 980 }
@@ -141,6 +141,9 @@ describe('FollowSession', () => {
     expect(nextFollowScroll(session, box, offscreen, 590)).toBeNull()
     session.cancel()
     expect(nextFollowScroll(session, box, offscreen, null)).toBeNull()
+    // Stale last request (same target as before the user scrolled away) would
+    // skip the scroll; Play / measure-click seek forget it via enable().
+    expect(nextFollowScroll(session, box, offscreen, 590)).toBeNull()
     session.enable()
     expect(nextFollowScroll(session, box, offscreen, null)).toBe(590)
   })
