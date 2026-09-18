@@ -3,6 +3,16 @@ import type { AudioEngine } from '../audio/engine'
 import { secondsPerTick } from '../render/renderPlan'
 import type { Score } from '../render/score'
 import { barAt, drawScore, playheadX, sheetFontsReady, type SheetLayout } from '../sheet/drawScore'
+import {
+  barRangeInDocument,
+  bindFollowInput,
+  createFollowSession,
+  documentScrollBox,
+  followBehavior,
+  frameCanScroll,
+  frameScrollBox,
+  nextFollowScroll,
+} from './followScroll'
 
 interface Props {
   score: Score
@@ -25,6 +35,7 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
   const sheetRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const layoutRef = useRef<SheetLayout | null>(null)
+  const followRef = useRef(createFollowSession())
   const [width, setWidth] = useState(0)
   const [fontsReady, setFontsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,6 +75,18 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
     }
   }, [score, width, fontsReady, accent])
 
+  // Playing false→true starts a new follow session. Stop leaves it cancelled
+  // or following; the next Play re-enables either way.
+  useEffect(() => {
+    if (playing) followRef.current.enable()
+  }, [playing])
+
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!frame || !playing) return
+    return bindFollowInput(frame, followRef.current)
+  }, [playing])
+
   useEffect(() => {
     const overlay = overlayRef.current
     const pen = overlay?.getContext('2d')
@@ -77,9 +100,10 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
       return
     }
     let raf = 0
-    let followedTop = -1
+    let requested: number | null = null
     const tickSeconds = secondsPerTick(score)
     const totalTicks = score.bars.length * score.meter.ticksPerBar
+    const follow = followRef.current
     const paint = () => {
       raf = requestAnimationFrame(paint)
       const layout = layoutRef.current
@@ -91,11 +115,16 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
       const tick = Math.min(position / tickSeconds, totalTicks - 0.001)
       const bar = layout.bars[Math.min(layout.bars.length - 1, Math.floor(tick / score.meter.ticksPerBar))]
       if (!bar) return
-      // On phones the frame is a capped scroll box: keep the sounding system in view.
       const frame = frameRef.current
-      if (frame && bar.top !== followedTop && frame.scrollHeight > frame.clientHeight + 1) {
-        followedTop = bar.top
-        frame.scrollTo({ top: Math.max(0, bar.top - 10), behavior: 'smooth' })
+      if (frame) {
+        const useFrame = frameCanScroll(frame)
+        const top = nextFollowScroll(follow, useFrame ? frameScrollBox(frame) : documentScrollBox(), useFrame ? bar : barRangeInDocument(frame, bar), requested)
+        if (top != null) {
+          requested = top
+          follow.markProgrammatic(performance.now())
+          if (useFrame) frame.scrollTo({ top, behavior: followBehavior() })
+          else window.scrollTo({ top, behavior: followBehavior() })
+        }
       }
       const dpr = window.devicePixelRatio || 1
       pen.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -120,7 +149,7 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
   }
 
   return (
-    <div className="sheet-frame" ref={frameRef}>
+    <div className="sheet-frame" ref={frameRef} tabIndex={-1}>
       <canvas
         ref={sheetRef}
         className="sheet-canvas"
