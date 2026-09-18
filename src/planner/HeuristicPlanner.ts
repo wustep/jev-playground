@@ -31,7 +31,7 @@ import {
   type StyleId,
   type StyleMatchScore,
 } from '../plan/schema'
-import { formSlots, type PhraseSlot } from '../plan/forms'
+import { formSlots, themeSources, type PhraseSlot } from '../plan/forms'
 import { rootDegree } from '../render/harmony'
 import { STYLE_PROFILES, styleVocabulary, type HarmonyBook, type StylePriors, type StyleProfile, type Weights } from '../plan/styles'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
@@ -346,6 +346,7 @@ export class HeuristicPlanner implements Planner {
     // 3 ─ bars: the form gives the roles and says how to assemble the harmony
     const slots = formSlots(globals.form as FormId, barCount)
     const roles = slots.flatMap((slot) => [...slot.roles])
+    const returns = themeSources(globals.form as FormId, barCount)
     const book = profile.harmony[isMinorKey(globals.key) ? 'minor' : 'major']
     let harmony = assembleHarmony(book, slots, profile.holds, sample, random)
     for (let attempt = 0; sample && attempt < 8 && hasPopLoop(harmony.chords); attempt++) {
@@ -359,7 +360,12 @@ export class HeuristicPlanner implements Planner {
       const previous = bars[i - 1]
       let contour: ContourId
       let contourProbabilities: Record<ContourId, number>
-      if (previous && (role === 'sequence' || role === 'echo')) {
+      const source = returns[i]
+      if (source !== undefined) {
+        // A returning bar IS the earlier bar's tune (the form's returning phrases): same shape.
+        contour = bars[source].contour
+        contourProbabilities = distributionOf(CONTOUR_IDS, [contour])
+      } else if (previous && (role === 'sequence' || role === 'echo')) {
         // A sequence or an echo IS the previous figure: same shape, new chord or new dynamic.
         contour = previous.contour
         contourProbabilities = distributionOf(CONTOUR_IDS, [contour])

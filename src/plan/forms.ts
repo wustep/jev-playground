@@ -374,3 +374,68 @@ export function formSlots(form: FormId, bars: BarCount): readonly PhraseSlot[] {
 export function formRoles(form: FormId, bars: BarCount): BarRoleId[] {
   return formSlots(form, bars).flatMap((phrase) => [...phrase.roles])
 }
+
+// ── the theme: which bars bring back which ──────────────────────────────────
+//
+// A tune is longer than a bar. In the repertoire the unit that returns is the
+// phrase: the nocturne's bars 5–8 are its bars 1–4 again (ornamented), the
+// slow movement's bars 9–16 are its bars 1–8 an octave higher, and only the
+// cadence is rewritten. The form label already says which phrases are the
+// same material; this expands that into "bar n brings back bar m", which the
+// renderer reads the way it reads roles.
+
+/** What a phrase opens with; a phrase can only bring back one that opened the same way. */
+type OpeningKind = 'idea' | 'travel' | 'cycle' | 'standing'
+const OPENING: Record<PhraseBuild, OpeningKind> = {
+  head_tail: 'idea',
+  head_seq: 'idea',
+  duplicate: 'idea',
+  coda: 'idea',
+  seq_tail: 'travel',
+  seq_seq: 'travel',
+  loop: 'cycle',
+  pedal: 'standing',
+}
+
+/** Bars of a returning phrase that come back before it goes its own way: a loop keeps its two-bar hook, a phrase everything up to its cadence. */
+const RETURNING_BARS: Record<OpeningKind, number> = { idea: 3, travel: 3, cycle: 2, standing: 3 }
+
+/** Roles that are a phrase's punctuation or its exit: they are written fresh even inside a returning phrase. */
+const WRITTEN_FRESH: ReadonlySet<BarRoleId> = new Set<BarRoleId>(['cadence', 'half_cadence', 'surprise', 'dissolve'])
+
+/**
+ * For each bar, the index of the earlier bar whose tune it brings back, or
+ * undefined where the line is new. A phrase returns the first phrase of the
+ * same material that opened the same way; a `duplicate` phrase also says its
+ * own two-bar idea twice. Cadences, surprises and dissolves stay fresh, so a
+ * consequent can close where its antecedent paused.
+ */
+export function themeSources(form: FormId, bars: BarCount): (number | undefined)[] {
+  const slots = formSlots(form, bars)
+  const sources: (number | undefined)[] = Array(slots.length * 4).fill(undefined)
+  // A fantasia is through-composed by definition: no literal repeats.
+  if (form === 'free_fantasia') return sources
+  slots.forEach((phrase, j) => {
+    const kind = OPENING[phrase.build]
+    // A coda is its own closing phrase unless it is written as a return (it opens by restating).
+    const returns = phrase.build !== 'coda' || phrase.roles[0] === 'restatement'
+    const i = returns ? slots.findIndex((earlier, at) => at < j && earlier.material === phrase.material && OPENING[earlier.build] === kind) : -1
+    for (let k = 0; k < 4; k++) {
+      const role = phrase.roles[k]
+      if (WRITTEN_FRESH.has(role) || j * 4 + k === sources.length - 1) continue
+      let source: number | undefined
+      if (i >= 0 && k < RETURNING_BARS[kind]) source = i * 4 + k
+      // The second half of a duplicate is its first half again (and the first half of whatever that brought back).
+      if (phrase.build === 'duplicate' && k >= 2) source = sources[j * 4 + k - 2] ?? j * 4 + k - 2
+      if (source === undefined) continue
+      // Follow a return of a return back to the bar that first said it.
+      source = sources[source] ?? source
+      const sourceRole = slots[Math.floor(source / 4)].roles[source % 4]
+      // A pause is not a tune to bring back, and a contrast bar only returns a
+      // bar that was itself a contrast: elsewhere it is the departure.
+      if (WRITTEN_FRESH.has(sourceRole) || (role === 'contrast' && sourceRole !== 'contrast')) continue
+      sources[j * 4 + k] = source
+    }
+  })
+  return sources
+}
