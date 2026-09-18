@@ -101,7 +101,7 @@ describe('JevPlanner', () => {
 
   it('hands Chopin and Hans Zimmer briefs to Jev when asked', () => {
     for (const [style, name, snippet] of [
-      ['chopin', 'Chopin', 'cantabile'],
+      ['chopin', 'Frédéric Chopin', 'cantabile'],
       ['hans_zimmer', 'Hans Zimmer', 'ostinato'],
     ] as const) {
       const on = buildRequest({ op: 'concept', style, brief: true }, 'jev-latest')

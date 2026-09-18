@@ -281,8 +281,10 @@ button.small {
 
 .dial-name {
   font-family: var(--serif);
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 600;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .dial-stop.selected .dial-name {
@@ -1530,8 +1532,9 @@ button.small {
   }
 
   .dial-name {
-    font-size: 16px;
-    line-height: 1.15;
+    font-size: 13.5px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
   }
 
   .dial-tag {
