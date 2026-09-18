@@ -3,6 +3,7 @@ import type { CompositionPlan } from '../plan/schema'
 import type { PlanInput, PlanTrace } from '../planner'
 import {
   DIAL_PLANNER,
+  autoplayAfterStyleSwitch,
   dialPendingTag,
   displayedPlanUsesJevScore,
   generatePlanner,
@@ -75,5 +76,12 @@ describe('dialPendingTag', () => {
   it('says planning… for dial-driven work and asking Jev… only when Generate is talking to Jev', () => {
     expect(dialPendingTag(false, 0.4)).toBe('planning…')
     expect(dialPendingTag(true, 0.4)).toBe('asking Jev… 40%')
+  })
+})
+
+describe('autoplayAfterStyleSwitch', () => {
+  it('restarts playback only when the previous style was already playing', () => {
+    expect(autoplayAfterStyleSwitch(true)).toBe(true)
+    expect(autoplayAfterStyleSwitch(false)).toBe(false)
   })
 })

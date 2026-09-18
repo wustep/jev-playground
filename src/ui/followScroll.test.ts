@@ -106,6 +106,13 @@ describe('FollowSession', () => {
     expect(session.following).toBe(false)
   })
 
+  it('cancels a jump away from the target on the first observed scroll', () => {
+    const session = createFollowSession()
+    session.markProgrammatic(1000, PROGRAMMATIC_HOLD_MS, 400, 200)
+    session.onScroll(1010, 0)
+    expect(session.following).toBe(false)
+  })
+
   it('does not treat leftover motion toward the target as a user cancel', () => {
     const session = createFollowSession()
     session.markProgrammatic(1000, 50, 400)

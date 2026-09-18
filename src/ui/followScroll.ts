@@ -68,7 +68,7 @@ export type FollowSession = {
   lastScrollTop: number | null
   enable: () => void
   cancel: () => void
-  markProgrammatic: (now: number, holdMs?: number, targetTop?: number) => void
+  markProgrammatic: (now: number, holdMs?: number, targetTop?: number, fromTop?: number) => void
   isProgrammatic: (now: number) => boolean
   onScroll: (now: number, currentTop?: number) => void
 }
@@ -87,11 +87,11 @@ export function createFollowSession(): FollowSession {
     cancel() {
       this.following = false
     },
-    markProgrammatic(now, holdMs = PROGRAMMATIC_HOLD_MS, targetTop) {
+    markProgrammatic(now, holdMs = PROGRAMMATIC_HOLD_MS, targetTop, fromTop) {
       this.programmaticUntil = Math.max(this.programmaticUntil, now + holdMs)
       if (targetTop != null) {
         this.targetTop = targetTop
-        this.lastScrollTop = null
+        this.lastScrollTop = fromTop ?? this.lastScrollTop
       }
     },
     isProgrammatic(now) {

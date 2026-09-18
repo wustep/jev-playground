@@ -42,3 +42,8 @@ export function displayedPlanUsesJevScore(displayedPlanner: PlannerId): boolean 
 export function dialPendingTag(pendingAsksJev: boolean, progress: number): string {
   return pendingAsksJev ? `asking Jev… ${Math.round(progress * 100)}%` : 'planning…'
 }
+
+/** Dial switch: restart the new piece only if the previous style was already sounding. */
+export function autoplayAfterStyleSwitch(wasPlaying: boolean): boolean {
+  return wasPlaying
+}
