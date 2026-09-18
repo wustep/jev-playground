@@ -240,7 +240,7 @@ button.small {
 
 .dial {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--ink);
   background: var(--sheet);
 }
@@ -256,6 +256,14 @@ button.small {
   display: grid;
   gap: 2px;
   background: transparent;
+}
+
+.dial-stop:nth-child(4n) {
+  border-right: 0;
+}
+
+.dial-stop:nth-child(-n + 4) {
+  border-bottom: 1px solid var(--ink);
 }
 
 .dial-stop:last-child {
@@ -1497,7 +1505,7 @@ button.small {
   }
 
   .dial {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dial-stop {
@@ -1505,11 +1513,19 @@ button.small {
     padding: 10px 8px 11px;
   }
 
-  .dial-stop:nth-child(3n) {
+  .dial-stop:nth-child(4n) {
+    border-right: 1px solid var(--ink);
+  }
+
+  .dial-stop:nth-child(-n + 4) {
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .dial-stop:nth-child(2n) {
     border-right: 0;
   }
 
-  .dial-stop:nth-child(-n + 3) {
+  .dial-stop:not(:nth-last-child(-n + 2)) {
     border-bottom: 1px solid var(--ink);
   }
 

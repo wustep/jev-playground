@@ -7,7 +7,7 @@ Can a **System One** model steer music across styles?
 - **Jev** (or an offline stub behind the same interface) decides *only enum labels*: the piece's character and form, key, meter, texture, palette, tempo, dynamics, instrument, and per bar a chord, a phrase role and a melodic contour.
 - **App code** expands that plan into notes, engraves it (VexFlow), plays it (smplr) and exports it (`.mid`).
 
-Styles on the dial: **Bach · Beethoven · Debussy · Philip Glass · Nahre Sol · Elijah Fox**.
+Styles on the dial: **Bach · Beethoven · Chopin · Debussy · Philip Glass · Hans Zimmer · Nahre Sol · Elijah Fox**.
 
 ## Routes
 
@@ -87,7 +87,7 @@ const score = useMemo(() => renderPlan(plan, generated.input.seed), [plan, gener
 ```ts
 interface CompositionPlan {
   version: 1
-  style: StyleId              // bach | beethoven | debussy | glass | nahre_sol | elijah_fox
+  style: StyleId              // bach | beethoven | chopin | debussy | glass | hans_zimmer | nahre_sol | elijah_fox
   character: CharacterId      // 12: lyrical_song, stormy_drama, dance_lilt, hypnotic_pulse … decided FIRST
   form: FormId                // 11: period, sentence, spinning_out, additive_loop, mosaic_pairs …
   key: KeyId                  // 21 keys, C_major … F_minor
