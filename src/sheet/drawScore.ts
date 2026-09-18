@@ -79,9 +79,26 @@ const SYSTEM_HEIGHT = 292
 /** Extra pixels either side of a notehead. VexFlow's default (3) makes dense 16ths look like one bar. */
 export const LEDGER_STROKE_PX = 1
 
-/** VexFlow wants "eb/4"; tonal gives "Eb4". */
-function vexKey(pitch: string): string {
-  return `${Tonal.pitchClass(pitch).toLowerCase()}/${Tonal.octave(pitch)}`
+/** VexFlow `Tables.keyProperties` accepts A–G plus # / ## / b / bb / n. */
+const VEX_PITCH = /^[a-g](#{1,2}|b{1,2}|n)?$/i
+
+/**
+ * VexFlow wants "eb/4"; tonal gives "Eb4".
+ * Illegal spellings (no octave, empty, H4, "MIDI 60") used to become `eb/undefined`
+ * or empty `keys`, which leaves a StaveNote with no noteheads — `getYs()` then
+ * throws NoYValues and SheetView banners the whole score.
+ */
+export function vexKey(pitch: string): string | null {
+  if (typeof pitch !== 'string' || !pitch) return null
+  const pc = Tonal.pitchClass(pitch)
+  const octave = Tonal.octave(pitch)
+  if (!pc || !VEX_PITCH.test(pc) || octave == null || !Number.isInteger(octave)) return null
+  return `${pc.toLowerCase()}/${Math.max(0, Math.min(8, octave))}`
+}
+
+/** Drop un-engravable pitches; keep the spelled names the rest of the pipeline knows. */
+export function usablePitches(pitches: readonly string[]): string[] {
+  return pitches.filter((pitch) => vexKey(pitch) != null)
 }
 
 /** Where a rest sits, so two voices on one staff don't collide. */
@@ -89,6 +106,33 @@ function restKey(clef: 'treble' | 'bass', voiceIndex: number, voiceCount: number
   if (voiceCount === 1) return clef === 'treble' ? 'b/4' : 'd/3'
   if (clef === 'treble') return voiceIndex === 0 ? 'g/5' : 'd/4'
   return voiceIndex === 0 ? 'b/3' : 'f/2'
+}
+
+function staveRest(clef: 'treble' | 'bass', voiceIndex: number, voiceCount: number, duration: string, dots: number): StaveNote {
+  return new StaveNote({
+    keys: [restKey(clef, voiceIndex, voiceCount)],
+    duration: `${duration}r`,
+    dots,
+    clef,
+    strokePx: LEDGER_STROKE_PX,
+  })
+}
+
+function staveSounding(
+  keys: string[],
+  duration: string,
+  dots: number,
+  clef: 'treble' | 'bass',
+  stemDirection: number | undefined,
+): StaveNote {
+  return new StaveNote({
+    keys,
+    duration,
+    dots,
+    clef,
+    strokePx: LEDGER_STROKE_PX,
+    ...(stemDirection === undefined ? { autoStem: true } : { stemDirection }),
+  })
 }
 
 export interface BuiltVoice {
@@ -101,42 +145,74 @@ export interface BuiltVoice {
 
 export function buildVoice(source: Voice, clef: 'treble' | 'bass', voiceIndex: number, voiceCount: number, meter: MeterInfo): BuiltVoice {
   const stemDirection = voiceCount > 1 ? (voiceIndex === 0 ? Stem.UP : Stem.DOWN) : undefined
-  const engraved = engraveVoice(source, meter)
+  const cleaned = source
+    .filter((n) => n.dur > 0 && n.start >= 0)
+    .map((n) => {
+      const pitches = usablePitches(n.pitches)
+      return pitches.length ? { ...n, pitches } : undefined
+    })
+    .filter((n): n is NonNullable<typeof n> => n != null)
+  // Empty / all-illegal voices still fill the bar with rests so the Voice ticks.
+  const engraved = engraveVoice(cleaned, meter)
   const notes: StaveNote[] = []
   const ties: StaveTie[] = []
   const onsets: BuiltVoice['onsets'] = []
+  const sounding: boolean[] = []
 
   engraved.forEach((piece, i) => {
-    const { duration, dots } = VEX_DURATION[piece.dur]
-    const staveNote = piece.note
-      ? new StaveNote({
-          keys: piece.note.pitches.map(vexKey),
-          duration,
-          dots,
-          clef,
-          strokePx: LEDGER_STROKE_PX,
-          ...(stemDirection === undefined ? { autoStem: true } : { stemDirection }),
-        })
-      : new StaveNote({ keys: [restKey(clef, voiceIndex, voiceCount)], duration: `${duration}r`, dots, clef, strokePx: LEDGER_STROKE_PX })
-    if (dots > 0) Dot.buildAndAttach([staveNote], { all: true })
-    if (piece.note && piece.head) {
-      if (piece.note.accent) staveNote.addModifier(new Articulation('a>').setPosition(clef === 'treble' ? Modifier.Position.ABOVE : Modifier.Position.BELOW), 0)
-      if (piece.note.roll && piece.note.pitches.length > 1) staveNote.addStroke(0, new Stroke(Stroke.Type.ARPEGGIO_DIRECTIONLESS))
+    const { duration, dots } = VEX_DURATION[piece.dur] ?? { duration: '16', dots: 0 }
+    const keys = piece.note ? piece.note.pitches.map(vexKey).filter((key): key is string => key != null) : []
+    let staveNote: StaveNote
+    let isSounding = false
+    try {
+      if (piece.note && keys.length) {
+        staveNote = staveSounding(keys, duration, dots, clef, stemDirection)
+        isSounding = !staveNote.isRest()
+      } else {
+        staveNote = staveRest(clef, voiceIndex, voiceCount, duration, dots)
+      }
+    } catch {
+      staveNote = staveRest(clef, voiceIndex, voiceCount, duration, dots)
+      isSounding = false
+    }
+    if (dots > 0) {
+      try {
+        Dot.buildAndAttach([staveNote], { all: true })
+      } catch {
+        /* a rest without a legal dot is still a rest */
+      }
+    }
+    if (isSounding && piece.note && piece.head) {
+      try {
+        if (piece.note.accent) staveNote.addModifier(new Articulation('a>').setPosition(clef === 'treble' ? Modifier.Position.ABOVE : Modifier.Position.BELOW), 0)
+        if (piece.note.roll && keys.length > 1) staveNote.addStroke(0, new Stroke(Stroke.Type.ARPEGGIO_DIRECTIONLESS))
+      } catch {
+        /* keep the note; lose the mark */
+      }
       onsets.push({ tick: piece.start, note: staveNote })
     }
     notes.push(staveNote)
+    sounding.push(isSounding)
     const previous = engraved[i - 1]
-    if (previous?.tieToNext && previous.note) {
-      const indexes = previous.note.pitches.map((_, k) => k)
-      ties.push(new StaveTie({ firstNote: notes[i - 1], lastNote: staveNote, firstIndexes: indexes, lastIndexes: indexes }))
+    if (previous?.tieToNext && sounding[i - 1] && isSounding) {
+      const count = Math.min(notes[i - 1].getKeys().length, staveNote.getKeys().length)
+      if (count > 0) {
+        const indexes = Array.from({ length: count }, (_, k) => k)
+        ties.push(new StaveTie({ firstNote: notes[i - 1], lastNote: staveNote, firstIndexes: indexes, lastIndexes: indexes }))
+      }
     }
   })
 
-  const voice = new VexVoice({ numBeats: meter.num, beatValue: meter.den }).setStrict(true).addTickables(notes)
-  const beams = Beam.generateBeams(notes, {
-    groups: Beam.getDefaultBeamGroups(`${meter.num}/${meter.den}`),
-    ...(stemDirection === undefined ? {} : { stemDirection, maintainStemDirections: true }),
-  })
+  const voice = new VexVoice({ numBeats: meter.num, beatValue: meter.den }).setStrict(false).addTickables(notes)
+  let beams: Beam[] = []
+  try {
+    beams = Beam.generateBeams(notes, {
+      groups: Beam.getDefaultBeamGroups(`${meter.num}/${meter.den}`),
+      ...(stemDirection === undefined ? {} : { stemDirection, maintainStemDirections: true }),
+    })
+  } catch {
+    beams = []
+  }
   return { voice, notes, ties, beams, onsets }
 }
 
@@ -148,16 +224,46 @@ export function buildVoice(source: Voice, clef: 'treble' | 'bass', voiceIndex: n
  */
 export function attachVoicesToStave(voices: BuiltVoice[], stave: Stave) {
   for (const built of voices) {
-    built.voice.setStave(stave)
-    for (const note of built.notes) note.setStave(stave)
+    try {
+      built.voice.setStave(stave)
+    } catch {
+      /* tickables still get a stave below */
+    }
+    for (const note of built.notes) {
+      try {
+        note.setStave(stave)
+      } catch {
+        /* draw path skips notes that still have no Y */
+      }
+    }
   }
 }
 
 /** Keep every note in a beam on the beam's stem direction after Formatter has run. */
 export function unifyBeamStems(beam: Beam) {
-  const direction = beam.getStemDirection()
-  for (const note of beam.getNotes()) {
-    if (!note.isRest()) note.setStemDirection(direction)
+  try {
+    const direction = beam.getStemDirection()
+    for (const note of beam.getNotes()) {
+      if (!note.isRest()) note.setStemDirection(direction)
+    }
+  } catch {
+    /* leave stems as format left them */
+  }
+}
+
+function hasYs(note: { getYs(): number[] }): boolean {
+  try {
+    return note.getYs().length > 0
+  } catch {
+    return false
+  }
+}
+
+function drawQuietly(draw: () => void) {
+  try {
+    draw()
+  } catch {
+    /* one bad beam/tie/voice must not blank the sheet */
   }
 }
 
@@ -250,28 +356,50 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       }
       new StaveConnector(treble, bass).setType(isFinal ? 'boldDoubleRight' : 'singleRight').setContext(context).draw()
 
-      const upper = bar.treble.map((voice, i) => buildVoice(voice, 'treble', i, bar.treble.length, meter))
-      const lower = bar.bass.map((voice, i) => buildVoice(voice, 'bass', i, bar.bass.length, meter))
-      attachVoicesToStave(upper, treble)
-      attachVoicesToStave(lower, bass)
-      if (upper.length) Accidental.applyAccidentals(upper.map((b) => b.voice), score.keySignature)
-      if (lower.length) Accidental.applyAccidentals(lower.map((b) => b.voice), score.keySignature)
+      const all: BuiltVoice[] = []
+      try {
+        const upper = bar.treble.map((voice, i) => buildVoice(voice, 'treble', i, bar.treble.length, meter))
+        const lower = bar.bass.map((voice, i) => buildVoice(voice, 'bass', i, bar.bass.length, meter))
+        attachVoicesToStave(upper, treble)
+        attachVoicesToStave(lower, bass)
+        if (upper.length) Accidental.applyAccidentals(upper.map((b) => b.voice), score.keySignature)
+        if (lower.length) Accidental.applyAccidentals(lower.map((b) => b.voice), score.keySignature)
 
-      const formatter = new Formatter()
-      if (upper.length) formatter.joinVoices(upper.map((b) => b.voice))
-      if (lower.length) formatter.joinVoices(lower.map((b) => b.voice))
-      const all = [...upper, ...lower]
-      formatter.format(all.map((b) => b.voice), Math.max(40, x + staveWidth - noteStart - 14))
-      all.forEach((b) => b.beams.forEach(unifyBeamStems))
+        const formatter = new Formatter()
+        if (upper.length) formatter.joinVoices(upper.map((b) => b.voice))
+        if (lower.length) formatter.joinVoices(lower.map((b) => b.voice))
+        all.push(...upper, ...lower)
+        if (all.length) formatter.format(all.map((b) => b.voice), Math.max(40, x + staveWidth - noteStart - 14))
+        all.forEach((b) => b.beams.forEach(unifyBeamStems))
 
-      upper.forEach((b) => b.voice.draw(context, treble))
-      lower.forEach((b) => b.voice.draw(context, bass))
-      all.forEach((b) => b.beams.forEach((beam) => beam.setContext(context).draw()))
-      all.forEach((b) => b.ties.forEach((tie) => tie.setContext(context).draw()))
+        upper.forEach((b) => drawQuietly(() => b.voice.draw(context, treble)))
+        lower.forEach((b) => drawQuietly(() => b.voice.draw(context, bass)))
+        all.forEach((b) =>
+          b.beams.forEach((beam) => {
+            if (beam.getNotes().every(hasYs)) drawQuietly(() => beam.setContext(context).draw())
+          }),
+        )
+        all.forEach((b) =>
+          b.ties.forEach((tie) => {
+            drawQuietly(() => tie.setContext(context).draw())
+          }),
+        )
+      } catch {
+        /* staves and labels still draw; this bar's notes are skipped */
+      }
 
       // Tick → x anchors for the playhead, merged across every voice.
       const anchorMap = new Map<number, number>()
-      for (const built of all) for (const onset of built.onsets) if (!anchorMap.has(onset.tick)) anchorMap.set(onset.tick, onset.note.getAbsoluteX())
+      for (const built of all) {
+        for (const onset of built.onsets) {
+          if (anchorMap.has(onset.tick) || !hasYs(onset.note)) continue
+          try {
+            anchorMap.set(onset.tick, onset.note.getAbsoluteX())
+          } catch {
+            /* playhead can live without this onset */
+          }
+        }
+      }
       if (!anchorMap.has(0)) anchorMap.set(0, noteStart)
       const anchors = [...anchorMap.entries()].map(([tick, ax]) => ({ tick, x: ax })).sort((a, b) => a.tick - b.tick)
       layout.bars.push({ index: bar.index, x, width: staveWidth, top: top - 8, bottom: top + STAFF_GAP + 96, anchors })

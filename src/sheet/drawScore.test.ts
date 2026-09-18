@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Formatter, Stave } from 'vexflow/bravura'
 import { METER_INFO, type Voice } from '../render/score'
-import { attachVoicesToStave, buildVoice, LEDGER_STROKE_PX, unifyBeamStems, type BuiltVoice } from './drawScore'
+import { attachVoicesToStave, buildVoice, LEDGER_STROKE_PX, unifyBeamStems, usablePitches, vexKey, type BuiltVoice } from './drawScore'
 
 const meter = METER_INFO.four_four
 
@@ -77,5 +77,80 @@ describe('sheet engraving', () => {
     formatTogether(upper, lower, false)
     lower.forEach((built) => built.beams.forEach(unifyBeamStems))
     for (const dirs of beamStemSets(lower)) expect(dirs).toHaveLength(1)
+  })
+})
+
+describe('vexKey', () => {
+  it('translates spelled pitches and rejects ones VexFlow cannot place', () => {
+    expect(vexKey('Eb4')).toBe('eb/4')
+    expect(vexKey('F#5')).toBe('f#/5')
+    expect(vexKey('Cb3')).toBe('cb/3')
+    expect(vexKey('Eb')).toBeNull()
+    expect(vexKey('')).toBeNull()
+    expect(vexKey('H4')).toBeNull()
+    expect(vexKey('MIDI 60')).toBeNull()
+    expect(vexKey('C10')).toBe('c/8')
+    expect(usablePitches(['Eb', '', 'C4', 'H4'])).toEqual(['C4'])
+  })
+})
+
+function ysAfterFormat(voices: BuiltVoice[], clefY = 40) {
+  attachVoicesToStave(voices, new Stave(10, clefY, 420))
+  const formatter = new Formatter()
+  formatter.joinVoices(voices.map((b) => b.voice))
+  formatter.format(
+    voices.map((b) => b.voice),
+    340,
+  )
+  return voices.flatMap((built) => built.notes.map((note) => note.getYs()))
+}
+
+describe('NoYValues hardening', () => {
+  it('turns empty pitches into a rest that still has Y values after format', () => {
+    const built = buildVoice([{ start: 0, dur: 16, pitches: [], velocity: 80 }], 'treble', 0, 2, meter)
+    expect(built.notes.some((note) => note.isRest())).toBe(true)
+    expect(built.notes.reduce((ticks, note) => ticks + note.getTicks().value(), 0)).toBeGreaterThan(0)
+    const ys = ysAfterFormat([built])
+    expect(ys.length).toBeGreaterThan(0)
+    for (const row of ys) expect(row.length).toBeGreaterThan(0)
+  })
+
+  it('repairs a missing-octave spelling next to a legal pitch', () => {
+    const built = buildVoice(
+      [
+        { start: 0, dur: 8, pitches: ['Eb'], velocity: 72 },
+        { start: 8, dur: 8, pitches: ['C4'], velocity: 72 },
+      ],
+      'treble',
+      0,
+      1,
+      meter,
+    )
+    expect(built.notes[0].isRest()).toBe(true)
+    expect(built.notes.some((note) => !note.isRest())).toBe(true)
+    for (const row of ysAfterFormat([built])) expect(row.length).toBeGreaterThan(0)
+  })
+
+  it('engraves an empty voice as a full-bar rest', () => {
+    const built = buildVoice([], 'bass', 0, 1, meter)
+    expect(built.notes.length).toBeGreaterThan(0)
+    expect(built.notes.every((note) => note.isRest())).toBe(true)
+    for (const row of ysAfterFormat([built], 136)) expect(row.length).toBeGreaterThan(0)
+  })
+
+  it('formats a weird beam group (16ths, empty pitch, rest gap) without NoYValues', () => {
+    const voice: Voice = [
+      { start: 0, dur: 1, pitches: ['G5'], velocity: 70 },
+      { start: 1, dur: 1, pitches: [], velocity: 70 },
+      { start: 2, dur: 1, pitches: ['H4'], velocity: 70 },
+      { start: 3, dur: 1, pitches: ['E5'], velocity: 70 },
+      { start: 8, dur: 4, pitches: ['C4', 'Eb'], velocity: 70 },
+      { start: 12, dur: 4, pitches: ['G4'], velocity: 70 },
+    ]
+    const upper = [buildVoice(voice, 'treble', 0, 2, meter)]
+    const lower = [buildVoice([{ start: 0, dur: 16, pitches: ['C3'], velocity: 64 }], 'bass', 0, 1, meter)]
+    formatTogether(upper, lower, true)
+    for (const row of upper[0].notes.map((note) => note.getYs())) expect(row.length).toBeGreaterThan(0)
+    for (const row of lower[0].notes.map((note) => note.getYs())) expect(row.length).toBeGreaterThan(0)
   })
 })
