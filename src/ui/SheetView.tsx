@@ -36,6 +36,8 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const layoutRef = useRef<SheetLayout | null>(null)
   const followRef = useRef(createFollowSession())
+  /** Last programmatic scrollTop; cleared whenever follow starts again (Play or seek). */
+  const followRequestedRef = useRef<number | null>(null)
   const [width, setWidth] = useState(0)
   const [fontsReady, setFontsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,10 +77,15 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
     }
   }, [score, width, fontsReady, accent])
 
-  // Playing false→true starts a new follow session. Stop leaves it cancelled
-  // or following; the next Play re-enables either way.
+  const beginFollow = () => {
+    followRef.current.enable()
+    followRequestedRef.current = null
+  }
+
+  // Play (false→true) and a measure-click seek both start a new follow session.
+  // Manual scroll cancels until the next Play or seek.
   useEffect(() => {
-    if (playing) followRef.current.enable()
+    if (playing) beginFollow()
   }, [playing])
 
   useEffect(() => {
@@ -100,7 +107,6 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
       return
     }
     let raf = 0
-    let requested: number | null = null
     const tickSeconds = secondsPerTick(score)
     const totalTicks = score.bars.length * score.meter.ticksPerBar
     const follow = followRef.current
@@ -118,9 +124,9 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
       const frame = frameRef.current
       if (frame) {
         const useFrame = frameCanScroll(frame)
-        const top = nextFollowScroll(follow, useFrame ? frameScrollBox(frame) : documentScrollBox(), useFrame ? bar : barRangeInDocument(frame, bar), requested)
+        const top = nextFollowScroll(follow, useFrame ? frameScrollBox(frame) : documentScrollBox(), useFrame ? bar : barRangeInDocument(frame, bar), followRequestedRef.current)
         if (top != null) {
-          requested = top
+          followRequestedRef.current = top
           follow.markProgrammatic(performance.now(), undefined, top, useFrame ? frame.scrollTop : window.scrollY)
           if (useFrame) frame.scrollTo({ top, behavior: followBehavior() })
           else window.scrollTo({ top, behavior: followBehavior() })
@@ -157,7 +163,10 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
         title="Click a bar to play from there"
         onClick={(event) => {
           const bar = barFromEvent(event)
-          if (bar) onSeekBar?.(bar.index)
+          if (bar) {
+            beginFollow()
+            onSeekBar?.(bar.index)
+          }
         }}
         onMouseMove={(event) => {
           event.currentTarget.style.cursor = barFromEvent(event) ? 'pointer' : 'default'
