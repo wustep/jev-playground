@@ -1,6 +1,8 @@
 // Small voice-leading helpers: keep hands where they were, move each voice as
 // little as possible, and let the bass take an inversion when that's smoother.
 
+import type { BassSpacingId } from './dialect'
+import { BASS_SPACING_INTERVAL } from './dialect'
 import type { ResolvedChord } from './harmony'
 import { byPitch, ladder, midiOf, nearestNote } from './pitch'
 
@@ -93,7 +95,14 @@ export function lowBass(chord: ResolvedChord, previous: string | undefined, fall
 }
 
 /** The tone a fifth-ish above the bass that fills out an open left hand without doubling the bass. */
-export function bassPartner(chord: ResolvedChord, bass: string): string {
-  const candidates = [chord.core[2], chord.core[1], chord.root].filter((pc) => pc && pc !== chord.bass)
-  return nearestNote([candidates[0] ?? chord.root], midiOf(bass) + 7)
+export function bassPartner(chord: ResolvedChord, bass: string, spacing: BassSpacingId = 'default'): string {
+  const interval = BASS_SPACING_INTERVAL[spacing]
+  const prefer =
+    spacing === 'open_tenths'
+      ? [chord.core[1], chord.root, chord.core[2]]
+      : spacing === 'close_chorale'
+        ? [chord.core[1], chord.core[2], chord.root]
+        : [chord.core[2], chord.core[1], chord.root]
+  const candidates = prefer.filter((pc) => pc && pc !== chord.bass)
+  return nearestNote([candidates[0] ?? chord.root], midiOf(bass) + interval)
 }

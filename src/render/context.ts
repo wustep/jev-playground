@@ -1,4 +1,5 @@
 import type { BarPlan, BaseRoleId, CharacterId, PaletteId } from '../plan/schema'
+import type { StyleDialect } from './dialect'
 import type { KeyInfo, ResolvedChord } from './harmony'
 import { clamp } from './pitch'
 import type { MeterInfo, Note, Voice } from './score'
@@ -59,6 +60,8 @@ export interface BarContext {
   velocity: number
   meter: MeterInfo
   key: KeyInfo
+  /** Closed per-style renderer knobs (non-chord tones, cadence ornament, bass, timing). */
+  dialect: StyleDialect
   rand: () => number
   memory: RenderMemory
 }
@@ -97,6 +100,24 @@ export function note(start: number, dur: number, pitches: string | string[], vel
 }
 
 export const choose = <T>(items: readonly T[], rand: () => number): T => items[Math.floor(rand() * items.length)]
+
+/** Rhythm-table family for textures that still key off bar length rather than meter id. */
+export type MeterGrid = 'eight' | 'twelve' | 'sixteen' | 'eighteen' | 'twentyfour'
+
+export function meterGrid(meter: Pick<MeterInfo, 'ticksPerBar'>): MeterGrid {
+  switch (meter.ticksPerBar) {
+    case 8:
+      return 'eight'
+    case 12:
+      return 'twelve'
+    case 18:
+      return 'eighteen'
+    case 24:
+      return 'twentyfour'
+    default:
+      return 'sixteen'
+  }
+}
 
 /** Rhythm vocabulary for one meter, keyed by what the bar needs to do. */
 export interface RhythmBank {

@@ -21,13 +21,17 @@
 //  • Phrase layout is ONE Choice between whole forms (src/plan/forms.ts), not
 //    a role question per bar: parallel per-bar marginals can't see each other
 //    and came back as "half cadence" four bars running.
-//  • Chords DO depend on each other, so they are asked one bar at a time with
-//    the progression-so-far in state ("respond to changing state").
+//  • Harmony is one Choice per 4-bar form slot, whose options are that style's
+//    HarmonyBook heads / seqs / tails / verified phrases for the slot's
+//    PhraseEnd. Per-bar `bar` ops stay parseable (chord2 / notes tests).
 //  • Choice criteria are the enum descriptions from schema.ts; Score levels
 //    describe standalone situations because the model never sees the ordering.
 
+import { formSlots } from '../../plan/forms.js'
+import { bookFor, phraseCriteria, PHRASE_ENDS, slotContourQuestionId } from '../../plan/harmonyPhrases.js'
 import { MELODY_DEGREES, PHRASE_NOTE_COUNT, pitchQuestionId, rhythmsFor } from '../../plan/notes.js'
 import {
+  BAR_COUNT_VALUES,
   BAR_ROLES,
   CHARACTERS,
   CHARACTER_IDS,
@@ -52,11 +56,13 @@ import {
   parseOption,
   parsePlan,
   parseStyle,
+  type BarCount,
   type BarPlan,
   type BarRoleId,
   type CharacterId,
   type ChordId,
   type CompositionPlan,
+  type ContourId,
   type GlobalField,
   type KeyId,
   type MeterId,
@@ -83,6 +89,19 @@ export type JevOp =
       /** their second-half harmonies, where a bar has one (same length as `chords`; omitted = none) */
       chord2s?: (ChordId | null)[]
       index: number
+    }
+  | {
+      op: 'phrase'
+      style: StyleId
+      brief: boolean
+      globals: PlanGlobals
+      barCount: BarCount
+      /** 4-bar form slot being decided now. */
+      slotIndex: number
+      /** Chords already fixed for bars 0..slotIndex*4-1 */
+      chords: ChordId[]
+      /** Contours already fixed for those same bars */
+      contours: ContourId[]
     }
   | { op: 'score'; plan: CompositionPlan; styles: StyleId[] }
   /** Debug-only: one opening right-hand phrase. Small — first bar, closed enums. */
@@ -227,6 +246,51 @@ export function asksApproach(roles: readonly BarRoleId[], index: number): boolea
 const describeChord = (chord: ChordId, chord2: ChordId | null | undefined) =>
   `${chord} — ${CHORDS[chord]}` + (chord2 ? `; second half of the bar: ${chord2} — ${CHORDS[chord2]}` : '')
 
+function phraseRequest(op: Extract<JevOp, { op: 'phrase' }>, model: string): SystemOneRequest {
+  const slots = formSlots(op.globals.form, op.barCount)
+  const slot = slots[op.slotIndex]
+  const start = op.slotIndex * 4
+  const priorSlots = slots.slice(0, op.slotIndex).map((earlier, s) => ({
+    slot: s + 1,
+    how_it_ends: PHRASE_ENDS[earlier.end],
+    bars: earlier.roles.map((role, k) => {
+      const bar = s * 4 + k
+      return {
+        bar: bar + 1,
+        role: `${role} — ${BAR_ROLES[role]}`,
+        chord: describeChord(op.chords[bar], undefined),
+        melodic_shape: CONTOURS[op.contours[bar]],
+      }
+    }),
+  }))
+  const state: Json = {
+    task: TASK,
+    requested_style: styleState(op.style, op.brief),
+    piece: { ...(describeGlobals(op.globals) as Record<string, Json>), length_in_bars: op.barCount },
+    phrases_so_far: priorSlots,
+    current_slot: {
+      slot: op.slotIndex + 1,
+      bars: `${start + 1}–${start + 4}`,
+      roles: slot.roles.map((role) => `${role} — ${BAR_ROLES[role]}`),
+      how_it_ends: PHRASE_ENDS[slot.end],
+      prior_melodic_shapes: op.contours.slice(-4).map((contour) => CONTOURS[contour]),
+    },
+  }
+  const questions: Record<string, Question> = {
+    phrase: choice(
+      'Which four-bar harmonic phrase should occupy `current_slot` so the progression in `phrases_so_far` continues in this style? Options are stock openings, travelling units, cadences and verified phrases from the style book, described functionally. Match the close described in `current_slot.how_it_ends`. Do not name composers.',
+      phraseCriteria(bookFor(op.style, op.globals.key), slot),
+    ),
+  }
+  slot.roles.forEach((role, k) => {
+    questions[slotContourQuestionId(k)] = choice(
+      `Which melodic shape should bar ${start + k + 1} have? Its role is ${role} — ${BAR_ROLES[role]}. Take the shapes already chosen in \`current_slot.prior_melodic_shapes\` and \`phrases_so_far\` into account.`,
+      CONTOURS,
+    )
+  })
+  return { model, state, questions }
+}
+
 function barRequest(op: Extract<JevOp, { op: 'bar' }>, model: string): SystemOneRequest {
   const bars: Json[] = op.roles.map((role, i) => ({
     bar: i + 1,
@@ -356,6 +420,8 @@ export function buildRequest(op: JevOp, model: string): SystemOneRequest {
       return globalsRequest(op, model)
     case 'bar':
       return barRequest(op, model)
+    case 'phrase':
+      return phraseRequest(op, model)
     case 'score':
       return scoreRequest(op, model)
     case 'notes':
@@ -395,6 +461,33 @@ export function parseOp(raw: unknown): JevOp {
         index,
       }
     }
+    case 'phrase': {
+      const globals = parseGlobals(obj.globals, 'op.globals')
+      const barCount = obj.barCount
+      if (typeof barCount !== 'number' || !(BAR_COUNT_VALUES as readonly number[]).includes(barCount)) {
+        throw new PlanValidationError('op.barCount: expected 4, 8, 16 or 32')
+      }
+      const slots = formSlots(globals.form, barCount as BarCount)
+      const slotIndex = obj.slotIndex
+      if (typeof slotIndex !== 'number' || !Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) {
+        throw new PlanValidationError('op.slotIndex: out of range')
+      }
+      const expected = slotIndex * 4
+      const chords = Array.isArray(obj.chords) ? obj.chords : []
+      const contours = Array.isArray(obj.contours) ? obj.contours : []
+      if (chords.length !== expected) throw new PlanValidationError('op.chords: expected one chord per earlier bar')
+      if (contours.length !== expected) throw new PlanValidationError('op.contours: expected one contour per earlier bar')
+      return {
+        op: 'phrase',
+        style: parseStyle(obj.style),
+        brief: obj.brief === true,
+        globals,
+        barCount: barCount as BarCount,
+        slotIndex,
+        chords: chords.map((chord, i) => parseOption(CHORDS, chord, `op.chords[${i}]`)),
+        contours: contours.map((contour, i) => parseOption(CONTOURS, contour, `op.contours[${i}]`)),
+      }
+    }
     case 'score': {
       const styles = Array.isArray(obj.styles) ? obj.styles.map((style) => parseStyle(style)) : []
       const unique = STYLE_IDS.filter((style) => styles.includes(style))
@@ -415,6 +508,6 @@ export function parseOp(raw: unknown): JevOp {
         bar: parseBarPlan(obj.bar, 'op.bar'),
       }
     default:
-      throw new PlanValidationError('op.op: expected "concept", "globals", "bar", "score" or "notes"')
+      throw new PlanValidationError('op.op: expected "concept", "globals", "bar", "phrase", "score" or "notes"')
   }
 }

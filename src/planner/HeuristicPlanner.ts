@@ -7,7 +7,8 @@
 //   1. character  — which kind of piece (one of the style's archetypes)
 //   2. globals    — form, key, meter, texture … from that archetype's priors
 //   3. bars       — roles from the form; chords assembled from the style's
-//                   harmony book by the form's phrase slots; contours per bar
+//                   harmony book by the form's phrase slots; contours per bar.
+//                   Shadow requests are one phrase Choice per slot (same as Jev).
 
 import {
   BAR_ROLE_IDS,
@@ -44,20 +45,21 @@ const unsent = (label: string, op: JevOp): Exchange => ({ label, op, request: bu
 /** Replay a finished plan as the sequence of ops JevPlanner would have issued. */
 export function shadowExchanges(plan: CompositionPlan, brief: boolean): Exchange[] {
   const { version: _version, style, bars, ...globals } = plan
-  const roles = bars.map((bar) => bar.role)
+  const barCount = bars.length as 4 | 8 | 16 | 32
+  const slotCount = barCount / 4
   return [
     unsent('character', { op: 'concept', style, brief }),
     unsent('globals + form', { op: 'globals', style, brief, character: plan.character }),
-    ...bars.map((_, index) =>
-      unsent(`bar ${index + 1} chord`, {
-        op: 'bar',
+    ...Array.from({ length: slotCount }, (_, slotIndex) =>
+      unsent(`phrase ${slotIndex + 1}`, {
+        op: 'phrase',
         style,
         brief,
         globals,
-        roles,
-        chords: bars.slice(0, index).map((bar) => bar.chord),
-        chord2s: bars.slice(0, index).map((bar) => bar.chord2 ?? null),
-        index,
+        barCount,
+        slotIndex,
+        chords: bars.slice(0, slotIndex * 4).map((bar) => bar.chord),
+        contours: bars.slice(0, slotIndex * 4).map((bar) => bar.contour),
       }),
     ),
   ]

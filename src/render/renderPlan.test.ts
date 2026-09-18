@@ -166,3 +166,70 @@ describe('renderPlan', () => {
     expect(notes.every((n, i) => i === 0 || n.time >= notes[i - 1].time)).toBe(true)
   })
 })
+
+describe('extended meters', () => {
+  const extra = ['two_four', 'nine_eight', 'twelve_eight'] as const
+
+  it('parses 2/4, 9/8 and 12/8 and keeps them on a closed grid', () => {
+    expect(METER_IDS).toEqual(expect.arrayContaining([...extra]))
+    const ticks = { two_four: 8, nine_eight: 18, twelve_eight: 24 } as const
+    const beats = { two_four: 4, nine_eight: 6, twelve_eight: 6 } as const
+    for (const meter of extra) {
+      const base = {
+        version: 1,
+        style: 'bach',
+        character: 'dance_lilt',
+        form: 'period',
+        key: 'C_major',
+        meter,
+        texture: 'chorale',
+        palette: 'diatonic',
+        tempo: 'moderato',
+        dynamics: 'mf',
+        dynamicShape: 'steady',
+        defaultInstrument: 'grand_piano',
+        bars: [
+          { chord: 'I', role: 'statement', contour: 'arch' },
+          { chord: 'V65', role: 'development', contour: 'rise' },
+          { chord: 'V7', role: 'half_cadence', contour: 'fall' },
+          { chord: 'I', role: 'cadence', contour: 'fall' },
+        ],
+      }
+      const plan = parsePlan(base)
+      expect(plan.meter).toBe(meter)
+      expect(parsePlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan)
+      const score = renderPlan(plan, 2)
+      expect(score.meter.ticksPerBar).toBe(ticks[meter])
+      expect(score.meter.beatTicks).toBe(beats[meter])
+      assertWellFormed(score)
+    }
+  })
+
+  it('renders every texture in the new meters without leaving the bar', () => {
+    for (const meter of extra) {
+      for (const texture of TEXTURE_IDS) {
+        const plan: CompositionPlan = {
+          version: 1,
+          style: 'beethoven',
+          character: 'heroic_bright',
+          form: 'sentence',
+          key: 'C_minor',
+          meter,
+          texture,
+          palette: 'diatonic',
+          tempo: 'allegro',
+          dynamics: 'f',
+          dynamicShape: 'sudden_contrast',
+          defaultInstrument: 'grand_piano',
+          bars: [
+            { chord: 'i', role: 'statement', contour: 'rise' },
+            { chord: 'V65', role: 'development', contour: 'arch' },
+            { chord: 'i64', role: 'climax', contour: 'leap_fall' },
+            { chord: 'V7', role: 'cadence', contour: 'fall', chord2: 'i' },
+          ],
+        }
+        assertWellFormed(renderPlan(plan, 4))
+      }
+    }
+  })
+})

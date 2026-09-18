@@ -4,7 +4,7 @@ Can a **System One** model steer music across styles?
 
 [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) (TypeSafe's first System One model) doesn't generate text or notes — it makes fast, typed **classify / score / pick** decisions with calibrated probabilities. This playground tests whether that is enough to steer a composition:
 
-- **Jev** (or an offline stub behind the same interface) decides *only enum labels*: the piece's character and form, key, meter, texture, palette, tempo, dynamics, instrument, and per bar a chord, a phrase role and a melodic contour.
+- **Jev** (or an offline stub behind the same interface) decides *only enum labels*: the piece's character and form, key, meter, texture, palette, tempo, dynamics, instrument, and — per 4-bar slot — a harmony-book phrase plus per-bar contours. Code expands those into per-bar chords and roles.
 - **App code** expands that plan into notes, engraves it (VexFlow), plays it (smplr) and exports it (`.mid`).
 
 Styles on the dial: **Johann Sebastian Bach · Ludwig van Beethoven · Frédéric Chopin · Claude Debussy · Philip Glass · Hans Zimmer · Laufey · Elijah Fox**.
@@ -46,7 +46,7 @@ Copy `.env.example` → `.env.local`. **Nothing is required** — with no key th
 
 ### `/api/jev` hardening
 
-- **Allowlist, not a proxy.** The body must be one of seven typed ops (music: `concept`, `globals`, `bar`, `score`, and Debug-only `notes`; trolley: `trolley_cast`, `trolley_judge`), re-validated against the enums; the server builds the actual `state`/`questions`. Raw `state`/`questions` are rejected with 400.
+- **Allowlist, not a proxy.** The body must be one of eight typed ops (music: `concept`, `globals`, `bar`, `phrase`, `score`, and Debug-only `notes`; trolley: `trolley_cast`, `trolley_judge`), re-validated against the enums; the server builds the actual `state`/`questions`. Raw `state`/`questions` are rejected with 400. `bar` stays parseable for older tests; live planning uses `phrase`.
 - **Rate limit.** 90 POSTs per minute per client IP (`JEV_RATE_LIMIT` overrides), keyed on `x-vercel-forwarded-for` / `x-real-ip` — headers Vercel's edge sets and a client can't forge. Over the limit: `429` + `Retry-After`. The counters are **in memory per function instance**, so on serverless this is best-effort: a cold start resets it and parallel instances count separately. That is enough to stop loops and casual abuse; a hard cap needs a shared store (Vercel KV / Upstash), which this project doesn't have configured.
 - **Nothing secret in responses.** The key is only ever sent upstream in the `Authorization` header. `GET` returns `{ available, model }` and no other env. Failed upstream calls return a generic message — never TypeSafe's response body; successful ones pass back only `model`, `answers`, `usage`.
 - 16 kB body cap, `GET`/`POST` only (`405` + `Allow`), `Cache-Control: no-store`. Covered by `server/jevHandler.test.ts`.
@@ -91,7 +91,7 @@ interface CompositionPlan {
   character: CharacterId      // 12: lyrical_song, stormy_drama, dance_lilt, hypnotic_pulse … decided FIRST
   form: FormId                // 11: period, sentence, spinning_out, additive_loop, mosaic_pairs …
   key: KeyId                  // 21 keys, C_major … F_minor
-  meter: MeterId              // four_four | three_four | six_eight
+  meter: MeterId              // four_four | three_four | two_four | six_eight | nine_eight | twelve_eight
   texture: TextureId          // 22 textures: chorale … toccata_perpetual, rolling_nocturne, bell_organum
   palette: PaletteId          // diatonic | chromatic_approach | pentatonic | whole_tone | modal | modal_dark | blues
   tempo: TempoId              // largo … presto (bucketed bpm)
@@ -116,12 +116,12 @@ Built against the public API (`POST https://api.typesafe.ai/v1/systemone`, [docs
 | --- | --- | --- | --- |
 | 1 | `concept` | `character` Choice (most typical) + one **Noul** per character (“is this a real part of their output?”) | Asked what is *most characteristic*, live Jev is — rightly — sure: Beethoven is C minor, block chords, allegro at 90–100 %, every time. Several characters apply at once, which is what Nouls are for; alone they are too flat, the Choice alone too peaked. Code combines them and draws one. |
 | 2 | `globals` | `form` + 8 global Choices + bar count, with the drawn character in `state` | Questions in one request run in parallel and can't see each other → fan out everything independent. Conditioning on one shared premise is what keeps the plan coherent (measured: Beethoven *lyrical song* → A♭ major, adagio, *p*; *playful wit* → 3/4 scherzo in D). |
-| 3…N | `bar` ×4/8/16/32 | `chord` (~85 labels valid in the key's mode) + `contour` | Chords depend on each other, so they're asked sequentially with the progression-so-far in `state`. |
+| 3…N | `phrase` ×1/2/4/8 | one HarmonyBook phrase for the slot's PhraseEnd + four `contour`s | ~4× fewer harmony requests than a chord per bar. Options are that style's heads, seqs, tails and verified phrases, described functionally. Prior-slot chords and contours sit in `state`. Cadence splits come from the book in code. |
 | opt. | `score` | one **Score** per style, levels low / medium / high | “How well does this plan match style X?” → `StyleMatchScore { match, confidence, raw }`. The plan's own `style` label is withheld from state. |
 
 Bar roles are **not** asked. An earlier version asked one role Choice per bar, in parallel; each answer was a marginal that knew nothing of its neighbours and the argmax came back as “statement, development, half cadence ×4, cadence”. One `form` Choice, expanded by code, is coherent by construction and cut the fan-out from ~16k to ~3.7k input tokens.
 
-Jev returns a full probability distribution per Choice. **Code owns the policy** (`src/planner/pick.ts`): `argmax`, or seeded `sample` — nucleus sampling (the top 90 % of the mass, at face value) so “Generate” gives variety without asking Jev to be random and without a 1 % option hijacking the piece. Two more policies apply when sampling: a novelty weight keeps a progression moving (Jev likes to sit on the tonic through every restatement), and the final bar is always argmax (a piece that ends on V7 because a 40 % option came up just sounds broken). The debug trace always shows Jev's own numbers, not the policy-adjusted ones. The *Style brief* toggle sends either just the style's name, or name + a prose description, to separate what Jev knows from what we told it.
+Jev returns a full probability distribution per Choice. **Code owns the policy** (`src/planner/pick.ts`): `argmax`, or seeded `sample` — nucleus sampling (the top 90 % of the mass, at face value) so “Generate” gives variety without asking Jev to be random and without a 1 % option hijacking the piece. Two more policies apply when sampling: a novelty weight keeps a progression moving (Jev likes to sit on the tonic through every restatement), and the final phrase slot is always argmax (a piece that ends on V7 because a 40 % option came up just sounds broken). The debug trace always shows Jev's own numbers, not the policy-adjusted ones. The *Style brief* toggle sends either just the style's name, or name + a prose description, to separate what Jev knows from what we told it.
 
 The browser never posts raw state/questions to the proxy. It posts a small typed `JevOp`; the server re-validates it against the enums and rebuilds the request with the same pure functions, so `/api/jev` can't be used as an open relay for the key.
 
@@ -168,6 +168,6 @@ Files imported by the serverless function use explicit `.js` import extensions (
 
 ## Known limits (v0)
 
-- One harmony per bar; no modulation, pickups, tuplets or cross-bar ties. Three meters only — 2/4, 9/8 and 12/8 are the biggest gaps (see the end of `docs/STYLE_NOTES.md`).
+- Cadence bars may split; no modulation, pickups, tuplets or cross-bar ties. Meters now include 2/4, 9/8 and 12/8; 3/8 and cut time are still out (see the end of `docs/STYLE_NOTES.md`).
 - Question wording and sampling policy were tuned against live Jev distributions for six styles on one afternoon; they are a starting point, not a calibration.
 - The stub's style-match score can only agree with its own priors; it's a plumbing baseline, not a judge.

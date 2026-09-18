@@ -108,7 +108,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     priors: {
       form: { spinning_out: 35, binary_dance: 30, period: 20, sentence: 10, call_and_response: 5 },
       key: { C_major: 12, G_major: 10, D_major: 9, F_major: 8, Bb_major: 6, A_major: 5, Eb_major: 4, E_major: 3, D_minor: 12, G_minor: 9, C_minor: 9, A_minor: 8, E_minor: 6, B_minor: 6, F_minor: 3 },
-      meter: { four_four: 50, three_four: 30, six_eight: 20 },
+      meter: { four_four: 42, three_four: 24, six_eight: 14, twelve_eight: 12, nine_eight: 8 },
       texture: { two_voice_counterpoint: 25, broken_chord_prelude: 20, chorale: 15, aria_walking_bass: 15, toccata_perpetual: 15, stride_dance: 10 },
       palette: { diatonic: 60, chromatic_approach: 40 },
       tempo: { andante: 30, moderato: 40, allegro: 30 },
@@ -124,7 +124,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         priors: {
           form: { spinning_out: 60, binary_dance: 20, sentence: 10, period: 10 },
           texture: { broken_chord_prelude: 55, toccata_perpetual: 30, two_voice_counterpoint: 15 },
-          meter: { four_four: 70, three_four: 15, six_eight: 15 },
+          meter: { four_four: 58, three_four: 12, six_eight: 12, twelve_eight: 12, nine_eight: 6 },
           tempo: { andante: 35, moderato: 40, allegro: 25 },
           dynamics: { mp: 45, mf: 45, p: 10 },
           dynamicShape: { steady: 35, terraced: 25, late_surge: 25, waves: 15 },
@@ -174,7 +174,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         priors: {
           form: { binary_dance: 70, period: 20, spinning_out: 10 },
           texture: { two_voice_counterpoint: 40, stride_dance: 35, aria_walking_bass: 25 },
-          meter: { six_eight: 50, three_four: 50 },
+          meter: { six_eight: 36, three_four: 32, twelve_eight: 20, nine_eight: 12 },
           tempo: { allegro: 50, moderato: 35, presto: 15 },
           contour: { leap_fall: 25, pendulum: 20, rise: 18, fall: 17, wave: 12, arch: 8 },
         },
@@ -251,7 +251,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     priors: {
       form: { sentence: 35, period: 35, call_and_response: 10, arch_return: 10, free_fantasia: 5, layered_build: 5 },
       key: { C_minor: 16, F_minor: 10, D_minor: 8, Cs_minor: 5, A_minor: 6, E_minor: 4, G_minor: 4, Eb_major: 12, C_major: 10, G_major: 7, Ab_major: 7, E_major: 5, F_major: 5, D_major: 4, A_major: 4, Db_major: 2 },
-      meter: { three_four: 35, four_four: 40, six_eight: 25 },
+      meter: { four_four: 32, three_four: 26, two_four: 24, six_eight: 18 },
       texture: { dramatic_chords: 18, alberti_melody: 18, tremolo_storm: 14, rolling_nocturne: 12, pulsing_chords: 12, scherzo_staccato: 12, chorale: 8, aria_walking_bass: 6 },
       palette: { diatonic: 50, chromatic_approach: 50 },
       tempo: { allegro: 35, presto: 15, adagio: 20, andante: 15, moderato: 10, largo: 5 },
@@ -268,6 +268,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { sentence: 45, period: 20, call_and_response: 20, free_fantasia: 15 },
           key: { C_minor: 30, F_minor: 18, D_minor: 16, Cs_minor: 8, G_minor: 8, A_minor: 8, E_minor: 6, Eb_major: 6 },
           texture: { tremolo_storm: 40, dramatic_chords: 35, pulsing_chords: 15, toccata_perpetual: 10 },
+          meter: { four_four: 36, two_four: 32, three_four: 18, six_eight: 14 },
           tempo: { allegro: 55, presto: 35, moderato: 10 },
           dynamics: { f: 40, ff: 25, p: 25, pp: 10 },
           dynamicShape: { sudden_contrast: 45, build_then_drop: 25, crescendo: 20, late_surge: 10 },
@@ -308,6 +309,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { sentence: 45, period: 35, call_and_response: 20 },
           key: { Eb_major: 30, C_major: 25, D_major: 15, G_major: 10, A_major: 10, F_major: 10 },
           texture: { pulsing_chords: 35, dramatic_chords: 30, alberti_melody: 20, scherzo_staccato: 15 },
+          meter: { four_four: 40, two_four: 30, three_four: 16, six_eight: 14 },
           tempo: { allegro: 70, presto: 15, moderato: 15 },
           dynamics: { f: 45, ff: 20, p: 25, pp: 10 },
           dynamicShape: { crescendo: 30, sudden_contrast: 35, build_then_drop: 20, terraced: 15 },
@@ -553,7 +555,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     priors: {
       form: { mosaic_pairs: 40, arch_return: 40, free_fantasia: 10, layered_build: 5, period: 5 },
       key: { Db_major: 14, Gb_major: 8, E_major: 10, B_major: 6, F_major: 8, Bb_major: 5, A_major: 5, G_major: 5, C_major: 6, D_minor: 8, Fs_minor: 8, E_minor: 6, A_minor: 5, Cs_minor: 6 },
-      meter: { six_eight: 35, three_four: 30, four_four: 35 },
+      meter: { six_eight: 28, four_four: 28, three_four: 22, nine_eight: 22 },
       texture: { parallel_planing: 20, wash_arpeggio: 20, melody_over_ostinato: 15, chordal_melody: 15, bell_organum: 10, displaced_arpeggio: 5, toccata_perpetual: 5, broken_chord_prelude: 5, stride_dance: 5 },
       palette: { pentatonic: 35, whole_tone: 15, modal: 20, modal_dark: 15, diatonic: 15 },
       tempo: { adagio: 35, andante: 40, largo: 15, moderato: 10 },
@@ -567,6 +569,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         weight: 30,
         priors: {
           form: { mosaic_pairs: 50, arch_return: 35, free_fantasia: 15 },
+          meter: { nine_eight: 32, six_eight: 28, four_four: 22, three_four: 18 },
           texture: { parallel_planing: 35, wash_arpeggio: 25, chordal_melody: 20, melody_over_ostinato: 20 },
           palette: { pentatonic: 35, whole_tone: 25, modal: 20, modal_dark: 10, diatonic: 10 },
           tempo: { adagio: 40, andante: 45, largo: 15 },
@@ -579,6 +582,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         weight: 20,
         priors: {
           form: { arch_return: 45, mosaic_pairs: 35, spinning_out: 20 },
+          meter: { nine_eight: 30, six_eight: 28, four_four: 24, three_four: 18 },
           texture: { wash_arpeggio: 40, broken_chord_prelude: 25, toccata_perpetual: 20, displaced_arpeggio: 15 },
           palette: { pentatonic: 45, modal: 30, diatonic: 25 },
           tempo: { andante: 35, moderato: 45, allegro: 20 },

@@ -30,9 +30,37 @@ const SOPRANO: Record<MeterId, RhythmBank> = {
     pause: [[6, 6]],
     close: [[12]],
   },
+  two_four: {
+    main: [[4, 4], [2, 2, 4], [4, 2, 2], [6, 2]],
+    busy: [[2, 2, 2, 2], [2, 2, 4]],
+    sparse: [[8], [4, 4]],
+    pause: [[4, 4], [2, 6]],
+    close: [[8]],
+  },
+  nine_eight: {
+    main: [[6, 6, 6], [4, 2, 4, 2, 6], [6, 4, 2, 6]],
+    busy: [[2, 2, 2, 2, 2, 2, 6], [4, 2, 4, 2, 4, 2]],
+    sparse: [[6, 12], [12, 6]],
+    pause: [[6, 12], [12, 6]],
+    close: [[12, 6]],
+  },
+  twelve_eight: {
+    main: [[6, 6, 6, 6], [4, 2, 4, 2, 4, 2, 4, 2], [6, 6, 4, 2, 6]],
+    busy: [[2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [4, 2, 4, 2, 4, 2, 6]],
+    sparse: [[12, 12], [8, 8, 8]],
+    pause: [[12, 12], [6, 6, 12]],
+    close: [[12, 12]],
+  },
 }
 
-const INNER_SPANS: Record<MeterId, number[]> = { four_four: [8, 8], three_four: [12], six_eight: [6, 6] }
+const INNER_SPANS: Record<MeterId, number[]> = {
+  four_four: [8, 8],
+  three_four: [12],
+  two_four: [4, 4],
+  six_eight: [6, 6],
+  nine_eight: [6, 6, 6],
+  twelve_eight: [6, 6, 6, 6],
+}
 
 /** Nearest chord tone to `near`, nudged toward pitch classes nobody sings yet. */
 function fillVoice(bar: BarContext, covered: Set<number>, near: number, lo: number, hi: number): string {
@@ -191,6 +219,9 @@ const PRELUDE_GROUPS: Record<MeterId, { length: number; patterns: number[][] }> 
   four_four: { length: 8, patterns: [[0, 1, 2, 3, 4, 2, 3, 4], [0, 1, 2, 3, 4, 3, 2, 3], [0, 2, 1, 3, 2, 4, 3, 2], [0, 1, 4, 3, 2, 3, 4, 3]] },
   three_four: { length: 12, patterns: [[0, 1, 2, 3, 4, 3, 2, 3, 4, 3, 2, 3], [0, 1, 2, 3, 4, 2, 3, 4, 2, 3, 4, 3]] },
   six_eight: { length: 6, patterns: [[0, 1, 2, 3, 4, 3], [0, 2, 3, 4, 3, 2], [0, 1, 3, 2, 4, 3]] },
+  two_four: { length: 8, patterns: [[0, 1, 2, 3, 4, 2, 3, 4], [0, 1, 2, 3, 4, 3, 2, 3]] },
+  nine_eight: { length: 6, patterns: [[0, 1, 2, 3, 4, 3], [0, 2, 3, 4, 3, 2], [0, 1, 3, 2, 4, 3]] },
+  twelve_eight: { length: 6, patterns: [[0, 1, 2, 3, 4, 3], [0, 2, 3, 4, 3, 2], [0, 1, 3, 2, 4, 3]] },
 }
 
 export function brokenChordPrelude(bar: BarContext): BarNotes {

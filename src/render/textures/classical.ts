@@ -29,6 +29,27 @@ const CANTABILE: Record<MeterId, RhythmBank> = {
     pause: [[4, 2, 6]],
     close: [[6, 6]],
   },
+  two_four: {
+    main: [[4, 2, 2], [2, 2, 4], [6, 2]],
+    busy: [[2, 2, 2, 2], [2, 2, 4]],
+    sparse: [[8], [4, 4]],
+    pause: [[4, 4]],
+    close: [[4, 4]],
+  },
+  nine_eight: {
+    main: [[4, 2, 4, 2, 6], [6, 4, 2, 6], [6, 6, 6]],
+    busy: [[2, 2, 2, 4, 2, 6], [2, 2, 2, 2, 2, 2, 2, 2, 2]],
+    sparse: [[6, 12], [12, 6]],
+    pause: [[4, 2, 12]],
+    close: [[6, 12]],
+  },
+  twelve_eight: {
+    main: [[4, 2, 4, 2, 4, 2, 4, 2], [6, 6, 6, 6], [6, 4, 2, 6, 6]],
+    busy: [[2, 2, 2, 4, 2, 2, 2, 2, 4, 2], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]],
+    sparse: [[12, 12], [6, 6, 12]],
+    pause: [[4, 2, 6, 12]],
+    close: [[12, 12]],
+  },
 }
 
 /**
@@ -52,6 +73,21 @@ const ALBERTI: Record<MeterId, number[][]> = {
     [0, 2, 1, 0, 2, 1],
     [0, 1, 2, 2, 1, 2],
   ],
+  two_four: [
+    [0, 2, 1, 2],
+    [0, 1, 2, 1],
+    [0, 2, 1, 2],
+  ],
+  nine_eight: [
+    [0, 1, 2, 0, 1, 2, 0, 1, 2],
+    [0, 2, 1, 0, 2, 1, 0, 2, 1],
+    [0, 1, 2, 2, 1, 2, 0, 1, 2],
+  ],
+  twelve_eight: [
+    [0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2],
+    [0, 2, 1, 0, 2, 1, 0, 2, 1, 0, 2, 1],
+    [0, 1, 2, 2, 1, 2, 0, 1, 2, 2, 1, 2],
+  ],
 }
 
 export function albertiMelody(bar: BarContext): BarNotes {
@@ -73,7 +109,7 @@ export function albertiMelody(bar: BarContext): BarNotes {
   const figure = figures[pieceChoice(bar, 'alberti', figures.length)]
   const left: Voice = []
   // The final bar stops the motor on a beat and lets the chord stand.
-  const motorLength = !bar.isLast ? figure.length : meter.id === 'three_four' ? 4 : figure.length / 2
+  const motorLength = !bar.isLast ? figure.length : meter.id === 'three_four' ? 4 : Math.floor(figure.length / 2)
   for (let k = 0; k < motorLength; k++) left.push(note(k * 2, 2, triad[figure[k]], velocity - 12 + (figure[k] === 0 ? 4 : 0)))
   if (bar.isLast) left.push(note(motorLength * 2, meter.ticksPerBar - motorLength * 2, triad, velocity - 8))
   return { treble: [melody], bass: [left] }
@@ -128,6 +164,33 @@ const GESTURES: Record<MeterId, Record<BaseRoleId, Gesture>> = {
     climax: { right: [6, 6], left: eighths(12), accents: [0, 1] },
     half_cadence: { right: [4, -2, 6], left: [4, -2, 6], accents: [1] },
     cadence: { right: [4, -2, 6], left: [4, -2, 6], accents: [0, 1] },
+  },
+  two_four: {
+    statement: { right: [-2, 2, 4], left: [-2, 2, 4], accents: [1] },
+    restatement: { right: [-2, 2, 4], left: [-2, 2, 4], accents: [1] },
+    development: { right: eighths(8), left: [4, 4], accents: [], swell: 16 },
+    contrast: { right: [4, 4], left: [8], accents: [], soft: true },
+    climax: { right: [4, 4], left: eighths(8), accents: [0] },
+    half_cadence: { right: [4, 4], left: [4, 4], accents: [1] },
+    cadence: { right: [4, 4], left: [4, 4], accents: [0, 1] },
+  },
+  nine_eight: {
+    statement: { right: [-2, 2, 2, 12], left: [-2, 2, 2, 12], accents: [2] },
+    restatement: { right: [-2, 2, 2, 12], left: [-2, 2, 2, 12], accents: [2] },
+    development: { right: eighths(18), left: [6, 6, 6], accents: [], swell: 20 },
+    contrast: { right: [6, 6, 6], left: [18], accents: [], soft: true },
+    climax: { right: [6, 6, 6], left: eighths(18), accents: [0, 2] },
+    half_cadence: { right: [4, -2, 12], left: [4, -2, 12], accents: [1] },
+    cadence: { right: [4, -2, 12], left: [4, -2, 12], accents: [0, 1] },
+  },
+  twelve_eight: {
+    statement: { right: [-2, 2, 2, 6, 12], left: [-2, 2, 2, 6, 12], accents: [2] },
+    restatement: { right: [-2, 2, 2, 6, 12], left: [-2, 2, 2, 6, 12], accents: [2] },
+    development: { right: eighths(24), left: [6, 6, 6, 6], accents: [], swell: 22 },
+    contrast: { right: [12, 12], left: [24], accents: [], soft: true },
+    climax: { right: [6, 6, 6, 6], left: eighths(24), accents: [0, 2] },
+    half_cadence: { right: [4, -2, 6, 12], left: [4, -2, 6, 12], accents: [1] },
+    cadence: { right: [4, -2, 18], left: [4, -2, 18], accents: [0, 1] },
   },
 }
 

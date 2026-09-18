@@ -79,6 +79,8 @@ like once a key existed:
   on-the-beat mordents, sarabande and siciliano rhythms), `stride_dance` for
   minuets; the prelude figure gained sibling patterns and the penultimate-bar sweep.
 - Contours: `pendulum` (compound melody) and `leap_fall` (gap-fill).
+- Meters: 9/8 and 12/8 sit on the dance and flowing-prelude priors (gigues,
+  compound preludes), next to 6/8.
 
 ## Beethoven
 
@@ -106,7 +108,8 @@ like once a key existed:
 - Textures: `tremolo_storm` (Pathétique Allegro), `rolling_nocturne` (the tune
   waits one bar, then a dotted upbeat into a long note), `pulsing_chords`
   (Waldstein; the Allegretto ostinato), `scherzo_staccato`. Alberti got three figures.
-- Not done: 2/4 is the biggest gap in the meter enum (see "Left out").
+- Meters now include 2/4 (24 of 91 opening movements in the piano-sonata
+  corpus sit there), wired into Beethoven priors next to 3/4 and 4/4.
 
 ## Debussy
 
@@ -134,6 +137,8 @@ like once a key existed:
   picks one of three shapes per piece; floating rhythms may enter off the beat.
 - The melody scale now bends to chromatic chord tones, so a line over bVI or II
   doesn't rub against it.
+- 9/8 is now a first-class meter (Arabesque compound triple), in Debussy priors
+  next to 6/8.
 
 ## Philip Glass
 
@@ -359,9 +364,8 @@ melody line at all (it is transposed by construction).
 
 ## Left out, on purpose
 
-- **New meters.** Every report asked for them (2/4 and cut time for Beethoven,
-  9/8 for Debussy, 3/8 and 12/8 for Bach). Each texture carries per-meter tables
-  and the engraver has per-meter beaming rules, so this is its own change.
+- **More meters.** 2/4, 9/8 and 12/8 are in (Beethoven marches/allegros, Debussy
+  compound triple, Bach gigues). 3/8 and cut time are still out.
 - **Two chords in a bar beyond cadences.** Cadence bars can now split (see
   above); the invention's 41 % two-chord bars are sequence-driven, and a
   travelling unit at two chords a bar is still to do.

@@ -84,13 +84,15 @@ describe('variable harmonic rhythm (heuristic)', () => {
     expect(rates.beethoven).toBeGreaterThan(rates.bach)
   })
 
-  it('reports chord2 in the trace and the shadow requests', async () => {
+  it('reports chord2 in the trace and shadows one phrase request per slot', async () => {
     const { plan, trace } = await planner.plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: true })
     const split = plan.bars.findIndex((bar) => bar.chord2)
     expect(split).toBeGreaterThan(0)
     expect(trace.decisions.find((d) => d.field === `bars[${split}].chord2`)?.choice).toBe(plan.bars[split].chord2)
-    const later = shadowExchanges(plan, true)[2 + split + 1].op
-    expect(later.op === 'bar' && later.chord2s?.[split]).toBe(plan.bars[split].chord2)
+    const shadows = shadowExchanges(plan, true)
+    expect(shadows).toHaveLength(4)
+    expect(shadows.slice(2).every((exchange) => exchange.op.op === 'phrase')).toBe(true)
+    expect(shadows[3].op.op === 'phrase' && shadows[3].op.chords).toHaveLength(4)
   })
 })
 
@@ -137,24 +139,19 @@ describe('variable harmonic rhythm (Jev)', () => {
     expect(asksApproach([...roles], 3)).toBe(false)
   })
 
-  it('splits the bar when Jev names an approach on another root, and keeps one harmony otherwise', async () => {
-    const split = await new JevPlanner(fakeJev({ form: 'period', key: 'C_major', chord: 'V7', approach: 'ii65' }).transport).plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: false })
-    expect(split.plan.bars[7].chord2).toBeUndefined()
-    const cadenceBound = split.plan.bars.filter((bar, i) => i < 7 && (bar.role === 'half_cadence' || split.plan.bars[i + 1].role === 'cadence'))
-    expect(cadenceBound.length).toBeGreaterThan(0)
-    for (const bar of cadenceBound) expect(bar).toMatchObject({ chord: 'ii65', chord2: 'V7' })
-    expect(split.plan.bars.filter((bar) => bar.chord2).length).toBe(cadenceBound.length)
-    expect(split.trace.requests).toBe(10)
-    expect(parsePlan(split.plan)).toEqual(split.plan)
-    renderPlan(split.plan, 1)
-
-    const none = await new JevPlanner(fakeJev({ form: 'period', key: 'C_major', chord: 'V7', approach: 'none' }).transport).plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: false })
-    expect(none.plan.bars.every((bar) => !bar.chord2)).toBe(true)
-    // An approach on the same root as the arrival is the same harmony: no split.
-    const sameRoot = await new JevPlanner(fakeJev({ form: 'period', key: 'C_major', chord: 'V7', approach: 'V7_of_V' }).transport).plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: false })
-    expect(sameRoot.plan.bars.some((bar) => bar.chord === 'V7_of_V' && bar.chord2 === 'V7')).toBe(true)
-    const tonicArrival = await new JevPlanner(fakeJev({ form: 'period', key: 'C_major', chord: 'I', approach: 'I64' }).transport).plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: false })
-    expect(tonicArrival.plan.bars.every((bar) => !bar.chord2)).toBe(true)
+  it('lets Jev pick book phrases and applies cadence splits in code', async () => {
+    const { plan, trace } = await new JevPlanner(fakeJev({ form: 'period', key: 'C_major' }).transport).plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: false })
+    expect(trace.requests).toBe(4)
+    expect(plan.bars).toHaveLength(8)
+    expect(parsePlan(plan)).toEqual(plan)
+    renderPlan(plan, 1)
+    // Book splits land on a cadence-bound bar; the last bar is never split.
+    expect(plan.bars[7].chord2).toBeUndefined()
+    const split = plan.bars.find((bar) => bar.chord2)
+    if (split) {
+      expect(split.chord).not.toBe(split.chord2)
+      expect(['half_cadence', 'development', 'climax']).toContain(split.role)
+    }
   })
 
   it('validates chord2s in bar ops and describes them for the scorer', () => {
