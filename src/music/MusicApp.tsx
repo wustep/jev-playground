@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { AudioEngine, type EngineStatus } from '../audio/engine'
 import { downloadMidi } from '../midi/exportMidi'
 import { BAR_COUNT_VALUES, INSTRUMENTS, INSTRUMENT_IDS, STYLE_IDS, STYLE_LABELS, type BarCount, type CompositionPlan, type InstrumentId, type StyleId } from '../plan/schema'
-import { BEST_OF_N, detectJev, heuristicPlanner, selectBestOfN, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from '../planner'
+import { BEST_OF_N, detectJev, heuristicPlanner, JevPlanner, selectBestOfN, type Decision, type JevAvailability, type PlanInput, type PlanResult, type PlannerId, type ScoreResult } from '../planner'
 import { shadowExchanges } from '../planner/HeuristicPlanner'
-import { renderPlan, secondsPerTick } from '../render/renderPlan'
+import { renderWithOptionalJevNotes } from '../render/jevNotes'
+import { secondsPerTick } from '../render/renderPlan'
 import { DebugPanel } from '../ui/DebugPanel'
 import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
@@ -18,6 +19,11 @@ const newSeed = () => Math.floor(Math.random() * 99_999) + 1
 const initialDebug = () => {
   const value = new URLSearchParams(window.location.search).get('debug')
   return value !== null && value !== '0' && value !== 'false'
+}
+
+const initialJevNotes = () => {
+  if (!initialDebug()) return false
+  return new URLSearchParams(window.location.search).get('notes') === 'jev'
 }
 
 export default function MusicApp() {
@@ -40,6 +46,7 @@ export default function MusicApp() {
   const [loop, setLoop] = useState(false)
   const [audio, setAudio] = useState<EngineStatus>({ state: 'idle' })
   const [debug, setDebug] = useState(initialDebug)
+  const [jevNotes, setJevNotes] = useState(initialJevNotes)
   const [saved, setSaved] = useState<string | null>(null)
 
   // One engine for the lifetime of the page; disposed (context closed) on unmount.
@@ -94,7 +101,8 @@ export default function MusicApp() {
       const input: PlanInput = { style, bars, pick, brief, seed, ...overrides }
       const wanted = generatePlanner(overrides.planner ?? plannerChoice, Boolean(jev?.planner))
       const planner = wanted === 'jev' && jev?.planner ? jev.planner : heuristicPlanner
-      const asksJev = planner !== heuristicPlanner
+      const wantJevNotes = debug && jevNotes && overrides.planner !== DIAL_PLANNER
+      const asksJev = planner !== heuristicPlanner || (wantJevNotes && jev?.planner instanceof JevPlanner)
 
       if (mountedRef.current) {
         engine.stop()
@@ -151,8 +159,36 @@ export default function MusicApp() {
         settle.fn?.(null)
         return
       }
+      let notePhrase = undefined as Generated['notePhrase']
+      let noteExchanges = undefined as Generated['noteExchanges']
+      if (wantJevNotes) {
+        const writer = jev?.planner instanceof JevPlanner ? jev.planner : null
+        if (!writer) {
+          notice = [notice, 'Jev notes need a live Jev connection. Using the code renderer’s notes instead.'].filter(Boolean).join(' ')
+        } else {
+          if (mountedRef.current) {
+            setPendingAsksJev(true)
+            setPlanStatus('Jev is writing the opening melody…')
+          }
+          try {
+            const written = await writer.writeNotes(result.plan, input, { signal: abort.signal })
+            if (abort.signal.aborted) {
+              settle.fn?.(null)
+              return
+            }
+            notePhrase = written.phrase
+            noteExchanges = [written.exchange]
+          } catch (cause) {
+            if (abort.signal.aborted) {
+              settle.fn?.(null)
+              return
+            }
+            notice = [notice, `Jev notes failed (${cause instanceof Error ? cause.message : String(cause)}). Using the code renderer’s notes instead.`].filter(Boolean).join(' ')
+          }
+        }
+      }
       const ended = performance.now()
-      const made = stampGenerateLatency({ ...result, input, notice }, started, ended)
+      const made = stampGenerateLatency({ ...result, input, notice, notePhrase, noteExchanges }, started, ended)
       styleCache.set(input.style, made)
       settle.fn?.(made)
       if (!mountedRef.current) return
@@ -170,7 +206,7 @@ export default function MusicApp() {
           : generatedPlanStatus(input.bars, generateStatusLatencyMs(ended - started, result.trace.latencyMs)),
       )
     },
-    [style, bars, pick, brief, seed, plannerChoice, jev, engine],
+    [style, bars, pick, brief, seed, plannerChoice, jev, engine, debug, jevNotes],
   )
 
   /** Cheap heuristic candidates + one score each (Jev when available). */
@@ -364,8 +400,13 @@ export default function MusicApp() {
   const plan = editedPlan ?? generated?.plan ?? null
 
   // ── THE SEAM: plan JSON → notes ───────────────────────────────────────────
-  // Everything below this line (sheet, playback, MIDI) reads `score` only.
-  const score = useMemo(() => (plan && generated ? renderPlan(plan, generated.input.seed) : null), [plan, generated])
+  // Default: labels → renderPlan. Debug + Notes:Jev overlays a validated
+  // opening melody; illegal phrases fall back to renderPlan.
+  const applyJevNotes = debug && jevNotes && !editedPlan && Boolean(generated?.notePhrase)
+  const score = useMemo(
+    () => (plan && generated ? renderWithOptionalJevNotes(plan, generated.input.seed, applyJevNotes ? generated.notePhrase : null).score : null),
+    [plan, generated, applyJevNotes],
+  )
 
   // Optional style-match scoring — skip while a plan is in flight so latency stays honest.
   // Jev score only when the displayed plan came from Jev, not because the picker is on Jev.
@@ -457,6 +498,20 @@ export default function MusicApp() {
     const url = new URL(window.location.href)
     if (on) url.searchParams.set('debug', '1')
     else url.searchParams.delete('debug')
+    if (!on) url.searchParams.delete('notes')
+    else if (jevNotes) url.searchParams.set('notes', 'jev')
+    window.history.replaceState(null, '', url)
+  }
+
+  const setNotesMode = (on: boolean) => {
+    setJevNotes(on)
+    const url = new URL(window.location.href)
+    if (on) {
+      url.searchParams.set('debug', '1')
+      url.searchParams.set('notes', 'jev')
+    } else {
+      url.searchParams.delete('notes')
+    }
     window.history.replaceState(null, '', url)
   }
 
@@ -467,10 +522,11 @@ export default function MusicApp() {
   // Decisions landed so far over the number a plan of this length makes (character + 9 globals + role/chord/contour per bar).
   const planProgress = busy ? Math.min(1, (progress?.length ?? 0) / (10 + bars * 3)) : 0
   const edited = editedPlan !== null
-  const exchanges = useMemo(
-    () => (generated && plan ? (edited ? shadowExchanges(plan, generated.input.brief) : generated.trace.exchanges) : []),
-    [generated, plan, edited],
-  )
+  const exchanges = useMemo(() => {
+    if (!generated || !plan) return []
+    if (edited) return shadowExchanges(plan, generated.input.brief)
+    return [...generated.trace.exchanges, ...(generated.noteExchanges ?? [])]
+  }, [generated, plan, edited])
 
   const audioLabel =
     audio.state === 'loading'
@@ -597,6 +653,15 @@ export default function MusicApp() {
             Seed
             <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
           </label>
+          <label title="Experimental: after the plan, Jev picks a closed-schema opening melody for bar 1. Off by default; illegal notes fall back to renderPlan.">
+            Notes
+            <select value={jevNotes ? 'jev' : 'code'} onChange={(event) => setNotesMode(event.target.value === 'jev')}>
+              <option value="code">code (renderPlan)</option>
+              <option value="jev" disabled={!jev?.planner}>
+                Jev writes notes{jev?.planner ? '' : ' (no key)'}
+              </option>
+            </select>
+          </label>
           <div className="controls-actions">
             <button type="submit" className="ghost" disabled={busy} title="Regenerate with exactly this seed and these settings">
               Re-run this seed
@@ -694,6 +759,7 @@ export default function MusicApp() {
               matches={matches?.scores ?? null}
               edited={edited}
               notice={generated.notice}
+              notes={applyJevNotes ? 'jev' : 'code'}
             />
           )}
         </>

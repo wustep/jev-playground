@@ -36,6 +36,8 @@ import {
   type StyleId,
   type StyleMatchScore,
 } from '../plan/schema'
+import { MELODY_DEGREES, PHRASE_NOTE_COUNT, parseJevNoteChoices, pitchQuestionId, rhythmsFor } from '../plan/notes'
+import { realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
 import { formRoles } from '../plan/forms'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
 import { marginConfidence, normalize, pickFrom, rng, withNovelty } from './pick'
@@ -226,5 +228,41 @@ export class JevPlanner implements Planner {
       result[style] = { match: MATCH_LEVELS[level], confidence: answer.confidence, raw: answer.score }
     }
     return { scores: result, exchanges: [exchange] }
+  }
+
+  /**
+   * Debug experiment: one extra request after the plan. Jev picks a 4-slot
+   * rhythm and four scale degrees for bar 1's right-hand line. Code validates
+   * the closed schema; the caller falls back to renderPlan on failure.
+   */
+  async writeNotes(
+    plan: CompositionPlan,
+    input: Pick<PlanInput, 'pick' | 'seed' | 'brief'>,
+    options?: Pick<PlanOptions, 'signal'>,
+  ): Promise<{ phrase: NotePhrase; exchange: Required<Exchange> }> {
+    const bar = plan.bars[0]
+    if (!bar) throw new Error('Jev notes: plan has no bars')
+    const op: JevOp = {
+      op: 'notes',
+      style: plan.style,
+      brief: input.brief,
+      character: plan.character,
+      key: plan.key,
+      meter: plan.meter,
+      tempo: plan.tempo,
+      texture: plan.texture,
+      palette: plan.palette,
+      bar,
+    }
+    const exchange = await this.exchange('opening melody', op, options?.signal)
+    const answers = exchange.response.answers
+    const random = rng(input.seed ^ 0x4e07e5)
+    const rhythmTable = rhythmsFor(plan.meter)
+    const rhythm = parseOption(rhythmTable, pickFrom(choiceAnswer(answers, 'rhythm').probabilities, input.pick, random), 'jev.rhythm')
+    const degrees = Array.from({ length: PHRASE_NOTE_COUNT }, (_, i) =>
+      parseOption(MELODY_DEGREES, pickFrom(choiceAnswer(answers, pitchQuestionId(i)).probabilities, input.pick, random), `jev.${pitchQuestionId(i)}`),
+    )
+    const choices = parseJevNoteChoices({ rhythm, degrees }, plan.meter)
+    return { phrase: realizeJevNoteChoices(choices, plan), exchange }
   }
 }

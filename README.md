@@ -46,7 +46,7 @@ Copy `.env.example` → `.env.local`. **Nothing is required** — with no key th
 
 ### `/api/jev` hardening
 
-- **Allowlist, not a proxy.** The body must be one of six typed ops (music: `concept`, `globals`, `bar`, `score`; trolley: `trolley_cast`, `trolley_judge`), re-validated against the enums; the server builds the actual `state`/`questions`. Raw `state`/`questions` are rejected with 400.
+- **Allowlist, not a proxy.** The body must be one of seven typed ops (music: `concept`, `globals`, `bar`, `score`, and Debug-only `notes`; trolley: `trolley_cast`, `trolley_judge`), re-validated against the enums; the server builds the actual `state`/`questions`. Raw `state`/`questions` are rejected with 400.
 - **Rate limit.** 90 POSTs per minute per client IP (`JEV_RATE_LIMIT` overrides), keyed on `x-vercel-forwarded-for` / `x-real-ip` — headers Vercel's edge sets and a client can't forge. Over the limit: `429` + `Retry-After`. The counters are **in memory per function instance**, so on serverless this is best-effort: a cold start resets it and parallel instances count separately. That is enough to stop loops and casual abuse; a hard cap needs a shared store (Vercel KV / Upstash), which this project doesn't have configured.
 - **Nothing secret in responses.** The key is only ever sent upstream in the `Authorization` header. `GET` returns `{ available, model }` and no other env. Failed upstream calls return a generic message — never TypeSafe's response body; successful ones pass back only `model`, `answers`, `usage`.
 - 16 kB body cap, `GET`/`POST` only (`405` + `Allow`), `Cache-Control: no-store`. Covered by `server/jevHandler.test.ts`.
@@ -80,7 +80,7 @@ On Vercel: `vercel env add TYPESAFE_API_KEY production`, then redeploy. The head
 const score = useMemo(() => renderPlan(plan, generated.input.seed), [plan, generated])
 ```
 
-`renderPlan` (`src/render/renderPlan.ts`) is pure and deterministic. Nothing upstream of it knows about notes; nothing downstream knows about Jev. The plan JSON is shown in the UI and is **editable** — change `"texture"` or a bar's `"chord"`, hit *Apply to renderer*, and hear only the renderer's response to that one label.
+`renderPlan` (`src/render/renderPlan.ts`) is pure and deterministic. Nothing upstream of it knows about notes; nothing downstream knows about Jev. The plan JSON is shown in the UI and is **editable** — change `"texture"` or a bar's `"chord"`, hit *Apply to renderer*, and hear only the renderer's response to that one label. Behind **Debug**, an experimental `Notes: Jev` toggle may overlay a closed-schema opening melody (bar 1, right hand) after the plan; illegal ticks/pitches fall back to `renderPlan` with a notice. The default Generate path is unchanged.
 
 ### The plan (`src/plan/schema.ts`)
 

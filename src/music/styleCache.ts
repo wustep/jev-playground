@@ -1,5 +1,6 @@
 import type { StyleId } from '../plan/schema'
-import type { PlanInput, PlanResult, ScoreResult } from '../planner'
+import type { Exchange, PlanInput, PlanResult, ScoreResult } from '../planner'
+import type { NotePhrase } from '../render/jevNotes'
 
 export interface Generated extends PlanResult {
   input: PlanInput
@@ -7,6 +8,9 @@ export interface Generated extends PlanResult {
   notice: string | null
   /** Precomputed style-match (best-of-N already scored the winner). */
   matches?: ScoreResult
+  /** Debug-only: Jev's validated opening melody, applied on top of renderPlan. */
+  notePhrase?: NotePhrase
+  noteExchanges?: Exchange[]
 }
 
 const STORAGE_KEY = 'jev-playground:music-style-cache:v1'

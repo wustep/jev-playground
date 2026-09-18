@@ -118,6 +118,18 @@ describe('JevPlanner', () => {
     const requests = [
       buildRequest({ op: 'concept', style: 'debussy', brief: false }, 'jev-latest'),
       buildRequest({ op: 'globals', style: 'debussy', brief: false, character: 'dreamy_haze' }, 'jev-latest'),
+      buildRequest({
+        op: 'notes',
+        style: 'debussy',
+        brief: false,
+        character: 'dreamy_haze',
+        key: 'Db_major',
+        meter: 'four_four',
+        tempo: 'andante',
+        texture: 'parallel_planing',
+        palette: 'whole_tone',
+        bar: { chord: 'Imaj7', role: 'statement', contour: 'arch' },
+      }, 'jev-latest'),
     ]
     const criteria = JSON.stringify(requests.flatMap((request) => Object.values(request.questions).map((q) => [q.criteria, q.instructions])))
     const chords = JSON.stringify([chordOptionsFor('C_major'), chordOptionsFor('C_minor')])
@@ -293,6 +305,24 @@ describe('/api/jev handler', () => {
     expect(() => parseOp({ op: 'bar', style: 'bach', globals, roles, chords: [], index: 1 })).toThrow()
     expect(() => parseOp({ op: 'bar', style: 'bach', globals, roles, chords: ['H7'], index: 1 })).toThrow()
     expect(() => parseOp({ op: 'bar', style: 'bach', globals: { ...globals, texture: 'dubstep' }, roles, chords: [], index: 0 })).toThrow()
+  })
+
+  it('accepts the debug notes op and rejects anything else', () => {
+    const notes = {
+      op: 'notes',
+      style: 'bach',
+      brief: true,
+      character: 'solemn_hymn',
+      key: 'C_major',
+      meter: 'four_four',
+      tempo: 'andante',
+      texture: 'chorale',
+      palette: 'diatonic',
+      bar: { chord: 'I', role: 'statement', contour: 'rise' },
+    }
+    expect(parseOp(notes)).toMatchObject({ op: 'notes', meter: 'four_four' })
+    expect(() => parseOp({ ...notes, op: 'midi' })).toThrow(/notes/)
+    expect(() => parseOp({ ...notes, palette: 'serial' })).toThrow()
   })
 })
 
