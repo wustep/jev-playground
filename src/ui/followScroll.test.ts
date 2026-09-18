@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  FOLLOW_NARROW_MAX_WIDTH,
+  FOLLOW_PADDING,
   PROGRAMMATIC_HOLD_MS,
   canScrollY,
   createFollowSession,
+  followInsets,
   followScrollTop,
   isScrollbarPointer,
   isTypingTarget,
@@ -46,6 +49,43 @@ describe('followScrollTop', () => {
 
   it('clamps to the max scroll', () => {
     expect(followScrollTop({ scrollTop: 0, clientHeight: 400, scrollHeight: 450 }, { top: 200, bottom: 480 })).toBe(50)
+  })
+
+  it('on a phone, does not treat a bar sitting on the bottom edge as in view', () => {
+    const insets = followInsets(400, 390)
+    const low = { top: 510, bottom: 690 }
+    // Desktop: fully on screen with a 10px gutter, so stay put.
+    expect(followScrollTop({ ...viewport, scrollTop: 300 }, low)).toBeNull()
+    const top = followScrollTop({ ...viewport, scrollTop: 300 }, low, insets)
+    expect(top).not.toBeNull()
+    expect(top).toBeGreaterThan(300)
+    const barCenter = (low.top + low.bottom) / 2 - (top as number)
+    expect(barCenter).toBeLessThan(400 / 2)
+  })
+
+  it('on a phone, scrolling down parks the bar above center, not on the floor', () => {
+    const insets = followInsets(400, 390)
+    const top = followScrollTop(viewport, { top: 500, bottom: 680 }, insets)
+    expect(top).not.toBeNull()
+    // Desktop just-enough is 290 (bar on the floor). Narrow scrolls further so the bar sits high.
+    expect(top).toBeGreaterThan(290)
+    const barCenter = (500 + 680) / 2 - (top as number)
+    expect(barCenter).toBeLessThan(400 / 2)
+    expect(500 - (top as number)).toBeGreaterThanOrEqual(insets.top)
+  })
+})
+
+describe('followInsets', () => {
+  it('keeps the tight desktop gutter at and above the sheet breakpoint', () => {
+    expect(followInsets(800, FOLLOW_NARROW_MAX_WIDTH + 1)).toEqual({ top: FOLLOW_PADDING, bottom: FOLLOW_PADDING })
+    expect(followInsets(800, 1280, 180)).toEqual({ top: FOLLOW_PADDING, bottom: FOLLOW_PADDING })
+  })
+
+  it('biases a narrow sheet upward and adds sticky chrome only then', () => {
+    const phone = followInsets(400, 390)
+    expect(phone.top).toBe(48)
+    expect(phone.bottom).toBe(180)
+    expect(followInsets(400, 390, 160)).toEqual({ top: 208, bottom: 180 })
   })
 })
 
@@ -146,6 +186,16 @@ describe('FollowSession', () => {
     expect(nextFollowScroll(session, box, offscreen, 590)).toBeNull()
     session.enable()
     expect(nextFollowScroll(session, box, offscreen, null)).toBe(590)
+  })
+
+  it('still refuses to follow after a manual cancel when using phone insets', () => {
+    const session = createFollowSession()
+    const box = { scrollTop: 0, clientHeight: 400, scrollHeight: 2000 }
+    const offscreen = { top: 800, bottom: 980 }
+    const phone = followInsets(400, 390)
+    expect(nextFollowScroll(session, box, offscreen, null, phone)).not.toBeNull()
+    session.cancel()
+    expect(nextFollowScroll(session, box, offscreen, null, phone)).toBeNull()
   })
 })
 

@@ -9,9 +9,11 @@ import {
   createFollowSession,
   documentScrollBox,
   followBehavior,
+  followInsets,
   frameCanScroll,
   frameScrollBox,
   nextFollowScroll,
+  stickyChromeHeight,
 } from './followScroll'
 
 interface Props {
@@ -124,7 +126,10 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
       const frame = frameRef.current
       if (frame) {
         const useFrame = frameCanScroll(frame)
-        const top = nextFollowScroll(follow, useFrame ? frameScrollBox(frame) : documentScrollBox(), useFrame ? bar : barRangeInDocument(frame, bar), followRequestedRef.current)
+        const box = useFrame ? frameScrollBox(frame) : documentScrollBox()
+        const range = useFrame ? bar : barRangeInDocument(frame, bar)
+        const chromeTop = useFrame ? 0 : stickyChromeHeight(frame)
+        const top = nextFollowScroll(follow, box, range, followRequestedRef.current, followInsets(box.clientHeight, window.innerWidth, chromeTop))
         if (top != null) {
           followRequestedRef.current = top
           follow.markProgrammatic(performance.now(), undefined, top, useFrame ? frame.scrollTop : window.scrollY)
