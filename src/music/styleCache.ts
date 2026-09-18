@@ -1,10 +1,12 @@
 import type { StyleId } from '../plan/schema'
-import type { PlanInput, PlanResult } from '../planner'
+import type { PlanInput, PlanResult, ScoreResult } from '../planner'
 
 export interface Generated extends PlanResult {
   input: PlanInput
   /** Set when the requested planner failed and the stub stepped in. */
   notice: string | null
+  /** Precomputed style-match (best-of-N already scored the winner). */
+  matches?: ScoreResult
 }
 
 const STORAGE_KEY = 'jev-playground:music-style-cache:v1'
