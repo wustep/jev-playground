@@ -10,7 +10,7 @@ import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
 import { DIAL_PLANNER, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
-import { generatedPlanStatus, planHeuristicSample, stampWallClockLatency } from './planTiming'
+import { generateStatusLatencyMs, generatedPlanStatus, planHeuristicSample, stampGenerateLatency } from './planTiming'
 import { styleCache, type Generated } from './styleCache'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
@@ -83,6 +83,7 @@ export default function MusicApp() {
 
   const generate = useCallback(
     async (overrides: Partial<PlanInput> & { planner?: PlannerId } = {}, opts: { cancelPrior?: boolean } = {}) => {
+      const started = performance.now()
       if (opts.cancelPrior !== false) abortRef.current?.abort()
       const abort = new AbortController()
       abortRef.current = abort
@@ -109,7 +110,6 @@ export default function MusicApp() {
         }
       })
       styleCache.setInflight(input.style, successOnly)
-      const started = performance.now()
       let result: PlanResult
       let notice: string | null = null
       try {
@@ -145,7 +145,8 @@ export default function MusicApp() {
         settle.fn?.(null)
         return
       }
-      const made = stampWallClockLatency({ ...result, input, notice }, started)
+      const ended = performance.now()
+      const made = stampGenerateLatency({ ...result, input, notice }, started, ended)
       styleCache.set(input.style, made)
       settle.fn?.(made)
       if (!mountedRef.current) return
@@ -156,7 +157,8 @@ export default function MusicApp() {
       setMatches(null)
       setGenerated(made)
       setInstrument(result.plan.defaultInstrument)
-      setPlanStatus(generatedPlanStatus(input.bars, made.trace.latencyMs))
+      // Always the wall clock of this Generate — never a leftover stub/cache stamp.
+      setPlanStatus(generatedPlanStatus(input.bars, generateStatusLatencyMs(ended - started, result.trace.latencyMs)))
     },
     [style, bars, pick, brief, seed, plannerChoice, jev, engine],
   )

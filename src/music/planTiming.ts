@@ -1,9 +1,29 @@
 import { heuristicPlanner, type PlanInput, type PlanResult } from '../planner'
 import type { Generated } from './styleCache'
 
+/** Sub-10ms stamps are stub/cache noise — never let them beat a real Generate wait. */
+const STUB_STAMP_MS = 10
+
 /** Prefer a recorded planner latency; otherwise the wall clock around the call. */
 export function stampWallClockLatency<T extends PlanResult>(result: T, started: number, ended = performance.now()): T {
   const latencyMs = Math.max(result.trace.latencyMs, ended - started)
+  if (latencyMs === result.trace.latencyMs) return result
+  return { ...result, trace: { ...result.trace, latencyMs } }
+}
+
+/**
+ * User-visible Generate duration: wall clock from click/start to plan ready.
+ * True network/planner latency may raise the value; a sub-10ms stub stamp cannot.
+ */
+export function generateStatusLatencyMs(wallClockMs: number, plannerLatencyMs = 0): number {
+  const elapsed = Math.max(0, wallClockMs)
+  if (plannerLatencyMs < STUB_STAMP_MS) return elapsed
+  return Math.max(elapsed, plannerLatencyMs)
+}
+
+/** Persist this Generate’s own timing. Never copy a previous cache entry’s latency. */
+export function stampGenerateLatency<T extends PlanResult>(result: T, started: number, ended = performance.now()): T {
+  const latencyMs = generateStatusLatencyMs(ended - started, result.trace.latencyMs)
   if (latencyMs === result.trace.latencyMs) return result
   return { ...result, trace: { ...result.trace, latencyMs } }
 }
