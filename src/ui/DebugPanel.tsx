@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { STYLE_IDS, STYLE_LABELS, type CompositionPlan, type StyleId, type StyleMatchScore } from '../plan/schema'
 import type { Decision, Exchange, PlanInput, PlanTrace } from '../planner'
-import type { Score } from '../render/score'
+import { scoreBarForPlan, type Score } from '../render/score'
 
 interface Props {
   plan: CompositionPlan
@@ -105,7 +105,7 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
               <tr><th>requests</th><td>{live ? trace.requests : `0 sent (${exchanges.length} would be)`} · {Math.round(trace.latencyMs)} ms{trace.inputTokens ? ` · ${trace.inputTokens} input tokens` : ''}</td></tr>
               <tr><th>policy</th><td><code>{input.pick}</code> · seed <code>{input.seed}</code> · bars <code>{String(input.bars)}</code> · style brief <code>{input.brief ? 'on' : 'off'}</code></td></tr>
               <tr><th>render</th><td>{score.keySignature} · {score.meter.num}/{score.meter.den} · ♩={score.bpm} · pedal {score.pedal}</td></tr>
-              <tr><th>notes</th><td>{notes === 'jev' ? 'Jev opening melody (bar 1, right hand)' : 'code renderer (renderPlan)'}</td></tr>
+              <tr><th>notes</th><td>{notes === 'jev' ? 'Jev right-hand melody (every plan bar)' : 'code renderer (renderPlan)'}</td></tr>
               {edited && <tr><th>note</th><td>Plan JSON was edited by hand — confidences hidden, payloads rebuilt for the edited plan.</td></tr>}
               {notice && <tr><th>notice</th><td>{notice}</td></tr>}
             </tbody>
@@ -118,17 +118,20 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
                 <tr><th>#</th><th>chord</th><th>resolved</th><th>conf.</th><th>role</th><th>conf.</th><th>contour</th></tr>
               </thead>
               <tbody>
-                {plan.bars.map((bar, i) => (
+                {plan.bars.map((bar, i) => {
+                  const body = scoreBarForPlan(score, i)
+                  return (
                   <tr key={i}>
                     <td>{i + 1}</td>
                     <td><code>{bar.chord}</code>{bar.chord2 && <> | <code>{bar.chord2}</code></>}</td>
-                    <td>{score.bars[i]?.chordSymbol}{score.bars[i]?.split && ` | ${score.bars[i].split.chordSymbol}`}</td>
+                    <td>{body?.chordSymbol}{body?.split && ` | ${body.split.chordSymbol}`}</td>
                     <td>{percent(byField.get(`bars[${i}].chord`)?.confidence)}</td>
                     <td><code>{bar.role}</code></td>
                     <td>{percent(byField.get(`bars[${i}].role`)?.confidence)}</td>
                     <td><code>{bar.contour}</code></td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

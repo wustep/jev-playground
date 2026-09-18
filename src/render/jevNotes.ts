@@ -1,9 +1,13 @@
-// Debug-only overlay: Jev's closed-schema opening melody on top of renderPlan.
+// Debug-only overlay: Jev's closed-schema right-hand melody on top of renderPlan.
 //
 // The default Generate path is unchanged (labels → renderPlan). When this
-// module is asked to apply a phrase it validates every tick and pitch against
+// module is asked to apply phrases it validates every tick and pitch against
 // the enums / spelled-pitch grammar; anything illegal throws so the caller
 // can fall back to the code renderer with a notice.
+//
+// One NotePhrase is one plan bar. Callers overlay every targeted bar; the
+// Debug Notes:jev path writes the full RH line (theme-return bars reuse the
+// source bar's rhythm and degrees, re-spelled against the later harmony).
 
 import {
   NOTE_TICKS,
@@ -21,7 +25,7 @@ import { PlanValidationError, type CompositionPlan } from '../plan/schema.js'
 import { keyInfo, resolveChord, scaleFor, type KeyInfo, type ResolvedChord } from './harmony'
 import { midiOf, nearestIndex, ladder } from './pitch'
 import { renderPlan } from './renderPlan'
-import { METER_INFO, type Note, type Score, type Voice } from './score'
+import { scoreBarForPlan, METER_INFO, type Note, type Score, type Voice } from './score'
 
 export class JevNotesError extends Error {}
 
@@ -43,11 +47,25 @@ const DEGREE_STEPS: Record<Exclude<MelodyDegreeId, 'rest'>, { degree: number; oc
 }
 
 export interface NotePhrase {
-  barIndex: 0
+  barIndex: number
   voice: 'treble'
   rhythm: PhraseRhythmId
   degrees: MelodyDegreeId[]
   notes: Voice
+}
+
+/** True when every plan bar has a phrase to overlay. A stale 1-bar cache is not enough. */
+export function notePhrasesCoverPlan(phrases: readonly NotePhrase[] | null | undefined, barCount: number): boolean {
+  if (!phrases || barCount <= 0 || phrases.length < barCount) return false
+  const covered = new Set(phrases.map((phrase) => phrase.barIndex))
+  for (let i = 0; i < barCount; i++) {
+    if (!covered.has(i)) return false
+  }
+  return true
+}
+
+function asPhraseList(phrases: readonly NotePhrase[] | null | undefined): NotePhrase[] {
+  return phrases?.length ? [...phrases] : []
 }
 
 export function parseScoreNote(raw: unknown, path: string, ticksPerBar: number): Note {
@@ -117,7 +135,13 @@ function scaleAt(
   return scaleFor(key, palette, harmony)
 }
 
-export function realizeJevNoteChoices(choices: JevNoteChoices, plan: CompositionPlan, velocity = DEFAULT_VELOCITY): NotePhrase {
+export function realizeJevNoteChoices(
+  choices: JevNoteChoices,
+  plan: CompositionPlan,
+  options: { barIndex?: number; velocity?: number } = {},
+): NotePhrase {
+  const barIndex = options.barIndex ?? 0
+  const velocity = options.velocity ?? DEFAULT_VELOCITY
   const meter = METER_INFO[plan.meter]
   const spec = PHRASE_RHYTHMS[choices.rhythm]
   if (spec.meter !== plan.meter) {
@@ -130,8 +154,8 @@ export function realizeJevNoteChoices(choices: JevNoteChoices, plan: Composition
     throw new PlanValidationError(`notes.degrees: expected ${PHRASE_NOTE_COUNT}`)
   }
   const key = keyInfo(plan.key)
-  const bar = plan.bars[0]
-  if (!bar) throw new PlanValidationError('notes: plan has no bars')
+  const bar = plan.bars[barIndex]
+  if (!bar) throw new PlanValidationError(`notes: plan has no bar ${barIndex + 1}`)
   const chord = resolveChord(key, bar.chord)
   const chord2 = bar.chord2 ? resolveChord(key, bar.chord2) : undefined
   const starts = startsFromRhythm(choices.rhythm)
@@ -148,7 +172,7 @@ export function realizeJevNoteChoices(choices: JevNoteChoices, plan: Composition
     notes.push(parseScoreNote({ start, dur, pitches: [pitch], velocity }, `notes[${i}]`, meter.ticksPerBar))
   })
   if (notes.length === 0) throw new JevNotesError('Jev notes produced only rests')
-  return { barIndex: 0, voice: 'treble', rhythm: choices.rhythm, degrees: choices.degrees, notes: parseScoreVoice(notes, meter.ticksPerBar) }
+  return { barIndex, voice: 'treble', rhythm: choices.rhythm, degrees: choices.degrees, notes: parseScoreVoice(notes, meter.ticksPerBar) }
 }
 
 function isFiniteTick(value: number): boolean {
@@ -157,8 +181,8 @@ function isFiniteTick(value: number): boolean {
 
 export function applyNotePhrase(score: Score, phrase: NotePhrase): Score {
   const index = phrase.barIndex + (score.introBars ?? 0)
-  const bar = score.bars[index]
-  if (!bar) throw new JevNotesError('Jev notes: no opening bar to overlay')
+  const bar = scoreBarForPlan(score, phrase.barIndex)
+  if (!bar) throw new JevNotesError(`Jev notes: no score bar for plan bar ${phrase.barIndex + 1}`)
   const voice = parseScoreVoice(phrase.notes, score.meter.ticksPerBar)
   const sample = bar.treble[0]?.[0]?.velocity
   const shaped = sample == null ? voice : voice.map((note) => ({ ...note, velocity: note.velocity || sample }))
@@ -169,22 +193,28 @@ export function applyNotePhrase(score: Score, phrase: NotePhrase): Score {
   }
 }
 
+/** Replace the right-hand line on every targeted plan bar. Intro framing stays put. */
+export function applyNotePhrases(score: Score, phrases: readonly NotePhrase[]): Score {
+  return phrases.reduce((next, phrase) => applyNotePhrase(next, phrase), score)
+}
+
 export function renderWithOptionalJevNotes(
   plan: CompositionPlan,
   seed: number,
-  phrase: NotePhrase | null | undefined,
+  phrases: readonly NotePhrase[] | null | undefined,
 ): { score: Score; used: 'jev' | 'code'; notice: string | null } {
   const code = renderPlan(plan, seed)
-  if (!phrase) return { score: code, used: 'code', notice: null }
+  const list = asPhraseList(phrases)
+  if (list.length === 0) return { score: code, used: 'code', notice: null }
   try {
-    const choices = parseJevNoteChoices({ rhythm: phrase.rhythm, degrees: phrase.degrees }, plan.meter)
-    const realized = realizeJevNoteChoices(choices, plan, phrase.notes[0]?.velocity)
-    // Prefer the already-realized notes when they still parse; otherwise the re-realize.
-    const overlay = { ...realized, notes: parseScoreVoice(phrase.notes, code.meter.ticksPerBar) }
-    return { score: applyNotePhrase(code, overlay), used: 'jev', notice: null }
+    const overlays = list.map((phrase) => {
+      const choices = parseJevNoteChoices({ rhythm: phrase.rhythm, degrees: phrase.degrees }, plan.meter)
+      const realized = realizeJevNoteChoices(choices, plan, { barIndex: phrase.barIndex, velocity: phrase.notes[0]?.velocity })
+      return { ...realized, notes: parseScoreVoice(phrase.notes, code.meter.ticksPerBar) }
+    })
+    return { score: applyNotePhrases(code, overlays), used: 'jev', notice: null }
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause)
     return { score: code, used: 'code', notice: `Jev notes failed (${reason}). Using the code renderer’s notes instead.` }
   }
 }
-

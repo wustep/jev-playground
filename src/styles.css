@@ -585,6 +585,18 @@ button.small {
   background: var(--accent);
 }
 
+.confidence-block {
+  display: grid;
+  gap: 3px;
+}
+
+.confidence-caption {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  color: var(--muted);
+}
+
 .bar-strip {
   list-style: none;
   margin: 0;
@@ -741,7 +753,8 @@ button.small {
   color: var(--stop);
 }
 
-.match .confidence {
+.match .confidence,
+.match .confidence-block {
   width: 100%;
 }
 

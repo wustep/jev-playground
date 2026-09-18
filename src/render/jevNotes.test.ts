@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { MELODY_DEGREE_IDS, NOTE_TICK_VALUES, PHRASE_NOTE_COUNT, PHRASE_RHYTHMS, parseJevNoteChoices, parseNoteTick } from '../plan/notes'
-import { METER_IDS, PlanValidationError } from '../plan/schema'
+import { METER_IDS, PlanValidationError, type BarCount } from '../plan/schema'
 import { HeuristicPlanner } from '../planner/HeuristicPlanner'
 import { JevPlanner, type JevTransport } from '../planner/JevPlanner'
 import { buildRequest, parseOp } from '../planner/jev/requests'
 import type { Answer, SystemOneResponse } from '../planner/jev/systemOne'
+import { themeSources } from '../plan/forms'
 import {
   applyNotePhrase,
+  applyNotePhrases,
+  notePhrasesCoverPlan,
   parseScoreNote,
   parseScoreVoice,
   realizeJevNoteChoices,
@@ -63,6 +66,14 @@ describe('closed note schema', () => {
   })
 })
 
+function closedPhrase(plan: Awaited<ReturnType<typeof samplePlan>>, barIndex: number): NotePhrase {
+  return realizeJevNoteChoices(
+    { rhythm: 'four_long_short', degrees: ['tonic_high', 'dominant', 'mediant', 'tonic'] },
+    plan,
+    { barIndex },
+  )
+}
+
 describe('realize + overlay', () => {
   it('spells degrees in the key and changes the opening right-hand line', async () => {
     const plan = await samplePlan('four_four')
@@ -77,10 +88,66 @@ describe('realize + overlay', () => {
 
     const code = renderPlan(plan, 3)
     const overlaid = applyNotePhrase(code, phrase)
-    expect(overlaid.bars[0].treble[0]).toEqual(phrase.notes)
-    expect(overlaid.bars.slice(1)).toEqual(code.bars.slice(1))
-    expect(overlaid.bars[0].bass).toEqual(code.bars[0].bass)
+    const body = phrase.barIndex + (code.introBars ?? 0)
+    expect(overlaid.bars[body].treble[0]).toEqual(phrase.notes)
+    expect(overlaid.bars.filter((_, i) => i !== body)).toEqual(code.bars.filter((_, i) => i !== body))
+    expect(overlaid.bars[body].bass).toEqual(code.bars[body].bass)
     expect(timeline(overlaid)[0].hand).toBe('right')
+  })
+
+  it('overlays the right-hand line on every plan bar, not just bar 1', async () => {
+    const plan = await samplePlan('four_four')
+    const phrases = plan.bars.map((_, i) => closedPhrase(plan, i))
+    expect(notePhrasesCoverPlan(phrases, plan.bars.length)).toBe(true)
+    expect(notePhrasesCoverPlan(phrases.slice(0, 1), plan.bars.length)).toBe(false)
+
+    const code = renderPlan(plan, 3)
+    const overlaid = applyNotePhrases(code, phrases)
+    const intro = code.introBars ?? 0
+    expect(overlaid.bars.slice(0, intro)).toEqual(code.bars.slice(0, intro))
+    for (let i = 0; i < plan.bars.length; i++) {
+      const index = i + intro
+      expect(overlaid.bars[index].treble[0], `bar ${i + 1}`).toEqual(phrases[i].notes)
+      expect(overlaid.bars[index].bass, `bar ${i + 1} bass`).toEqual(code.bars[index].bass)
+    }
+
+    const { score, used, notice } = renderWithOptionalJevNotes(plan, 3, phrases)
+    expect(used).toBe('jev')
+    expect(notice).toBeNull()
+    const changed = plan.bars.filter((_, i) => {
+      const index = i + (score.introBars ?? 0)
+      return JSON.stringify(score.bars[index].treble[0]) !== JSON.stringify(code.bars[index].treble[0])
+    })
+    expect(changed.length).toBeGreaterThan(1)
+    expect(score.bars.slice(score.introBars).map((bar) => bar.treble[0])).toEqual(phrases.map((phrase) => phrase.notes))
+  })
+
+  it('skips intro framing bars when overlaying later plan bars', async () => {
+    const base = await samplePlan('four_four')
+    const plan = { ...base, opening: 'vamp_intro' as const }
+    const phrases = plan.bars.map((_, i) => closedPhrase(plan, i))
+    const code = renderPlan(plan, 5)
+    expect(code.introBars).toBeGreaterThan(0)
+    const overlaid = applyNotePhrases(code, phrases)
+    expect(overlaid.bars.slice(0, overlaid.introBars)).toEqual(code.bars.slice(0, code.introBars))
+    for (let i = 0; i < plan.bars.length; i++) {
+      const index = i + overlaid.introBars
+      expect(overlaid.bars[index].treble[0]).toEqual(phrases[i].notes)
+    }
+    expect(notePhrasesCoverPlan([{ ...phrases[0], barIndex: 0 }], plan.bars.length)).toBe(false)
+  })
+
+  it('falls back to renderPlan when any overlaid phrase is illegal', async () => {
+    const plan = await samplePlan('four_four')
+    const good = plan.bars.map((_, i) => closedPhrase(plan, i))
+    const mixed = good.map((phrase, i) =>
+      i === 3 ? { ...phrase, notes: [{ start: 0, dur: 5, pitches: ['C4'], velocity: 72 }] } : phrase,
+    )
+    const code = renderPlan(plan, 7)
+    const result = renderWithOptionalJevNotes(plan, 7, mixed)
+    expect(result.used).toBe('code')
+    expect(result.notice).toMatch(/Jev notes failed/)
+    expect(result.score).toEqual(code)
   })
 
   it('falls back to renderPlan when the phrase is illegal', async () => {
@@ -93,7 +160,7 @@ describe('realize + overlay', () => {
       degrees: ['tonic', 'dominant', 'mediant', 'tonic_high'],
       notes: [{ start: 0, dur: 5, pitches: ['C4'], velocity: 72 }],
     }
-    const result = renderWithOptionalJevNotes(plan, 7, bad)
+    const result = renderWithOptionalJevNotes(plan, 7, [bad])
     expect(result.used).toBe('code')
     expect(result.notice).toMatch(/Jev notes failed/)
     expect(result.notice).toMatch(/legal note duration|5/)
@@ -108,13 +175,13 @@ describe('realize + overlay', () => {
     expect(() =>
       realizeJevNoteChoices({ rhythm: 'four_even', degrees: ['rest', 'rest', 'rest', 'rest'] }, plan),
     ).toThrow(/only rests/)
-    const result = renderWithOptionalJevNotes(plan, 1, {
+    const result = renderWithOptionalJevNotes(plan, 1, [{
       barIndex: 0,
       voice: 'treble',
       rhythm: 'four_even',
       degrees: ['rest', 'rest', 'rest', 'rest'],
       notes: [],
-    })
+    }])
     expect(result.used).toBe('code')
     expect(result.notice).toMatch(/Jev notes failed/)
   })
@@ -169,13 +236,33 @@ describe('Jev notes op', () => {
       const response: SystemOneResponse = { model: 'jev-1.13.0', answers, usage: { input_tokens: 40, output_tokens: 0 } }
       return response
     }
-    const { phrase, exchange } = await new JevPlanner(transport).writeNotes(plan, { pick: 'argmax', seed: 1, brief: true })
-    expect(exchange.op.op).toBe('notes')
-    expect(exchange.sent).toBe(true)
-    expect(phrase.notes.length).toBeGreaterThan(0)
-    const { score, used, notice } = renderWithOptionalJevNotes(plan, 1, phrase)
+    const { phrases, exchanges } = await new JevPlanner(transport).writeNotes(plan, { pick: 'argmax', seed: 1, brief: true })
+    expect(exchanges.length).toBeGreaterThan(0)
+    expect(exchanges.every((exchange) => exchange.op.op === 'notes')).toBe(true)
+    expect(exchanges.every((exchange) => exchange.sent)).toBe(true)
+    expect(phrases).toHaveLength(plan.bars.length)
+    expect(notePhrasesCoverPlan(phrases, plan.bars.length)).toBe(true)
+    const returns = themeSources(plan.form, plan.bars.length as BarCount)
+    expect(exchanges).toHaveLength(returns.filter((source) => source === undefined).length)
+    for (let i = 0; i < plan.bars.length; i++) {
+      const source = returns[i]
+      if (source === undefined) continue
+      expect(phrases[i].rhythm).toBe(phrases[source].rhythm)
+      expect(phrases[i].degrees).toEqual(phrases[source].degrees)
+    }
+    const { score, used, notice } = renderWithOptionalJevNotes(plan, 1, phrases)
     expect(used).toBe('jev')
     expect(notice).toBeNull()
-    expect(score.bars[0].treble[0]).toEqual(phrase.notes)
+    const intro = score.introBars ?? 0
+    for (let i = 0; i < phrases.length; i++) {
+      expect(score.bars[i + intro].treble[0]).toEqual(phrases[i].notes)
+    }
+  })
+
+  it('names the requested plan bar in the notes op, not only bar 1', () => {
+    const later = buildRequest({ ...notesOp, barIndex: 5 }, 'jev-latest')
+    expect(JSON.stringify(later.state)).toContain('bar 6')
+    expect(JSON.stringify(later.state)).not.toMatch(/bar 1 only/)
+    expect(later.state).toMatchObject({ this_bar: { bar_number: 6 } })
   })
 })
