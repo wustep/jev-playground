@@ -10,8 +10,8 @@ LilyPond sources). *Corpus* = counted over expert annotations (DCML Beethoven
 sonatas). *Analysis* = a freely readable published analysis or liner note.
 *Own words* = the musician's own teaching or site. *Inferred* = a stylistic
 suggestion, not a transcription. Nothing here claims that commercial sheet
-music exists unless a page showing it was actually fetched (two cases, both
-the artists' own shops, noted below).
+music exists unless a page showing it was actually fetched (Elijah Fox's
+shop, noted below).
 
 Where things live: enums in `src/plan/schema.ts`; per-style archetypes and
 harmony books in `src/plan/styles.ts`; phrase layouts in `src/plan/forms.ts`;
@@ -179,35 +179,39 @@ Delport on the Tirol Concerto), the IRCAM survey, and Wikipedia.
   `melody_over_ostinato`; static contours fell from 45 % to 28 %. The brief
   handed to Jev now describes the process rather than the ostinato.
 
-## Nahre Sol
+## Laufey
 
-The verifiable record is thin, and several of the old assumptions had no
-source. She sells her own PDF scores (nahresol.com/shop — page fetched; contents
-not seen), so ground truth exists; we did not use it.
+Scores are in copyright; nothing here is a transcription. Sources are public
+bios, interviews and album notes (*Typical of Me*, *Everything I Know About Love*,
+*Bewitched*). She replaced Nahre Sol on the dial: Nahre’s eclectic mix was hard
+to replicate and sat too close to Glass / Fox / Zimmer; Laufey is a
+contemporary woman with a clearer, song-shaped jazz-pop idiom.
 
 **Learned**
-- *Own words* (nahresol.com/bio, /about): "an eclectic mixture … improvisation,
-  the avant-garde, traditional Western forms and harmony, jazz, and minimalism";
-  the album draws on "minimalism, jazz, and French music from the 20th century";
-  Steve Reich is "one of my greatest musical heroes" (she builds by layering from
-  one rhythmic motive); Bach, Pärt, Satie, Ravel, Piazzolla.
-- *Analysis* (third-party): "both hands overlapping over the keyboard, allowing
-  her harmonies to be close and tense"; "crystalline, Bach-like contrapuntal
-  lines"; "a few incredibly beautiful harmonic surprises". Titles: *Coucou
-  Waltz*, *First Tango*, *Sideways*, exercises on major sevenths, suspensions,
-  ii–V–I cycles, bitonal arpeggios, broken sixths and stride.
-- **Not supported by any source**: 3+3+2 ostinatos as a hallmark, quartal/add9
-  voicings, Lydian/Dorian colour, odd meters.
+- *Own words / bios*: Icelandic-Chinese singer-songwriter pianist; jazz
+  standards and mid-century pop as the home language; writes at the piano for
+  voice. Intimate, romantic, unhurried. Major-key song forms more than
+  through-composed miniatures.
+- *Analysis / inferred*: swinging or lightly syncopated accompaniment under a
+  clear singing melody (chordal melody, alberti-ish broken chords, soft stride);
+  ii–V colour, major sevenths, occasional chromatic approach; not the dense
+  ninth/thirteenth stacks of modern jazz piano. Soft dynamics. Distinct from
+  Elijah Fox on the same dial: Fox is impressionist/psychedelic jazz
+  miniatures with displaced arpeggios and ambient haze; Laufey is
+  song-shaped jazz-pop / standards energy — clearer melody and groove.
 
 **Changed**
-- Brief rewritten from her own words. Archetypes: layered pulse, playful wit,
-  warm song, waltz/tango, toccata flow, stillness.
-- `syncopated_ostinato` demoted from 50 % to one texture among eleven;
-  `interlocking_hands` (close seconds, shifting accents), `two_voice_counterpoint`,
-  `chordal_melody`, `stride_dance` promoted. Forms `layered_build`, `arch_return`.
-- Harmony (all *inferred*): maj7 and sus colour, circle-of-fifths and ii–V–I
-  units, `II_over_I` bitonal shimmer, chromatic-mediant `surprises` late in the
-  phrase. One inferred phrase (i–bVI–bIII–bVII) was dropped: it *is* the pop loop.
+- Archetypes: lyrical song (high), warm groove (high), dreamy haze (medium),
+  playful wit (low-medium), meditative stillness (low).
+- Forms: `period`, `arch_return`, `vamp_and_tag`, `call_and_response`.
+  `holds: true`.
+- Textures: `chordal_melody`, `alberti_melody` and `stride_dance` lead;
+  `displaced_arpeggio` and interlocking-hand process music stay off the book.
+- Harmony: major-key ii–V–I and I–vi–ii–V families, inversions for a walking
+  bass, light maj7 colour; no I–V–vi–IV. Minor book is standard jazz-ballad
+  (i–iiø–V–i), not stacked ninths.
+- Instruments: grand piano first, electric piano as a light colour.
+- Brief names no other dial composer.
 
 ## Elijah Fox
 
