@@ -89,10 +89,15 @@ describe('a returning phrase', () => {
 
   it('writes the cadence fresh: the consequent closes where the antecedent paused', () => {
     const score = renderPlan(periodPlan(PERIOD), 3)
-    const last = (index: number) => tops(score.bars[index].treble[0]).at(-1)! % 12
-    expect(last(7)).toBe(0) // C: the tonic
-    expect(last(15)).toBe(0)
-    expect(last(3)).not.toBe(0)
+    // The last long note is the landing; a pickup into the next phrase may follow it.
+    const landing = (index: number) => {
+      const voice = score.bars[index].treble[0]
+      const held = [...voice].reverse().find((n) => n.dur >= score.meter.beatTicks) ?? voice[0]
+      return midiOf(held.pitches[held.pitches.length - 1]) % 12
+    }
+    expect(landing(7)).toBe(0) // C: the tonic
+    expect(landing(15)).toBe(0)
+    expect(landing(3)).not.toBe(0)
   })
 
   it('reaches at least as high when it comes back as the climax', () => {

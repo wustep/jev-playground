@@ -13,6 +13,7 @@ import { rng } from '../planner/pick'
 import { newMemory, type BarContext, type BarNotes, type RenderMemory, type Texture } from './context'
 import { applyCadenceOrnament, STYLE_DIALECTS, timingOffsetSeconds } from './dialect'
 import { keyInfo, resolveChord, scaleFor, type ResolvedChord } from './harmony'
+import { applyPhraseBreath, breathes, isPhraseFinalBar } from './phrasing'
 import { clamp, midiOf } from './pitch'
 import { METER_INFO, type Bar, type Note, type Score, type TimedNote, type Voice } from './score'
 import { PEDALLED, TEXTURE_RENDERERS } from './textures'
@@ -205,6 +206,9 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       isLast: index === plan.bars.length - 1,
       plan: barPlan,
       returns: PUNCTUATION.has(barPlan.role) ? undefined : returns[index],
+      phraseFinal: isPhraseFinalBar(index, plan.bars.length),
+      breathes: breathes(plan.character),
+      arrangement: 2 as const,
       role: ROLE_BASE[barPlan.role],
       character: plan.character,
       palette: plan.palette,
@@ -229,7 +233,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     }
   })
 
-  return {
+  const score: Score = {
     plan,
     seed,
     keySignature: key.signature,
@@ -239,6 +243,8 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     pedal: PEDALLED.has(plan.texture),
     articulation: feel.articulation,
   }
+  applyPhraseBreath(score)
+  return score
 }
 
 // ── Score → absolute time ───────────────────────────────────────────────────

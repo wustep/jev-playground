@@ -2,6 +2,7 @@ import type { BarPlan, BaseRoleId, CharacterId, PaletteId } from '../plan/schema
 import type { StyleDialect } from './dialect'
 import type { KeyInfo, ResolvedChord } from './harmony'
 import { clamp } from './pitch'
+import { phrasingOf, phraseRestTicks, withEndRest } from './phrasing'
 import type { MeterInfo, Note, Voice } from './score'
 
 /** A remembered bar of one line: its pitches, and the chord they were heard over. */
@@ -70,6 +71,16 @@ export interface BarContext {
    * line is new.
    */
   returns?: number
+  /** Last bar of a four-bar phrase (or of the piece). */
+  phraseFinal: boolean
+  /** Whether this character's tune lands, holds and rests at phrase ends. */
+  breathes: boolean
+  /**
+   * Arrangement density for this bar (0 bare … 3 full). Textures that carry
+   * a song line may thin or double their figure; a post-pass in renderPlan
+   * applies the same levels to every texture.
+   */
+  arrangement: 0 | 1 | 2 | 3
   /** `plan.role` folded onto the seven roles the gesture tables are keyed by. */
   role: BaseRoleId
   character: CharacterId
@@ -170,10 +181,18 @@ export function rhythmFor(bar: BarContext, bank: RhythmBank, memoryKey: string):
     ;(bar.memory.barRhythms[memoryKey] ??= {})[bar.index] = rhythm
     return (bar.memory.lastRhythms[memoryKey] = rhythm)
   }
-  if (bar.isLast) return remember(choose(bank.close, bar.rand))
+  const air = (rhythm: number[]) => {
+    if (!bar.breathes || bar.returns !== undefined) return remember(rhythm)
+    if (!bar.phraseFinal && !bar.isLast) return remember(rhythm)
+    const rest = phraseRestTicks(bar.meter, phrasingOf(bar.character))
+    return remember(withEndRest(rhythm, rest))
+  }
+  if (bar.isLast) return air(choose(bank.close, bar.rand))
   // A returning phrase comes back with its rhythm, bar for bar.
   const returning = bar.returns === undefined ? undefined : bar.memory.barRhythms[memoryKey]?.[bar.returns]
   if (returning) return remember(returning)
+  // Phrase ends land early and rest even when the role is development.
+  if (bar.breathes && bar.phraseFinal) return air(choose(bar.role === 'cadence' ? bank.close : bank.pause, bar.rand))
   // A sequence or an echo IS the previous bar's figure on a new chord / at a new dynamic.
   const previous = bar.memory.lastRhythms[memoryKey]
   if ((bar.plan.role === 'sequence' || bar.plan.role === 'echo') && previous) return remember(previous)
@@ -184,5 +203,5 @@ export function rhythmFor(bar: BarContext, bank: RhythmBank, memoryKey: string):
     bar.memory.rhythms[memoryKey] = fresh
     return remember(fresh)
   }
-  return remember(choose(bank[BANK_FOR_ROLE[bar.role]], bar.rand))
+  return air(choose(bank[BANK_FOR_ROLE[bar.role]], bar.rand))
 }
