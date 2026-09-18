@@ -43,11 +43,22 @@ function runnersUp(decision: Decision | undefined): string {
     .join(' · ')
 }
 
-export function Confidence({ value }: { value: number | undefined }) {
+export function Confidence({ value, caption }: { value: number | undefined; caption?: string }) {
   if (value == null) return null
+  const percent = Math.round(value * 100)
+  const title = caption
+    ? `${percent}% confidence — how sure this rating is, not how well it matches`
+    : `${percent}% confidence`
+  const bar = (
+    <span className="confidence" title={caption ? undefined : title}>
+      <span className="confidence-fill" style={{ width: `${percent}%` }} />
+    </span>
+  )
+  if (!caption) return bar
   return (
-    <span className="confidence" title={`confidence ${(value * 100).toFixed(0)}%`}>
-      <span className="confidence-fill" style={{ width: `${Math.round(value * 100)}%` }} />
+    <span className="confidence-block" title={title}>
+      {bar}
+      <span className="confidence-caption">{caption}</span>
     </span>
   )
 }

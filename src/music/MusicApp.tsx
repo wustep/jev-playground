@@ -798,10 +798,15 @@ export default function MusicApp() {
                     key={id}
                     className={`match ${match ? `match-${match.match}` : ''} ${id === plan.style ? 'target' : ''}`}
                     style={{ '--stop': STYLE_THEME[id].accent } as CSSProperties}
+                    title={
+                      match
+                        ? `${STYLE_LABELS[id]}: ${match.match} — ${Math.round(match.confidence * 100)}% confident in that rating`
+                        : undefined
+                    }
                   >
                     <span className="match-name">{STYLE_LABELS[id]}</span>
                     <span className="match-level">{match ? match.match : '…'}</span>
-                    <Confidence value={match?.confidence} />
+                    <Confidence value={match?.confidence} caption="confidence" />
                   </div>
                 )
               })}
