@@ -98,15 +98,26 @@ export function createFollowSession(): FollowSession {
       return now < this.programmaticUntil
     },
     onScroll(now, currentTop) {
-      if (this.isProgrammatic(now)) {
-        if (currentTop != null && this.targetTop != null) {
-          if (this.lastScrollTop != null && Math.abs(currentTop - this.targetTop) > Math.abs(this.lastScrollTop - this.targetTop) + 6) {
-            this.following = false
+      if (currentTop != null && this.targetTop != null) {
+        const distance = Math.abs(currentTop - this.targetTop)
+        if (this.lastScrollTop != null) {
+          const previous = Math.abs(this.lastScrollTop - this.targetTop)
+          if (distance + 1 < previous) {
+            this.lastScrollTop = currentTop
+            this.markProgrammatic(now, 160)
+            return
           }
+          if (distance > previous + 6) {
+            this.following = false
+            this.lastScrollTop = currentTop
+            return
+          }
+        } else {
           this.lastScrollTop = currentTop
         }
-        return
+        if (distance < 1.5) this.targetTop = null
       }
+      if (this.isProgrammatic(now)) return
       this.following = false
     },
   }
@@ -127,8 +138,9 @@ export function barRangeInDocument(frame: HTMLElement, bar: Range): Range {
   return { top: origin + bar.top, bottom: origin + bar.bottom }
 }
 
+/** Instant: a long smooth animation outlives the programmatic hold and looks like a user scroll. */
 export function followBehavior(): ScrollBehavior {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+  return 'auto'
 }
 
 export function touchMovedEnough(startY: number | null, currentY: number | null, threshold = TOUCH_CANCEL_PX): boolean {

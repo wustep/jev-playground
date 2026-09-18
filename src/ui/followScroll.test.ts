@@ -106,6 +106,17 @@ describe('FollowSession', () => {
     expect(session.following).toBe(false)
   })
 
+  it('does not treat leftover motion toward the target as a user cancel', () => {
+    const session = createFollowSession()
+    session.markProgrammatic(1000, 50, 400)
+    session.onScroll(1010, 80)
+    session.onScroll(1020, 200)
+    expect(session.following).toBe(true)
+    session.onScroll(1100, 320)
+    expect(session.following).toBe(true)
+    expect(session.isProgrammatic(1100)).toBe(true)
+  })
+
   it('stays cancelled after a user scroll even if later scroll is programmatic', () => {
     const session = createFollowSession()
     session.onScroll(0)
