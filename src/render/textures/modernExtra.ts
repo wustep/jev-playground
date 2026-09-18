@@ -9,6 +9,7 @@
 
 import { Note } from 'tonal'
 import type { BaseRoleId, MeterId } from '../../plan/schema'
+import { figureStep } from '../arrangement'
 import { meterGrid, note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote, spellMidi } from '../pitch'
@@ -82,9 +83,10 @@ export function pulsingChords(bar: BarContext): BarNotes {
 
   // The motor: even eighths, the first of each beat leaned on. A swell through development bars.
   const left: Voice = []
-  for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += 2, k++) {
-    const swell = role === 'development' ? (k / (meter.ticksPerBar / 2)) * 12 - 4 : 0
-    left.push(note(tick, 2, pulse, velocity - 10 + swell + (tick % meter.beatTicks === 0 ? 4 : 0)))
+  const step = figureStep(bar, 2)
+  for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += step, k++) {
+    const swell = role === 'development' ? (k / Math.max(1, meter.ticksPerBar / step)) * 12 - 4 : 0
+    left.push(note(tick, step, pulse, velocity - 10 + swell + (tick % meter.beatTicks === 0 ? 4 : 0)))
   }
 
   // Above it: either flickering fragments, or one note repeated like a bell (fixed per piece).
@@ -164,7 +166,8 @@ export function melodyOverOstinato(bar: BarContext): BarNotes {
     // Rocking dyad: bass note against the third above, even eighths.
     const rock = midiOf(partner) < midiOf(third) ? partner : third
     const voice: Voice = []
-    for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += 2, k++) voice.push(note(tick, 2, k % 2 === 0 ? low : rock, velocity - 10 + (k === 0 ? 4 : 0)))
+    const step = figureStep(bar, 2)
+    for (let tick = 0, k = 0; tick < meter.ticksPerBar; tick += step, k++) voice.push(note(tick, step, k % 2 === 0 ? low : rock, velocity - 10 + (k === 0 ? 4 : 0)))
     bass.push(voice)
   } else if (kind === 1) {
     // A two-note cell over a held pedal: short–long, the footstep figure.
@@ -179,8 +182,9 @@ export function melodyOverOstinato(bar: BarContext): BarNotes {
     // Broken chord up and back: root – fifth – octave – tenth – …
     const tones = [low, partner, nearestNote([bar.chord.bass], midiOf(low) + 12), tenth]
     const pattern = meter.beatTicks === 6 ? [0, 1, 2, 3, 2, 1] : [0, 1, 2, 3, 2, 3, 2, 1]
-    const order = Array.from({ length: meter.ticksPerBar / 2 }, (_, k) => pattern[k % pattern.length])
-    bass.push(order.map((index, k) => note(k * 2, 2, tones[index], velocity - 10 + (k === 0 ? 4 : 0))))
+    const step = figureStep(bar, 2)
+    const order = Array.from({ length: Math.ceil(meter.ticksPerBar / step) }, (_, k) => pattern[k % pattern.length])
+    bass.push(order.map((index, k) => note(k * step, step, tones[index], velocity - 10 + (k === 0 ? 4 : 0))))
   }
 
   if (bar.isLast) {

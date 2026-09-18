@@ -23,6 +23,7 @@ const FIELD_LABEL: Record<GlobalField, string> = {
   dynamics: 'Dynamics',
   dynamicShape: 'Shape',
   defaultInstrument: 'Instrument',
+  arrangement: 'Arrangement',
 }
 
 function pretty(field: GlobalField, plan: CompositionPlan): string {
@@ -92,7 +93,7 @@ export function PlanPanel({ plan, score, decisions, edited, onApply, debug = fal
       <dl className="plan-fields">
         {GLOBAL_FIELD_IDS.map((field) => {
           const decision = edited ? undefined : byField.get(field)
-          const description = (GLOBAL_FIELDS[field] as Record<string, string>)[plan[field]]
+          const description = plan[field] != null ? (GLOBAL_FIELDS[field] as Record<string, string>)[plan[field] as string] : undefined
           return (
             <div key={field} className="plan-field" title={[description, runnersUp(decision)].filter(Boolean).join('\n\n')}>
               <dt>{FIELD_LABEL[field]}</dt>

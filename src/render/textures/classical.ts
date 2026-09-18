@@ -1,4 +1,5 @@
 import type { BaseRoleId, MeterId } from '../../plan/schema'
+import { figureStep } from '../arrangement'
 import { note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank } from '../context'
 import { melodyPitches } from '../melody'
 import { ladder, midiOf, nearestNote } from '../pitch'
@@ -109,9 +110,12 @@ export function albertiMelody(bar: BarContext): BarNotes {
   const figure = figures[pieceChoice(bar, 'alberti', figures.length)]
   const left: Voice = []
   // The final bar stops the motor on a beat and lets the chord stand.
-  const motorLength = !bar.isLast ? figure.length : meter.id === 'three_four' ? 4 : Math.floor(figure.length / 2)
-  for (let k = 0; k < motorLength; k++) left.push(note(k * 2, 2, triad[figure[k]], velocity - 12 + (figure[k] === 0 ? 4 : 0)))
-  if (bar.isLast) left.push(note(motorLength * 2, meter.ticksPerBar - motorLength * 2, triad, velocity - 8))
+  const step = figureStep(bar, 2)
+  const motorLength = !bar.isLast ? Math.ceil(figure.length * (2 / step)) : meter.id === 'three_four' ? 4 : Math.floor(figure.length / 2)
+  for (let k = 0; k < motorLength && k * step < meter.ticksPerBar; k++) {
+    left.push(note(k * step, step, triad[figure[k % figure.length]], velocity - 12 + (figure[k % figure.length] === 0 ? 4 : 0)))
+  }
+  if (bar.isLast) left.push(note(motorLength * step, Math.max(0, meter.ticksPerBar - motorLength * step), triad, velocity - 8))
   return { treble: [melody], bass: [left] }
 }
 

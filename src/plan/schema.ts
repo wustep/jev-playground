@@ -221,6 +221,16 @@ export const INSTRUMENTS = {
 export type InstrumentId = keyof typeof INSTRUMENTS
 export const INSTRUMENT_IDS = keysOf<InstrumentId>(INSTRUMENTS)
 
+export const ARRANGEMENTS = {
+  constant: 'One unchanging arrangement from first bar to last — the same density, the same doubling',
+  build: 'Starts bare and adds a layer each phrase, so the last statement is the fullest',
+  lift_on_return: 'The first statement is simple; when the idea comes back the arrangement is fuller — a thicker left hand, the tune doubled at the octave',
+  peak_then_bare: 'Builds to a peak past the midpoint, then drops back to a bare exposed texture to finish',
+  terraced_blocks: 'Whole phrases sit at one density, then jump to another, like stops on an organ',
+} as const
+export type ArrangementId = keyof typeof ARRANGEMENTS
+export const ARRANGEMENT_IDS = keysOf<ArrangementId>(ARRANGEMENTS)
+
 export const BAR_COUNTS = {
   '4': 'Four bars — one short phrase, a single gesture',
   '8': 'Eight bars — a full period: a phrase and its answer',
@@ -443,6 +453,11 @@ export interface CompositionPlan {
   dynamics: DynamicId
   dynamicShape: DynamicShapeId
   defaultInstrument: InstrumentId
+  /**
+   * How density changes when material returns. Optional on hand-edited plans;
+   * planners always write it, and the renderer defaults from style + character.
+   */
+  arrangement?: ArrangementId
   /** 4, 8, 16 or 32 bars, one harmony each — two where a bar carries a `chord2`. */
   bars: BarPlan[]
 }
@@ -459,6 +474,7 @@ export const GLOBAL_FIELDS = {
   dynamics: DYNAMICS,
   dynamicShape: DYNAMIC_SHAPES,
   defaultInstrument: INSTRUMENTS,
+  arrangement: ARRANGEMENTS,
 } as const
 export type GlobalField = keyof typeof GLOBAL_FIELDS
 export const GLOBAL_FIELD_IDS = Object.keys(GLOBAL_FIELDS) as GlobalField[]
@@ -512,6 +528,7 @@ export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
     dynamics: parseOption(DYNAMICS, obj.dynamics, `${path}.dynamics`),
     dynamicShape: parseOption(DYNAMIC_SHAPES, obj.dynamicShape, `${path}.dynamicShape`),
     defaultInstrument: parseOption(INSTRUMENTS, obj.defaultInstrument, `${path}.defaultInstrument`),
+    arrangement: obj.arrangement != null ? parseOption(ARRANGEMENTS, obj.arrangement, `${path}.arrangement`) : 'lift_on_return',
   }
 }
 

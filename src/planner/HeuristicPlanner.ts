@@ -424,6 +424,7 @@ const FIELD_WEIGHT: Record<GlobalField, number> = {
   dynamicShape: 1,
   key: 0.75,
   meter: 0.5,
+  arrangement: 0.75,
 }
 
 /** 0–1: how typical the plan's globals are for one of the style's kinds of piece. */
@@ -434,7 +435,8 @@ function globalsFit(plan: CompositionPlan, profile: StyleProfile, character: Cha
   for (const field of GLOBAL_FIELD_IDS) {
     const prior = (field === 'character' ? archetypeWeights(profile) : priors[field]) as Weights<string>
     const peak = Math.max(...Object.values(prior).map((w) => w ?? 0), 1)
-    weighted += FIELD_WEIGHT[field] * Math.min(1, (prior[plan[field]] ?? 0) / peak)
+    const chosen = plan[field]
+    weighted += FIELD_WEIGHT[field] * Math.min(1, (chosen ? (prior[chosen] ?? 0) : 0) / peak)
     totalWeight += FIELD_WEIGHT[field]
   }
   return weighted / totalWeight

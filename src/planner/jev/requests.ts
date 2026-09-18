@@ -50,6 +50,7 @@ import {
   INSTRUMENTS,
   DYNAMICS,
   DYNAMIC_SHAPES,
+  ARRANGEMENTS,
   PlanValidationError,
   parseBarPlan,
   parseGlobals,
@@ -139,6 +140,7 @@ function describeGlobals(globals: PlanGlobals): Json {
     dynamics: DYNAMICS[globals.dynamics],
     dynamic_shape: DYNAMIC_SHAPES[globals.dynamicShape],
     instrument: INSTRUMENTS[globals.defaultInstrument],
+    ...(globals.arrangement ? { arrangement: ARRANGEMENTS[globals.arrangement] } : {}),
   }
 }
 
@@ -174,6 +176,7 @@ const GLOBAL_INSTRUCTIONS: Record<Exclude<GlobalField, 'character'>, string> = {
   dynamics: 'Which overall dynamic level suits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
   dynamicShape: 'How would the dynamics behave over a piece with the character in `piece_character`, in the style of `requested_style.name`?',
   defaultInstrument: 'Which of these instruments would `requested_style.name` most plausibly use for a piece with the character in `piece_character`?',
+  arrangement: 'How would the keyboard arrangement change as phrases return in a piece with the character in `piece_character`, in the style of `requested_style.name`? The options describe density over the form, not which notes to write.',
 }
 
 const choice = (instructions: string, criteria: Record<string, string>): ChoiceQuestion => ({

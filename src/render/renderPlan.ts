@@ -13,6 +13,7 @@ import { rng } from '../planner/pick'
 import { newMemory, type BarContext, type BarNotes, type RenderMemory, type Texture } from './context'
 import { applyCadenceOrnament, STYLE_DIALECTS, timingOffsetSeconds } from './dialect'
 import { keyInfo, resolveChord, scaleFor, type ResolvedChord } from './harmony'
+import { applyArrangement, arrangementLevels, arrangementOf } from './arrangement'
 import { applyPhraseBreath, breathes, isPhraseFinalBar } from './phrasing'
 import { clamp, midiOf } from './pitch'
 import { METER_INFO, type Bar, type Note, type Score, type TimedNote, type Voice } from './score'
@@ -182,6 +183,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   // while its role still allows it (a cadence is always written fresh).
   const barCount = plan.bars.length as BarCount
   const returns = (BAR_COUNT_VALUES as readonly number[]).includes(barCount) ? themeSources(plan.form, barCount) : []
+  const levels = arrangementLevels({ ...plan, arrangement: arrangementOf(plan) })
   const velocities = plan.bars.map((barPlan, index) =>
     clamp(baseVelocity + shapeOffset(plan.dynamicShape, index, plan.bars.length, barPlan.role) + (ROLE_VELOCITY[barPlan.role] ?? 0), 24, 118),
   )
@@ -208,7 +210,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       returns: PUNCTUATION.has(barPlan.role) ? undefined : returns[index],
       phraseFinal: isPhraseFinalBar(index, plan.bars.length),
       breathes: breathes(plan.character),
-      arrangement: 2 as const,
+      arrangement: levels[index],
       role: ROLE_BASE[barPlan.role],
       character: plan.character,
       palette: plan.palette,
@@ -244,6 +246,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     articulation: feel.articulation,
   }
   applyPhraseBreath(score)
+  applyArrangement(score, levels)
   return score
 }
 

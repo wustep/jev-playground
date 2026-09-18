@@ -20,6 +20,7 @@
 // verified (from their own teaching material) or inferred.
 
 import type {
+  ArrangementId,
   CharacterId,
   ChordId,
   ContourId,
@@ -49,6 +50,7 @@ export interface StylePriors {
   dynamicShape: Weights<DynamicShapeId>
   defaultInstrument: Weights<InstrumentId>
   contour: Weights<ContourId>
+  arrangement: Weights<ArrangementId>
 }
 
 export interface Archetype {
@@ -116,6 +118,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamicShape: { terraced: 50, steady: 30, waves: 10, late_surge: 10 },
       defaultInstrument: { harpsichord: 50, church_organ: 25, grand_piano: 25 },
       contour: { rise: 18, fall: 20, arch: 16, pendulum: 14, wave: 12, leap_fall: 10, dip: 6, drop_rise: 2, static: 2 },
+      arrangement: { constant: 70, lift_on_return: 20, terraced_blocks: 10 },
     },
     archetypes: {
       // Preludes in unbroken figuration (WTC I/1, I/2).
@@ -259,6 +262,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamicShape: { sudden_contrast: 35, build_then_drop: 20, crescendo: 20, arch: 10, late_surge: 10, waves: 5 },
       defaultInstrument: { grand_piano: 90, strings: 10 },
       contour: { rise: 24, fall: 16, arch: 14, leap_fall: 12, static: 12, drop_rise: 8, wave: 8, dip: 4, pendulum: 2 },
+      arrangement: { lift_on_return: 55, build: 20, peak_then_bare: 15, constant: 10 },
     },
     archetypes: {
       // Pathétique / Tempest / Appassionata allegros.
@@ -410,6 +414,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamicShape: { arch: 30, waves: 20, sudden_contrast: 15, crescendo: 15, late_surge: 10, terraced: 10 },
       defaultInstrument: { grand_piano: 95, strings: 5 },
       contour: { arch: 24, fall: 18, wave: 16, leap_fall: 12, rise: 12, dip: 8, drop_rise: 6, static: 4 },
+      arrangement: { lift_on_return: 60, build: 15, constant: 15, peak_then_bare: 10 },
     },
     archetypes: {
       // Nocturnes: singing cantabile over rolling left-hand figuration.
@@ -563,6 +568,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamicShape: { arch: 40, waves: 20, steady: 15, decrescendo: 15, late_surge: 10 },
       defaultInstrument: { grand_piano: 85, strings: 8, choir: 7 },
       contour: { fall: 22, arch: 22, wave: 16, static: 14, dip: 10, rise: 8, drop_rise: 5, leap_fall: 3 },
+      arrangement: { lift_on_return: 40, constant: 30, terraced_blocks: 20, build: 10 },
     },
     archetypes: {
       dreamy_haze: {
@@ -710,6 +716,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamicShape: { terraced: 35, steady: 30, waves: 15, build_then_drop: 20 },
       defaultInstrument: { grand_piano: 55, church_organ: 20, strings: 15, choir: 5, electric_piano: 5 },
       contour: { static: 28, rise: 22, wave: 18, arch: 16, fall: 16 },
+      arrangement: { terraced_blocks: 55, build: 25, constant: 15, peak_then_bare: 5 },
     },
     archetypes: {
       hypnotic_pulse: {
@@ -841,6 +848,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamicShape: { crescendo: 30, late_surge: 25, build_then_drop: 15, arch: 15, waves: 10, steady: 5 },
       defaultInstrument: { grand_piano: 55, strings: 30, electric_piano: 10, choir: 5 },
       contour: { static: 26, rise: 22, arch: 16, fall: 14, wave: 10, leap_fall: 6, dip: 6 },
+      arrangement: { peak_then_bare: 50, build: 35, lift_on_return: 10, constant: 5 },
     },
     archetypes: {
       // Layered ostinato that thickens without becoming a cell-process étude.
@@ -1002,6 +1010,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 12, terraced: 8 },
       defaultInstrument: { grand_piano: 82, electric_piano: 18 },
       contour: { arch: 26, fall: 20, wave: 16, rise: 14, dip: 10, leap_fall: 8, static: 6 },
+      arrangement: { lift_on_return: 55, build: 20, constant: 15, peak_then_bare: 10 },
     },
     archetypes: {
       // Standards-shaped songs: a sung tune over piano accompaniment.
@@ -1129,6 +1138,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 20 },
       defaultInstrument: { grand_piano: 55, electric_piano: 35, strings: 5, choir: 5 },
       contour: { arch: 22, fall: 20, wave: 18, rise: 14, static: 10, leap_fall: 8, dip: 8 },
+      arrangement: { build: 40, lift_on_return: 35, peak_then_bare: 15, terraced_blocks: 10 },
     },
     archetypes: {
       dreamy_haze: {
