@@ -17,8 +17,10 @@ const keysOf = <K extends string>(table: OptionTable<K>) => Object.keys(table) a
 export const STYLE_LABELS = {
   bach: 'Bach',
   beethoven: 'Beethoven',
+  chopin: 'Chopin',
   debussy: 'Debussy',
   glass: 'Philip Glass',
+  hans_zimmer: 'Hans Zimmer',
   nahre_sol: 'Nahre Sol',
   elijah_fox: 'Elijah Fox',
 } as const

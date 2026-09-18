@@ -1,6 +1,6 @@
 # Style notes: what we learned → what changed
 
-Research for the six dial styles, and how each finding landed in code. The
+Research for the eight dial styles, and how each finding landed in code. The
 point was breadth: outputs felt mechanical because every style had 2–4 fixed
 eight-bar progressions, 1–2 phrase layouts, one texture that dominated, and no
 inverted chords at all (so every bass leapt root to root, like a pop song).
@@ -237,6 +237,57 @@ lessons, not from those scores.
   (inner voice sliding by half-steps). Form `vamp_and_tag`; its 32-bar layout is AABA.
 - New chords for him: `Imaj7s5`, `IVadd6`, `sharp_iv_half_dim7`, `biii7`,
   `iv_add6`, `bII7`, `V9sus4`, `bVII9`.
+
+## Chopin
+
+Scores are public domain; the book is modelled on well-known nocturne, waltz,
+mazurka, prelude and ballade cadences rather than a bar-by-bar corpus count.
+
+**Learned**
+- *Score / analysis* (Op. 9/2, Op. 27, Op. 28 preludes, mazurkas, ballades): a
+  singing right-hand cantabile over rolling left-hand figuration; mazurka and
+  waltz lilt in triple meter; études as unbroken figuration; ballades and
+  scherzos as storm. Favourite keys sit on the flat side and on C♯ / B / F♯
+  minor. Harmony stays functional: secondary dominants, Neapolitan sixths,
+  cadential 6/4, clear V–I and half cadences, with chromatic approach over a
+  diatonic frame. Pedal is assumed.
+- *Inferred* from the same repertoire: character mix weights nocturne and dance
+  above étude, ballade, stillness and wit.
+
+**Changed**
+- Archetypes: nocturne (`lyrical_song`), mazurka/waltz (`dance_lilt`),
+  ballade/scherzo (`stormy_drama`), étude (`flowing_perpetual`), slow prelude
+  (`meditative_stillness`), light waltz joke (`playful_wit`).
+- Harmony book seeded with nocturne and waltz cadences (`ii6–I64–V7–I`,
+  `V43–I6–V7–I`, Neapolitan `i–i42–bII6–V7`); `holds: true`.
+- Textures: `rolling_nocturne`, `alberti_melody`, `chordal_melody`,
+  `stride_dance`, `dramatic_chords`, `broken_chord_prelude`. Grand piano.
+- Brief names no other dial composer.
+
+## Hans Zimmer
+
+Scores are in copyright; nothing here is a transcription. Sources are liner
+notes, published film-music analyses, and the well-known piano/hybrid cues of
+the 2000s–2020s (ostinato builds, pedal drones, minor-key gravity, late surges).
+
+**Learned**
+- *Analysis / inferred*: slow-building layered ostinatos; simple diatonic or
+  modal loops that escalate rather than rotate additively; melody over a
+  repeating left-hand figure; pedal drones; sparse openings that surge late;
+  occasional warm major anthems. Pulse + crescendo drama, not cell-process
+  minimalism as the only mode.
+- The four-chord pop loop (i–bVI–bIII–bVII and I–V–vi–IV) is still banned.
+  Closest film-score loops that stay legal: i–bVI–bVII–V, i–iv–bVI–V, held
+  i–bVI drones, plagal and modal closes.
+
+**Changed**
+- Archetypes: ostinato pulse, heroic anthem, hymn/processional, drone
+  stillness, storm/action, restless layered search.
+- Forms: `layered_build`, `additive_loop`, `vamp_and_tag`, `arch_return`.
+- Textures: `melody_over_ostinato` and `pulsing_chords` lead; `minimal_cells`
+  is a minority colour. Dynamics prefer `crescendo` and `late_surge`.
+  `holds: true`. Instruments: grand piano, strings, electric piano.
+- Brief describes the build-and-melody idiom without naming another dial style.
 
 ---
 

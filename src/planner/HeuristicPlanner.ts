@@ -244,7 +244,7 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
 
 /**
  * The four-chord pop loop by root — I–V–vi–IV in any rotation, and its
- * minor-key spelling i–bVI–bIII–bVII. None of these six composers lives there,
+ * minor-key spelling i–bVI–bIII–bVII. None of these dial composers lives there,
  * and independently chosen two-bar units can still spell it by accident.
  */
 const POP_LOOPS = new Set(['0 7 9 5', '7 9 5 0', '9 5 0 7', '5 0 7 9', '0 8 3 10', '8 3 10 0', '3 10 0 8', '10 0 8 3'])

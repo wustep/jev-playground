@@ -99,6 +99,20 @@ describe('JevPlanner', () => {
     expect(first.probabilities.I).toBeCloseTo(0.8)
   })
 
+  it('hands Chopin and Hans Zimmer briefs to Jev when asked', () => {
+    for (const [style, name, snippet] of [
+      ['chopin', 'Chopin', 'cantabile'],
+      ['hans_zimmer', 'Hans Zimmer', 'ostinato'],
+    ] as const) {
+      const on = buildRequest({ op: 'concept', style, brief: true }, 'jev-latest')
+      const off = buildRequest({ op: 'concept', style, brief: false }, 'jev-latest')
+      expect(off.state).toMatchObject({ requested_style: { name } })
+      expect(JSON.stringify(off.state)).not.toContain(snippet)
+      expect(JSON.stringify(on.state)).toContain(name)
+      expect(JSON.stringify(on.state)).toContain(snippet)
+    }
+  })
+
   it('never names a composer in option descriptions', () => {
     const requests = [
       buildRequest({ op: 'concept', style: 'debussy', brief: false }, 'jev-latest'),
@@ -106,7 +120,7 @@ describe('JevPlanner', () => {
     ]
     const criteria = JSON.stringify(requests.flatMap((request) => Object.values(request.questions).map((q) => [q.criteria, q.instructions])))
     const chords = JSON.stringify([chordOptionsFor('C_major'), chordOptionsFor('C_minor')])
-    for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Nahre', 'Fox', 'Chopin', 'Satie', 'Reich']) {
+    for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Nahre', 'Fox', 'Chopin', 'Zimmer', 'Satie', 'Reich']) {
       expect(criteria).not.toContain(name)
       expect(chords).not.toContain(name)
     }

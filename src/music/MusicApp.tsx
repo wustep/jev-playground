@@ -189,7 +189,7 @@ export default function MusicApp() {
   }, [generate, style, bars])
 
   // Prewarm offline stubs only (instant dial, no network). Live Jev is cached
-  // lazily on first Generate / dial miss — prewarming all six styles was ~108
+  // lazily on first Generate / dial miss — prewarming every style was ~108
   // /api/jev calls and blew the 90/min rate limit on first paint.
   useEffect(() => {
     let cancelled = false

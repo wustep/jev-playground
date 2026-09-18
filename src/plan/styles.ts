@@ -16,8 +16,8 @@
 // JevPlanner never reads priors, archetypes or harmony: it asks Jev.
 //
 // Where each entry comes from — score, corpus or analysis — is recorded in
-// docs/STYLE_NOTES.md. Entries for the two living pianists are marked there
-// as verified (from their own teaching material) or inferred.
+// docs/STYLE_NOTES.md. Entries for living musicians are marked there as
+// verified (from their own teaching material) or inferred.
 
 import type {
   CharacterId,
@@ -383,6 +383,157 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   },
 
   // ────────────────────────────────────────────────────────────────────────────
+  chopin: {
+    brief:
+      'Mid-nineteenth-century Polish and French piano music, c. 1840. A singing right-hand cantabile over left-hand arpeggio, waltz or nocturne figuration; rubato-friendly slow pieces; mazurka and waltz dance lilt in triple meter; stormy ballade and scherzo drama. Harmony is functional Romantic: chromatic approach over a diatonic base, secondary dominants, Neapolitan colour, and clear dominant–tonic and half cadences. Pedalled piano, written for the grand piano.',
+    priors: {
+      form: { period: 30, sentence: 20, arch_return: 20, binary_dance: 15, spinning_out: 10, free_fantasia: 5 },
+      key: { Db_major: 14, Ab_major: 12, Bb_major: 8, Eb_major: 8, Gb_major: 6, F_major: 5, C_major: 4, Cs_minor: 10, B_minor: 8, Fs_minor: 6, C_minor: 5, E_minor: 5, F_minor: 5, G_minor: 4 },
+      meter: { three_four: 45, four_four: 35, six_eight: 20 },
+      texture: { rolling_nocturne: 22, alberti_melody: 18, chordal_melody: 14, stride_dance: 14, dramatic_chords: 12, broken_chord_prelude: 12, wash_arpeggio: 8 },
+      palette: { chromatic_approach: 55, diatonic: 45 },
+      tempo: { adagio: 28, andante: 24, moderato: 18, allegro: 16, largo: 8, presto: 6 },
+      dynamics: { p: 35, mp: 20, pp: 15, f: 15, mf: 10, ff: 5 },
+      dynamicShape: { arch: 30, waves: 20, sudden_contrast: 15, crescendo: 15, late_surge: 10, terraced: 10 },
+      defaultInstrument: { grand_piano: 95, strings: 5 },
+      contour: { arch: 24, fall: 18, wave: 16, leap_fall: 12, rise: 12, dip: 8, drop_rise: 6, static: 4 },
+    },
+    archetypes: {
+      // Nocturnes: singing cantabile over rolling left-hand figuration.
+      lyrical_song: {
+        weight: 28,
+        priors: {
+          form: { period: 45, arch_return: 30, sentence: 25 },
+          key: { Db_major: 22, Ab_major: 18, Eb_major: 12, Gb_major: 10, F_major: 8, C_major: 6, Cs_minor: 12, B_minor: 6, E_minor: 6 },
+          meter: { four_four: 45, six_eight: 30, three_four: 25 },
+          texture: { rolling_nocturne: 50, alberti_melody: 25, chordal_melody: 15, wash_arpeggio: 10 },
+          tempo: { adagio: 50, andante: 30, largo: 15, moderato: 5 },
+          dynamics: { p: 45, pp: 25, mp: 20, f: 10 },
+          dynamicShape: { arch: 40, waves: 30, crescendo: 15, late_surge: 15 },
+          contour: { arch: 32, fall: 20, wave: 20, leap_fall: 12, rise: 10, dip: 6 },
+        },
+      },
+      // Mazurkas and waltzes.
+      dance_lilt: {
+        weight: 26,
+        priors: {
+          form: { binary_dance: 45, period: 35, arch_return: 20 },
+          key: { Bb_major: 18, Ab_major: 14, Db_major: 12, Eb_major: 10, F_major: 8, C_major: 6, Cs_minor: 10, B_minor: 8, Fs_minor: 8, G_minor: 6 },
+          meter: { three_four: 85, six_eight: 10, four_four: 5 },
+          texture: { stride_dance: 50, alberti_melody: 25, chordal_melody: 15, rolling_nocturne: 10 },
+          tempo: { moderato: 40, andante: 30, allegro: 25, adagio: 5 },
+          dynamics: { p: 35, mp: 30, mf: 20, f: 15 },
+          dynamicShape: { waves: 35, arch: 25, sudden_contrast: 20, terraced: 20 },
+          contour: { leap_fall: 22, wave: 20, arch: 18, rise: 16, fall: 14, dip: 10 },
+        },
+      },
+      // Ballades and scherzos.
+      stormy_drama: {
+        weight: 16,
+        priors: {
+          form: { sentence: 35, spinning_out: 25, free_fantasia: 25, arch_return: 15 },
+          key: { G_minor: 18, C_minor: 16, F_minor: 14, B_minor: 12, Cs_minor: 12, Fs_minor: 10, E_minor: 8, Ab_major: 10 },
+          meter: { four_four: 45, six_eight: 30, three_four: 25 },
+          texture: { dramatic_chords: 40, broken_chord_prelude: 20, tremolo_storm: 15, rolling_nocturne: 15, wash_arpeggio: 10 },
+          tempo: { allegro: 50, presto: 25, moderato: 15, andante: 10 },
+          dynamics: { f: 35, ff: 20, p: 25, pp: 10, mf: 10 },
+          dynamicShape: { sudden_contrast: 40, crescendo: 25, late_surge: 20, arch: 15 },
+          contour: { rise: 28, leap_fall: 20, drop_rise: 16, fall: 14, arch: 12, wave: 10 },
+        },
+      },
+      // Études: unbroken figuration.
+      flowing_perpetual: {
+        weight: 14,
+        priors: {
+          form: { spinning_out: 45, sentence: 25, arch_return: 20, period: 10 },
+          texture: { broken_chord_prelude: 45, wash_arpeggio: 25, toccata_perpetual: 15, alberti_melody: 15 },
+          meter: { four_four: 55, six_eight: 25, three_four: 20 },
+          tempo: { allegro: 45, moderato: 30, andante: 15, presto: 10 },
+          dynamics: { mf: 35, mp: 25, f: 20, p: 20 },
+          dynamicShape: { crescendo: 30, arch: 30, waves: 20, late_surge: 20 },
+          contour: { wave: 28, rise: 22, fall: 18, arch: 16, static: 16 },
+        },
+      },
+      // Slow preludes and spare late nocturnes.
+      meditative_stillness: {
+        weight: 10,
+        priors: {
+          form: { period: 35, arch_return: 35, spinning_out: 20, free_fantasia: 10 },
+          key: { E_minor: 22, Cs_minor: 18, B_minor: 14, F_minor: 12, C_minor: 10, Db_major: 12, Ab_major: 12 },
+          meter: { four_four: 50, six_eight: 30, three_four: 20 },
+          texture: { rolling_nocturne: 45, chordal_melody: 30, chorale: 15, melody_over_ostinato: 10 },
+          tempo: { largo: 40, adagio: 45, andante: 15 },
+          dynamics: { pp: 50, p: 40, mp: 10 },
+          dynamicShape: { steady: 35, arch: 30, waves: 20, decrescendo: 15 },
+          contour: { static: 30, fall: 25, arch: 20, dip: 15, rise: 10 },
+        },
+      },
+      // Light waltzes and mazurka jokes.
+      playful_wit: {
+        weight: 6,
+        priors: {
+          form: { binary_dance: 40, period: 30, call_and_response: 30 },
+          meter: { three_four: 70, six_eight: 15, four_four: 15 },
+          texture: { stride_dance: 40, scherzo_staccato: 35, alberti_melody: 25 },
+          tempo: { allegro: 50, moderato: 35, presto: 15 },
+          dynamics: { p: 40, mf: 25, f: 20, mp: 15 },
+          dynamicShape: { sudden_contrast: 45, terraced: 30, waves: 25 },
+          contour: { leap_fall: 25, wave: 20, rise: 18, fall: 17, pendulum: 12, arch: 8 },
+        },
+      },
+    },
+    holds: true,
+    harmony: {
+      major: {
+        heads: [['I', 'V65'], ['I', 'I6'], ['I', 'vi'], ['I6', 'IV'], ['I', 'V7_of_IV'], ['I', 'ii42'], ['V43', 'I6'], ['I', 'IV64']],
+        seqs: [['V7_of_ii', 'ii'], ['V7_of_V', 'V7'], ['V7_of_vi', 'vi'], ['ii6', 'V7'], ['IV', 'I6'], ['vi', 'iii6'], ['V7_of_IV', 'IV6'], ['ii65', 'V65'], ['V65_of_V', 'V']],
+        tails: {
+          closed: [['V7', 'I'], ['V65', 'I'], ['V43', 'I'], ['vii_dim6', 'I']],
+          half: [['I64', 'V'], ['ii65', 'V'], ['V7_of_V', 'V'], ['IV', 'V'], ['V65_of_V', 'V'], ['ii6', 'V']],
+          open: [['V42', 'I6'], ['V7', 'vi'], ['V7_of_IV', 'IV'], ['IV', 'I6'], ['vi', 'ii65']],
+        },
+        phrases: {
+          // Nocturne cadence (ii6–I64–V7–I); waltz close; tonic-turned-dominant into IV; inverted-dominant close.
+          closed: [['ii6', 'I64', 'V7', 'I'], ['V43', 'I6', 'V7', 'I'], ['V7_of_IV', 'IV', 'V7', 'I'], ['ii65', 'I64', 'V65', 'I']],
+          // Nocturne and mazurka pauses on V; secondary dominant into a half cadence.
+          half: [['I', 'V65', 'I6', 'V'], ['I', 'vi', 'V7_of_V', 'V'], ['I6', 'IV', 'ii65', 'V'], ['I', 'V43', 'I6', 'V7']],
+          // Waltz first strain; nocturne opening that leans to IV; deceptive turn through vi.
+          open: [['I', 'V65', 'I', 'IV'], ['I', 'V7_of_vi', 'vi', 'IV6'], ['I6', 'ii65', 'V7', 'vi'], ['I', 'V6', 'vi', 'iii6']],
+        },
+        loops: [['I', 'V65', 'I', 'V7'], ['I', 'I6', 'IV', 'V7'], ['I', 'vi', 'ii65', 'V']],
+        pedals: [['I', 'IV64', 'I', 'IV64'], ['V7', 'I64', 'V7', 'V']],
+        codas: [['I', 'IV64', 'V7_over_I', 'I'], ['V7_of_IV', 'IV6', 'V7', 'I']],
+        finals: ['I'],
+        surprises: ['bII6', 'vii_dim7_of_V', 'V7_of_vi', 'iv6', 'bVI', 'vii_dim7'],
+        subs: { I: ['I6'], V7: ['V65', 'V43'], IV: ['ii6', 'IV6'], ii: ['ii6', 'ii65'], V: ['V6', 'V7'], vi: ['vi6', 'IV6'] },
+      },
+      minor: {
+        heads: [['i', 'V65'], ['i', 'i42'], ['i', 'iv64'], ['i', 'vii_dim7'], ['i6', 'iv'], ['i', 'bVI'], ['i', 'V6'], ['i', 'ii_half_dim65']],
+        seqs: [['V7_of_IV', 'iv'], ['bVI', 'bII6'], ['iv', 'bII'], ['vii_dim7', 'i6'], ['bVI', 'iv6'], ['ii_half_dim65', 'V7'], ['iv6', 'V'], ['V7_of_vi', 'vi']],
+        tails: {
+          closed: [['V7', 'i'], ['V65', 'i'], ['vii_dim7', 'i'], ['V7b9', 'i']],
+          half: [['i64', 'V'], ['ii_dim6', 'V'], ['iv6', 'V'], ['bII6', 'V7'], ['vii_dim7_of_V', 'V'], ['bVI7', 'V']],
+          open: [['V7', 'bVI'], ['V42', 'i6'], ['V7_of_IV', 'iv'], ['bVI', 'bII6']],
+        },
+        phrases: {
+          // Prelude-like authentic close; Phrygian iv6 into a cadence; darkened V7b9.
+          closed: [['ii_dim6', 'i64', 'V7', 'i'], ['iv6', 'i64', 'V7', 'i'], ['ii_half_dim65', 'i64', 'V7b9', 'i'], ['i', 'V6', 'V7', 'i']],
+          // Neapolitan sixth before V (nocturne and prelude idiom); i–V rocking; iv6 approach.
+          half: [['i', 'i42', 'bII6', 'V7'], ['i', 'V65', 'i', 'V'], ['iv6', 'ii_half_dim65', 'bVI7', 'V'], ['i', 'vii_dim6', 'ii_dim6', 'V']],
+          // Ballade colour: iv and Neapolitan without closing; deceptive V7–bVI.
+          open: [['i', 'V65', 'iv', 'bII6'], ['i', 'bVI', 'iv6', 'V'], ['i6', 'iv', 'V7', 'bVI'], ['i', 'V6', 'V7_of_IV', 'IV6']],
+        },
+        loops: [['i', 'V65', 'i', 'V7'], ['i', 'i', 'V7', 'V7'], ['i', 'iv64', 'V7', 'i']],
+        pedals: [['i64', 'vii_dim7_of_V', 'V7', 'V'], ['i', 'iv64', 'i', 'iv64']],
+        codas: [['i', 'iv64', 'V7_over_I', 'i'], ['i', 'V7', 'i', 'i'], ['iv6', 'i64', 'V7', 'I']],
+        finals: ['i', 'i', 'I'],
+        surprises: ['bII6', 'vii_dim7_of_V', 'bVI7', 'vii_dim7', 'bVI', 'I'],
+        subs: { i: ['i6'], V7: ['V65', 'vii_dim7'], iv: ['iv6', 'ii_dim6'], V: ['V6', 'V7'], bVI: ['iv6', 'bVImaj7'], ii_half_dim7: ['ii_half_dim65'] },
+      },
+    },
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
   debussy: {
     brief:
       'French piano music, c. 1905. Harmony is colour, not function: triads, ninths and hollow fifths glide in parallel; pentatonic, whole-tone and old church modes blur the key; added sixths and ninths hang unresolved over pedal notes. Phrases are short ideas said twice and set side by side like tiles. Dominant–tonic cadences are avoided — pieces settle by a plagal or modal step, or simply fade. Very soft, pedalled, with one gentle swell.',
@@ -650,6 +801,165 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         finals: ['I', 'I', 'I64', 'I6'],
         surprises: ['i', 'bVI', 'bVII', 'III', 'iii64'],
         subs: { I: ['I64', 'I6'], vi: ['vi6'], V: ['V6'], IV: ['IV64'], iii: ['iii64'] },
+      },
+    },
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  hans_zimmer: {
+    brief:
+      'Film-score piano and hybrid texture, c. 2000s–2020s. Slow-building layered ostinatos, simple diatonic or modal loops that escalate, pedal drones, sparse then heroic surges, minor-key gravity, and occasional warm major anthems. Pulse and crescendo drama with a melody riding over the ostinato — cells may thicken, but the piece is a build, not a process of additive rotation. Written for grand piano, strings, and occasionally electric piano.',
+    priors: {
+      form: { layered_build: 32, additive_loop: 22, vamp_and_tag: 18, arch_return: 16, period: 8, sentence: 4 },
+      key: { D_minor: 14, A_minor: 12, C_minor: 12, G_minor: 10, F_minor: 8, E_minor: 6, C_major: 8, Eb_major: 8, F_major: 6, G_major: 6, D_major: 5, Ab_major: 5 },
+      meter: { four_four: 70, three_four: 18, six_eight: 12 },
+      texture: { melody_over_ostinato: 28, pulsing_chords: 22, dramatic_chords: 16, wash_arpeggio: 12, minimal_cells: 10, chorale: 8, rolling_nocturne: 4 },
+      palette: { diatonic: 55, modal: 20, modal_dark: 15, chromatic_approach: 10 },
+      tempo: { andante: 30, adagio: 22, moderato: 22, largo: 12, allegro: 10, presto: 4 },
+      dynamics: { p: 30, mp: 25, mf: 20, pp: 15, f: 8, ff: 2 },
+      dynamicShape: { crescendo: 30, late_surge: 25, build_then_drop: 15, arch: 15, waves: 10, steady: 5 },
+      defaultInstrument: { grand_piano: 55, strings: 30, electric_piano: 10, choir: 5 },
+      contour: { static: 26, rise: 22, arch: 16, fall: 14, wave: 10, leap_fall: 6, dip: 6 },
+    },
+    archetypes: {
+      // Layered ostinato that thickens without becoming a cell-process étude.
+      hypnotic_pulse: {
+        weight: 24,
+        priors: {
+          form: { layered_build: 45, additive_loop: 35, vamp_and_tag: 20 },
+          texture: { pulsing_chords: 35, melody_over_ostinato: 30, minimal_cells: 20, wash_arpeggio: 15 },
+          tempo: { andante: 40, moderato: 35, adagio: 15, allegro: 10 },
+          dynamics: { p: 35, mp: 35, mf: 20, f: 10 },
+          dynamicShape: { crescendo: 40, late_surge: 30, waves: 15, build_then_drop: 15 },
+          contour: { static: 40, rise: 25, wave: 15, arch: 12, fall: 8 },
+        },
+      },
+      // Warm major anthems.
+      heroic_bright: {
+        weight: 16,
+        priors: {
+          form: { layered_build: 40, arch_return: 30, period: 20, sentence: 10 },
+          key: { C_major: 22, Eb_major: 18, D_major: 16, G_major: 14, F_major: 12, Ab_major: 10, A_minor: 8 },
+          texture: { dramatic_chords: 35, pulsing_chords: 25, chorale: 20, wash_arpeggio: 20 },
+          tempo: { moderato: 40, andante: 25, allegro: 25, adagio: 10 },
+          dynamics: { mf: 35, f: 25, mp: 20, p: 12, ff: 8 },
+          dynamicShape: { crescendo: 35, late_surge: 30, arch: 20, build_then_drop: 15 },
+          defaultInstrument: { strings: 40, grand_piano: 40, choir: 15, electric_piano: 5 },
+          contour: { rise: 35, arch: 25, leap_fall: 15, fall: 15, static: 10 },
+        },
+      },
+      // Processional cues and hymn-like cues.
+      solemn_hymn: {
+        weight: 16,
+        priors: {
+          form: { layered_build: 40, arch_return: 30, vamp_and_tag: 20, period: 10 },
+          key: { D_minor: 20, A_minor: 16, C_minor: 14, G_minor: 12, F_minor: 10, Ab_major: 14, Eb_major: 14 },
+          texture: { chorale: 35, pulsing_chords: 25, melody_over_ostinato: 25, bell_organum: 15 },
+          tempo: { adagio: 40, andante: 35, largo: 20, moderato: 5 },
+          dynamics: { p: 40, pp: 25, mp: 25, mf: 10 },
+          dynamicShape: { crescendo: 30, late_surge: 25, arch: 25, steady: 20 },
+          defaultInstrument: { strings: 35, choir: 25, grand_piano: 30, church_organ: 10 },
+          contour: { static: 35, arch: 25, rise: 20, fall: 15, dip: 5 },
+        },
+      },
+      // Sparse drones and held colour.
+      meditative_stillness: {
+        weight: 16,
+        priors: {
+          form: { vamp_and_tag: 40, additive_loop: 25, arch_return: 25, layered_build: 10 },
+          texture: { melody_over_ostinato: 50, rolling_nocturne: 20, wash_arpeggio: 15, pulsing_chords: 15 },
+          tempo: { largo: 40, adagio: 40, andante: 20 },
+          dynamics: { pp: 50, p: 40, mp: 10 },
+          dynamicShape: { late_surge: 30, steady: 25, crescendo: 25, arch: 20 },
+          defaultInstrument: { grand_piano: 45, strings: 35, electric_piano: 15, choir: 5 },
+          contour: { static: 45, fall: 20, arch: 15, rise: 12, dip: 8 },
+        },
+      },
+      // Crescendo drama, action cues.
+      stormy_drama: {
+        weight: 16,
+        priors: {
+          form: { layered_build: 50, additive_loop: 25, free_fantasia: 15, sentence: 10 },
+          key: { D_minor: 22, C_minor: 20, G_minor: 16, F_minor: 14, A_minor: 12, E_minor: 10, Eb_major: 6 },
+          texture: { dramatic_chords: 35, pulsing_chords: 25, tremolo_storm: 20, wash_arpeggio: 20 },
+          tempo: { allegro: 40, moderato: 30, andante: 15, presto: 15 },
+          dynamics: { f: 30, mf: 25, p: 20, ff: 15, mp: 10 },
+          dynamicShape: { crescendo: 35, late_surge: 25, build_then_drop: 25, sudden_contrast: 15 },
+          contour: { rise: 35, leap_fall: 18, drop_rise: 15, arch: 15, fall: 12, static: 5 },
+        },
+      },
+      // Uneasy cues that keep adding weight.
+      restless_searching: {
+        weight: 12,
+        priors: {
+          form: { layered_build: 45, additive_loop: 30, vamp_and_tag: 25 },
+          texture: { pulsing_chords: 35, melody_over_ostinato: 30, minimal_cells: 20, dramatic_chords: 15 },
+          tempo: { andante: 40, moderato: 30, adagio: 20, allegro: 10 },
+          dynamics: { p: 35, mp: 30, mf: 20, pp: 15 },
+          dynamicShape: { crescendo: 40, late_surge: 30, waves: 15, build_then_drop: 15 },
+          palette: { modal_dark: 35, diatonic: 35, modal: 20, chromatic_approach: 10 },
+          contour: { static: 30, rise: 25, wave: 20, fall: 15, arch: 10 },
+        },
+      },
+    },
+    holds: true,
+    harmony: {
+      minor: {
+        // Simple film loops: i–bVI–bVII–V and i–iv–V families. No i–bVI–bIII–bVII
+        // (the pop-loop spelling); bIII is reserved for a surprise colour.
+        heads: [['i', 'i'], ['i', 'bVI'], ['i', 'iv'], ['i', 'v'], ['i64', 'i64'], ['i', 'bVII']],
+        seqs: [['bVI', 'bVII'], ['iv', 'V'], ['bVI', 'iv'], ['bVII', 'V'], ['v', 'bVI'], ['iv', 'bVI'], ['bVI', 'V'], ['i64', 'iv64']],
+        tails: {
+          closed: [['V', 'i'], ['bVII', 'i'], ['iv', 'i'], ['V7', 'i'], ['bVI', 'i']],
+          half: [['bVI', 'V'], ['iv', 'V'], ['bVII', 'V'], ['bVI', 'bVII'], ['iv', 'v']],
+          open: [['bVI', 'bVII'], ['iv', 'bVI'], ['v', 'bVI'], ['bVII', 'iv']],
+        },
+        phrases: {
+          closed: [['i', 'bVI', 'bVII', 'i'], ['i', 'iv', 'V', 'i'], ['i', 'bVI', 'V', 'i'], ['iv', 'i', 'V7', 'i']],
+          half: [['i', 'bVI', 'bVII', 'V'], ['i', 'iv', 'bVI', 'V'], ['i', 'i', 'bVI', 'V']],
+          open: [['i', 'i', 'bVI', 'bVI'], ['i', 'iv', 'i', 'iv'], ['i', 'bVI', 'iv', 'V']],
+        },
+        loops: [
+          ['i', 'bVI', 'bVII', 'V'],
+          ['i', 'iv', 'bVI', 'V'],
+          ['i', 'bVI', 'iv', 'V'],
+          ['i', 'i', 'bVI', 'bVI'],
+          ['i', 'v', 'bVII', 'i'],
+          ['i', 'iv'],
+          ['i', 'bVI'],
+        ],
+        pedals: [['i', 'iv64', 'i', 'iv64'], ['i', 'bVII_over_I', 'i', 'bVII_over_I'], ['V7sus4', 'V7', 'V7sus4', 'V7']],
+        codas: [['iv', 'i', 'iv64', 'i'], ['bVII', 'i', 'bVII', 'i'], ['bVI', 'V', 'i', 'i']],
+        finals: ['i', 'i', 'i64', 'i_add9'],
+        surprises: ['I', 'IV7', 'bVImaj7', 'V7sus4', 'III'],
+        subs: { i: ['i64', 'i6', 'i_add9'], bVI: ['bVImaj7'], V: ['V7', 'V7sus4'], iv: ['iv64', 'iv6'], bVII: ['bVII_over_I'] },
+      },
+      major: {
+        heads: [['I', 'I'], ['I', 'IV'], ['I', 'V'], ['I', 'IV64'], ['I', 'vi'], ['I', 'V7_over_I']],
+        seqs: [['IV', 'V'], ['vi', 'V'], ['IV', 'I6'], ['V', 'IV'], ['I6', 'IV'], ['IV64', 'V7_over_I'], ['vi', 'I6']],
+        tails: {
+          closed: [['V', 'I'], ['IV', 'I'], ['IV64', 'I'], ['V7', 'I']],
+          half: [['IV', 'V'], ['vi', 'V'], ['I', 'V'], ['IV64', 'V']],
+          open: [['I', 'IV'], ['V', 'IV'], ['I6', 'vi'], ['IV', 'vi']],
+        },
+        phrases: {
+          closed: [['I', 'IV', 'V', 'I'], ['I', 'V', 'IV', 'I'], ['I', 'IV64', 'V7', 'I']],
+          half: [['I', 'IV', 'vi', 'V'], ['I', 'I', 'IV', 'V']],
+          open: [['I', 'I', 'IV', 'IV'], ['I', 'IV64', 'I', 'IV64'], ['I', 'vi', 'IV', 'V']],
+        },
+        loops: [
+          ['I', 'V', 'I', 'IV'],
+          ['I', 'IV', 'I', 'V'],
+          ['I', 'IV64', 'I', 'V7_over_I'],
+          ['I', 'vi', 'IV', 'V'],
+          ['I', 'IV'],
+          ['I', 'I', 'IV', 'IV'],
+        ],
+        pedals: [['I', 'IV64', 'I', 'IV64'], ['I', 'V7_over_I', 'I', 'bVII_over_I']],
+        codas: [['IV', 'I', 'IV64', 'I'], ['I', 'V', 'I', 'I'], ['vi', 'V', 'I64', 'I']],
+        finals: ['I', 'I', 'Iadd9', 'I64'],
+        surprises: ['bVI', 'bVII', 'iv', 'bIII'],
+        subs: { I: ['I64', 'I6', 'Iadd9'], IV: ['IV64', 'IV6'], V: ['V7', 'V7sus4'], vi: ['vi6'] },
       },
     },
   },
