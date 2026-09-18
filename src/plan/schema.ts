@@ -21,7 +21,7 @@ export const STYLE_LABELS = {
   debussy: 'Claude Debussy',
   glass: 'Philip Glass',
   hans_zimmer: 'Hans Zimmer',
-  nahre_sol: 'Nahre Sol',
+  laufey: 'Laufey',
   elijah_fox: 'Elijah Fox',
 } as const
 export type StyleId = keyof typeof STYLE_LABELS
