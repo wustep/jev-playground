@@ -73,6 +73,8 @@ export type JevOp =
       roles: BarRoleId[]
       /** chords already fixed for bars 0..index-1 */
       chords: ChordId[]
+      /** their second-half harmonies, where a bar has one (same length as `chords`; omitted = none) */
+      chord2s?: (ChordId | null)[]
       index: number
     }
   | { op: 'score'; plan: CompositionPlan; styles: StyleId[] }
@@ -179,13 +181,39 @@ export function chordOptionsFor(key: KeyId): Record<string, string> {
   return Object.fromEntries(Object.entries(CHORDS).filter(([id]) => !hidden.has(id as ChordId)))
 }
 
+/**
+ * Chords offered as the first half of a bar that arrives on a cadence chord in
+ * its second half: the cadential six-four and the pre-dominants. Asked only on
+ * the bar before a cadence and on a half-cadence bar, in the same request as
+ * that bar's chord, so a two-chord cadence costs no extra round trip.
+ */
+const APPROACHES: readonly ChordId[] = ['I64', 'i64', 'ii6', 'ii65', 'ii7', 'ii_dim6', 'ii_half_dim65', 'ii_half_dim7', 'IV', 'iv', 'IV6', 'iv6', 'IVmaj7', 'vi', 'bII6', 'bVI', 'V7_of_V', 'V65_of_V']
+export const NO_APPROACH = 'none'
+
+/** Options for the approach question in `key`, `none` first. */
+export function approachOptionsFor(key: KeyId): Record<string, string> {
+  const offered = chordOptionsFor(key)
+  return {
+    [NO_APPROACH]: 'One harmony for the whole bar',
+    ...Object.fromEntries(APPROACHES.filter((id) => id in offered).map((id) => [id, `First half of the bar only: ${CHORDS[id]}, the chosen chord arriving in the second half`])),
+  }
+}
+
+/** Whether bar `index` is asked for an approach chord: it pauses on a half cadence, or leads straight into the cadence bar. */
+export function asksApproach(roles: readonly BarRoleId[], index: number): boolean {
+  return index < roles.length - 1 && (roles[index] === 'half_cadence' || roles[index + 1] === 'cadence')
+}
+
+const describeChord = (chord: ChordId, chord2: ChordId | null | undefined) =>
+  `${chord} — ${CHORDS[chord]}` + (chord2 ? `; second half of the bar: ${chord2} — ${CHORDS[chord2]}` : '')
+
 function barRequest(op: Extract<JevOp, { op: 'bar' }>, model: string): SystemOneRequest {
   const bars: Json[] = op.roles.map((role, i) => ({
     bar: i + 1,
     role: `${role} — ${BAR_ROLES[role]}`,
     chord:
       i < op.index
-        ? `${op.chords[i]} — ${CHORDS[op.chords[i]]}`
+        ? describeChord(op.chords[i], op.chord2s?.[i])
         : i === op.index
           ? '(to be decided now)'
           : '(not decided yet)',
@@ -209,6 +237,14 @@ function barRequest(op: Extract<JevOp, { op: 'bar' }>, model: string): SystemOne
         'Which melodic shape should bar `current_bar` have, given its role in `bars` and the way `requested_style.name` typically shapes lines?',
         CONTOURS,
       ),
+      ...(asksApproach(op.roles, op.index)
+        ? {
+            approach: choice(
+              'Bar `current_bar` closes or pauses a phrase. Would `requested_style.name` give it two harmonies — an approach chord in its first half, with the chord chosen for this bar arriving in the second half (a cadential six-four resolving to the dominant, ii–V in one bar) — or keep one harmony for the whole bar?',
+              approachOptionsFor(op.globals.key),
+            ),
+          }
+        : {}),
     },
   }
 }
@@ -220,7 +256,7 @@ export function describePlan(plan: CompositionPlan): Json {
     length_in_bars: plan.bars.length,
     bars: plan.bars.map((bar, i) => ({
       bar: i + 1,
-      chord: `${bar.chord} — ${CHORDS[bar.chord]}`,
+      chord: describeChord(bar.chord, bar.chord2),
       role: BAR_ROLES[bar.role],
       melodic_shape: CONTOURS[bar.contour],
     })),
@@ -286,6 +322,8 @@ export function parseOp(raw: unknown): JevOp {
         throw new PlanValidationError('op.index: out of range')
       }
       if (chords.length !== index) throw new PlanValidationError('op.chords: expected one chord per earlier bar')
+      const chord2s = obj.chord2s === undefined ? undefined : obj.chord2s
+      if (chord2s !== undefined && (!Array.isArray(chord2s) || chord2s.length !== index)) throw new PlanValidationError('op.chord2s: expected one entry (chord or null) per earlier bar')
       return {
         op: 'bar',
         style: parseStyle(obj.style),
@@ -293,6 +331,7 @@ export function parseOp(raw: unknown): JevOp {
         globals: parseGlobals(obj.globals, 'op.globals'),
         roles: roles.map((role, i) => parseOption(BAR_ROLES, role, `op.roles[${i}]`)),
         chords: chords.map((chord, i) => parseOption(CHORDS, chord, `op.chords[${i}]`)),
+        ...(chord2s ? { chord2s: chord2s.map((chord, i) => (chord == null ? null : parseOption(CHORDS, chord, `op.chord2s[${i}]`))) } : {}),
         index,
       }
     }

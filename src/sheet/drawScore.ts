@@ -258,6 +258,18 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       pen.fillStyle = theme.accent
       pen.font = '500 11px "JetBrains Mono", ui-monospace, monospace'
       pen.fillText(bar.plan.chord, labelX + symbolWidth + 8, top - 5)
+      if (bar.split && bar.plan.chord2) {
+        // The second harmony, over the first note at or after the split.
+        const at = anchors.find((anchor) => anchor.tick >= bar.split!.tick)
+        const splitX = Math.max(labelX + symbolWidth + pen.measureText(bar.plan.chord).width + 16, at ? at.x - 4 : x + staveWidth / 2)
+        pen.fillStyle = theme.ink
+        pen.font = '600 15px "Fraunces", "Academico", Georgia, serif'
+        pen.fillText(prettyChord(bar.split.chordSymbol), splitX, top - 4)
+        const splitWidth = pen.measureText(prettyChord(bar.split.chordSymbol)).width
+        pen.fillStyle = theme.accent
+        pen.font = '500 11px "JetBrains Mono", ui-monospace, monospace'
+        pen.fillText(bar.plan.chord2, splitX + splitWidth + 8, top - 5)
+      }
       pen.fillStyle = theme.muted
       pen.font = '500 10.5px "JetBrains Mono", ui-monospace, monospace'
       pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace(/_/g, ' ')}`, labelX, top + STAFF_GAP + 134)
