@@ -3,8 +3,7 @@
 //   request 1      the CHARACTER of the piece: most typical (Choice) + which ones
 //                  this composer writes at all (one Noul each); code combines them
 //   request 2      form + globals, given that character            (fan-out)
-//   requests 3..N  one per bar: chord + contour, with the progression so far
-//                  in state, because chords must see each other
+//   requests 3..   one per 4-bar form slot: a HarmonyBook phrase + four contours
 //   score()        one request, one Score question per style
 //
 // Bar roles are not asked: they are the chosen form, expanded by code
@@ -17,7 +16,6 @@ import {
   BAR_ROLE_IDS,
   CHARACTERS,
   CHARACTER_IDS,
-  CHORDS,
   CONTOURS,
   GLOBAL_FIELDS,
   GLOBAL_FIELD_IDS,
@@ -27,6 +25,7 @@ import {
   type BarPlan,
   type CharacterId,
   type ChordId,
+  type ContourId,
   type FormId,
   type CompositionPlan,
   type GlobalField,
@@ -38,11 +37,11 @@ import {
 } from '../plan/schema'
 import { MELODY_DEGREES, PHRASE_NOTE_COUNT, parseJevNoteChoices, pitchQuestionId, rhythmsFor } from '../plan/notes'
 import { realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
-import { formRoles } from '../plan/forms'
+import { formRoles, formSlots } from '../plan/forms'
+import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
-import { marginConfidence, normalize, pickFrom, rng, withNovelty } from './pick'
-import { rootDegree } from '../render/harmony'
-import { approachOptionsFor, asksApproach, buildRequest, characterQuestionId, NO_APPROACH, scoreQuestionId, type JevOp } from './jev/requests'
+import { marginConfidence, normalize, pickFrom, rng } from './pick'
+import { buildRequest, characterQuestionId, scoreQuestionId, type JevOp } from './jev/requests'
 import { callSystemOne, DEFAULT_MODEL, type Answer, type ChoiceAnswer, type SystemOneResponse } from './jev/systemOne'
 
 /** noul ** this: 0.95 → 0.81, 0.75 → 0.32, 0.5 → 0.06, 0.2 → 0.002. */
@@ -168,37 +167,51 @@ export class JevPlanner implements Planner {
       decisions.push({ field: `bars[${i}].role`, choice: role, confidence: 1, probabilities: normalize(Object.fromEntries(BAR_ROLE_IDS.map((id) => [id, id === role ? 1 : 0]))) })
     })
 
-    // 3 ─ chords, sequentially: each bar sees the ones before it
-    const chords: ChordId[] = []
-    const chord2s: (ChordId | null)[] = []
-    const bars: BarPlan[] = []
-    for (let index = 0; index < barCount; index++) {
-      const answers = await ask(`bar ${index + 1} chord`, {
-        op: 'bar',
+    // 3 ─ one HarmonyBook phrase per 4-bar slot. Cadence splits are applied in
+    // code from the book's `splits` list (no extra approach Choice).
+    const slots = formSlots(globals.form as FormId, barCount)
+    const book = bookFor(input.style, globals.key as KeyId)
+    const pickedChords: ChordId[] = []
+    const contours: ContourId[] = []
+    for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
+      const slot = slots[slotIndex]
+      const answers = await ask(`phrase ${slotIndex + 1}`, {
+        op: 'phrase',
         style: input.style,
         brief: input.brief,
         globals: globals as PlanGlobals,
-        roles,
-        chords: [...chords],
-        chord2s: [...chord2s],
-        index,
+        barCount,
+        slotIndex,
+        chords: [...pickedChords],
+        contours: [...contours],
       })
-      // Policy: keep a sampled progression moving (Jev likes to sit on the tonic through
-      // every restatement) — except where sitting still IS the point: the close, an echo.
-      const isLast = index === barCount - 1
-      const settles = isLast || roles[index] === 'cadence' || roles[index] === 'echo'
-      // The last chord is never a dice roll: a piece that ends on V7 because a 40 % option came up just sounds broken.
-      const chord = decide(answers, 'chord', `bars[${index}].chord`, CHORDS, settles ? undefined : (given) => withNovelty(given, chords), isLast ? 'argmax' : input.pick)
-      const contour = decide(answers, 'contour', `bars[${index}].contour`, CONTOURS)
-      // A cadence bar may take two harmonies: Jev's chord arrives in the second half behind an
-      // approach chord it also chose — unless the approach is the same harmony under another name.
-      const approach = asksApproach(roles, index) ? decide(answers, 'approach', `bars[${index}].approach`, approachOptionsFor(globals.key as KeyId)) : NO_APPROACH
-      const split = approach !== NO_APPROACH && rootDegree(approach as ChordId) !== rootDegree(chord)
-      const bar: BarPlan = split ? { chord: approach as ChordId, chord2: chord, role: roles[index], contour } : { chord, role: roles[index], contour }
-      chords.push(bar.chord)
-      chord2s.push(bar.chord2 ?? null)
-      bars.push(bar)
+      const catalog = phraseOptions(book, slot)
+      const table = Object.fromEntries(catalog.map((entry) => [entry.id, entry.label]))
+      const isLast = slotIndex === slots.length - 1
+      const phraseId = decide(
+        answers,
+        'phrase',
+        `slots[${slotIndex}].phrase`,
+        table,
+        isLast ? undefined : (given) => withPhraseNovelty(given, pickedChords, catalog),
+        isLast ? 'argmax' : input.pick,
+      )
+      pickedChords.push(...expandPhrase(phraseId, book, slot))
+      for (let k = 0; k < 4; k++) {
+        contours.push(decide(answers, slotContourQuestionId(k), `bars[${slotIndex * 4 + k}].contour`, CONTOURS))
+      }
     }
+    const harmony = finishPhraseHarmony(pickedChords, slots, book)
+    const bars: BarPlan[] = roles.map((role, i) => {
+      const chord = harmony.chords[i]
+      const chord2 = harmony.seconds[i]
+      const contour = contours[i]
+      decisions.push({ field: `bars[${i}].chord`, choice: chord, confidence: 1, probabilities: normalize({ [chord]: 1 }) })
+      if (chord2) {
+        decisions.push({ field: `bars[${i}].chord2`, choice: chord2, confidence: 1, probabilities: normalize({ [chord2]: 1 }) })
+      }
+      return chord2 ? { chord, chord2, role, contour } : { chord, role, contour }
+    })
 
     const plan: CompositionPlan = { version: 1, style: input.style, ...(globals as PlanGlobals), bars }
     return {

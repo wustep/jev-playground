@@ -1,9 +1,10 @@
 // A form label → the phrase layout of the piece.
 //
 // Both planners decide a FORM (one label); code expands it into four-bar
-// phrase slots. Each slot carries the per-bar roles the renderer reads, plus —
-// for the offline HeuristicPlanner only — a recipe for how its harmony is
-// assembled from a style's harmony book (src/plan/styles.ts).
+// phrase slots. Each slot carries the per-bar roles the renderer reads, plus
+// a recipe for how its harmony is assembled from a style's harmony book
+// (src/plan/styles.ts): the heuristic samples units; Jev picks one book
+// phrase per slot.
 //
 // Why a form label instead of one role question per bar: live Jev answers the
 // per-bar questions in parallel, so each answer is a marginal that knows

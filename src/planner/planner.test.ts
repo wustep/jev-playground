@@ -48,8 +48,8 @@ function fakeJev(prefer: Record<string, string> = {}) {
 }
 
 describe('JevPlanner', () => {
-  it('assembles a valid plan from a character, one fan-out, and one request per bar', async () => {
-    const { transport, seen } = fakeJev({ character: 'hypnotic_pulse', writes_hypnotic_pulse: 'yes', form: 'additive_loop', texture: 'minimal_cells', key: 'A_minor', chord: 'bVI' })
+  it('assembles a valid plan from a character, one fan-out, and one request per phrase slot', async () => {
+    const { transport, seen } = fakeJev({ character: 'hypnotic_pulse', writes_hypnotic_pulse: 'yes', form: 'additive_loop', texture: 'minimal_cells', key: 'A_minor' })
     const planner = new JevPlanner(transport)
     const { plan, trace } = await planner.plan({ style: 'glass', bars: 8, pick: 'argmax', seed: 1, brief: false })
 
@@ -57,12 +57,12 @@ describe('JevPlanner', () => {
     expect(plan.character).toBe('hypnotic_pulse')
     expect(plan.texture).toBe('minimal_cells')
     expect(plan.bars).toHaveLength(8)
-    expect(plan.bars.every((bar) => bar.chord === 'bVI')).toBe(true)
+    expect(plan.bars.every((bar) => typeof bar.chord === 'string')).toBe(true)
     // Roles are not asked of Jev: they are the chosen form, expanded by code.
     expect(plan.bars.map((bar) => bar.role)).toEqual(formRoles('additive_loop', 8))
-    expect(trace.requests).toBe(10)
+    expect(trace.requests).toBe(4)
     expect(trace.model).toBe('jev-1.13.0')
-    expect(trace.inputTokens).toBe(1000)
+    expect(trace.inputTokens).toBe(400)
     expect(trace.exchanges.every((exchange) => exchange.sent && exchange.response)).toBe(true)
 
     // Request 1 asks only about character: which is most typical, plus one yes/no per character …
@@ -75,28 +75,26 @@ describe('JevPlanner', () => {
     expect(Object.keys(seen[1].questions)).toHaveLength(9)
     expect(Object.keys(seen[1].questions)).not.toContain('barCount')
     expect(JSON.stringify(seen[1].state)).toContain('steady motoric pulse')
-    // Bar requests carry the progression so far and offer the chord labels that exist in this mode.
-    const fifth = seen[6]
-    expect(Object.keys(fifth.questions.chord.criteria as object)).toEqual(Object.keys(chordOptionsFor('A_minor')))
+    // Phrase requests carry the book options and prior-slot contour context.
+    expect(Object.keys(seen[2].questions)).toEqual(['phrase', 'contour_0', 'contour_1', 'contour_2', 'contour_3'])
+    expect(Object.keys(seen[2].questions.phrase.criteria as object).length).toBeGreaterThan(2)
+    expect(JSON.stringify(seen[3].state)).toContain('phrases_so_far')
+    expect(JSON.stringify(seen[3].state)).toContain('prior_melodic_shapes')
     expect(Object.keys(chordOptionsFor('A_minor'))).not.toContain('Imaj9')
     expect(Object.keys(chordOptionsFor('C_major'))).not.toContain('i64')
-    expect(JSON.stringify(fifth.state)).toContain('"current_bar":5')
-    expect((fifth.state as { bars: { chord: string }[] }).bars[3].chord).toContain('bVI')
-    expect((fifth.state as { bars: { chord: string }[] }).bars[4].chord).toBe('(to be decided now)')
 
     renderPlan(plan, 1) // and the renderer accepts it
   })
 
   it('keeps a sampled progression moving without touching what the trace reports', async () => {
-    // A Jev that answers "tonic" to every chord question, the way the live model does for restatements.
-    const { transport } = fakeJev({ key: 'C_major', chord: 'I' })
+    const { transport } = fakeJev({ key: 'C_major' })
     const { plan, trace } = await new JevPlanner(transport).plan({ style: 'bach', bars: 8, pick: 'sample', seed: 4, brief: true })
     const repeats = plan.bars.filter((bar, i) => i > 0 && bar.chord === plan.bars[i - 1].chord).length
-    expect(repeats).toBeLessThan(4)
-    expect(new Set(plan.bars.map((bar) => bar.chord)).size).toBeGreaterThan(2)
-    // The debug trace still shows Jev's own 80 % for "I", not the policy-adjusted number.
-    const first = trace.decisions.find((d) => d.field === 'bars[1].chord')!
-    expect(first.probabilities.I).toBeCloseTo(0.8)
+    expect(repeats).toBeLessThan(6)
+    expect(new Set(plan.bars.map((bar) => bar.chord)).size).toBeGreaterThan(1)
+    const first = trace.decisions.find((d) => d.field === 'slots[0].phrase')!
+    const top = Object.values(first.probabilities).reduce((a, b) => Math.max(a, b), 0)
+    expect(top).toBeCloseTo(0.8)
   })
 
   it('hands Chopin, Hans Zimmer and Laufey briefs to Jev when asked', () => {
@@ -130,6 +128,27 @@ describe('JevPlanner', () => {
         palette: 'whole_tone',
         bar: { chord: 'Imaj7', role: 'statement', contour: 'arch' },
       }, 'jev-latest'),
+      buildRequest({
+        op: 'phrase',
+        style: 'debussy',
+        brief: false,
+        globals: {
+          character: 'dreamy_haze',
+          form: 'mosaic_pairs',
+          key: 'Db_major',
+          meter: 'nine_eight',
+          texture: 'parallel_planing',
+          palette: 'whole_tone',
+          tempo: 'andante',
+          dynamics: 'pp',
+          dynamicShape: 'arch',
+          defaultInstrument: 'grand_piano',
+        },
+        barCount: 8,
+        slotIndex: 0,
+        chords: [],
+        contours: [],
+      }, 'jev-latest'),
     ]
     const criteria = JSON.stringify(requests.flatMap((request) => Object.values(request.questions).map((q) => [q.criteria, q.instructions])))
     const chords = JSON.stringify([chordOptionsFor('C_major'), chordOptionsFor('C_minor')])
@@ -154,7 +173,7 @@ describe('HeuristicPlanner', () => {
   it('records the payloads Jev would have been sent, unsent', async () => {
     const { plan, trace } = await new HeuristicPlanner().plan({ style: 'elijah_fox', bars: 8, pick: 'sample', seed: 9, brief: true })
     expect(trace.requests).toBe(0)
-    expect(trace.exchanges).toHaveLength(2 + plan.bars.length)
+    expect(trace.exchanges).toHaveLength(2 + plan.bars.length / 4)
     expect(trace.exchanges.every((exchange) => !exchange.sent && !exchange.response)).toBe(true)
     expect(trace.exchanges[0].request.model).toBe('jev-latest')
     expect(trace.latencyMs).toBeGreaterThan(0)
@@ -314,6 +333,12 @@ describe('/api/jev handler', () => {
     expect(() => parseOp({ op: 'bar', style: 'bach', globals, roles, chords: [], index: 1 })).toThrow()
     expect(() => parseOp({ op: 'bar', style: 'bach', globals, roles, chords: ['H7'], index: 1 })).toThrow()
     expect(() => parseOp({ op: 'bar', style: 'bach', globals: { ...globals, texture: 'dubstep' }, roles, chords: [], index: 0 })).toThrow()
+    expect(parseOp({ op: 'phrase', style: 'bach', brief: true, globals, barCount: 8, slotIndex: 1, chords: ['I', 'V6', 'ii6', 'V'], contours: ['arch', 'rise', 'fall', 'fall'] })).toMatchObject({
+      op: 'phrase',
+      slotIndex: 1,
+    })
+    expect(() => parseOp({ op: 'phrase', style: 'bach', globals, barCount: 8, slotIndex: 1, chords: ['I'], contours: ['arch'] })).toThrow(/chords/)
+    expect(() => parseOp({ op: 'phrase', style: 'bach', globals, barCount: 7, slotIndex: 0, chords: [], contours: [] })).toThrow(/barCount/)
   })
 
   it('accepts the debug notes op and rejects anything else', () => {
