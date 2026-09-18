@@ -298,6 +298,7 @@ button.small {
 }
 
 .controls {
+  --control-input-height: 34px;
   display: flex;
   flex-wrap: wrap;
   gap: 12px 14px;
@@ -329,7 +330,9 @@ button.small {
 
 .plan-status {
   align-self: end;
-  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  min-height: var(--control-input-height);
   font-size: 12.5px;
   color: var(--muted);
   max-width: 48ch;
@@ -1554,6 +1557,7 @@ button.small {
 
   /* Controls: a two-column grid of full-width fields, then Generate + compact Best. */
   .controls {
+    --control-input-height: 44px;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
