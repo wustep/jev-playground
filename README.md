@@ -80,7 +80,7 @@ On Vercel: `vercel env add TYPESAFE_API_KEY production`, then redeploy. The head
 const score = useMemo(() => renderPlan(plan, generated.input.seed), [plan, generated])
 ```
 
-`renderPlan` (`src/render/renderPlan.ts`) is pure and deterministic. Nothing upstream of it knows about notes; nothing downstream knows about Jev. The plan JSON is shown in the UI and is **editable** — change `"texture"` or a bar's `"chord"`, hit *Apply to renderer*, and hear only the renderer's response to that one label. Behind **Debug**, an experimental `Notes: Jev` toggle may overlay a closed-schema opening melody (bar 1, right hand) after the plan; illegal ticks/pitches fall back to `renderPlan` with a notice. The default Generate path is unchanged.
+`renderPlan` (`src/render/renderPlan.ts`) is pure and deterministic. Nothing upstream of it knows about notes; nothing downstream knows about Jev. The plan JSON is shown in the UI and is **editable** — change `"texture"` or a bar's `"chord"`, hit *Apply to renderer*, and hear only the renderer's response to that one label. Behind **Debug**, an experimental `Notes: Jev` toggle may overlay a closed-schema right-hand melody on every plan bar after the plan; illegal ticks/pitches fall back to `renderPlan` with a notice. The default Generate path is unchanged.
 
 ### The plan (`src/plan/schema.ts`)
 

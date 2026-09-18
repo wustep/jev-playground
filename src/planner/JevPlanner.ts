@@ -4,7 +4,7 @@
 //                  this composer writes at all (one Noul each); code combines them
 //   request 2      form + globals, given that character            (fan-out)
 //   requests 3..   one per 4-bar form slot: a HarmonyBook phrase + four contours
-//   score()        one request, one Score question per style
+//   score()        one request: one Score per style + song_quality (0–3)
 //
 // Bar roles are not asked: they are the chosen form, expanded by code
 // (src/plan/forms.ts).
@@ -42,7 +42,7 @@ import { formRoles, formSlots, themeSources } from '../plan/forms'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
 import { marginConfidence, normalize, pickFrom, rng } from './pick'
-import { buildRequest, characterQuestionId, scoreQuestionId, type JevOp } from './jev/requests'
+import { buildRequest, characterQuestionId, scoreQuestionId, SONG_SCORE_QUESTION_ID, type JevOp } from './jev/requests'
 import { callSystemOne, DEFAULT_MODEL, type Answer, type ChoiceAnswer, type SystemOneResponse } from './jev/systemOne'
 
 /** noul ** this: 0.95 → 0.81, 0.75 → 0.32, 0.5 → 0.06, 0.2 → 0.002. */
@@ -243,50 +243,76 @@ export class JevPlanner implements Planner {
     const exchange = await this.exchange('style match', { op: 'score', plan, styles: [...styles] }, options?.signal)
     const response = exchange.response
     const result: Partial<Record<StyleId, StyleMatchScore>> = {}
-    for (const style of styles) {
-      const answer = response.answers[scoreQuestionId(style)]
-      if (!answer || answer.type !== 'score') continue
+    const fromScore = (answer: { score: number; confidence: number } | undefined): StyleMatchScore | undefined => {
+      if (!answer) return undefined
       // `score` is a probability-weighted position on the 0..2 level scale;
       // round to the nearest level when code needs a single label.
       const level = Math.max(0, Math.min(MATCH_LEVELS.length - 1, Math.round(answer.score)))
-      result[style] = { match: MATCH_LEVELS[level], confidence: answer.confidence, raw: answer.score }
+      return { match: MATCH_LEVELS[level], confidence: answer.confidence, raw: answer.score }
     }
-    return { scores: result, exchanges: [exchange] }
+    for (const style of styles) {
+      const answer = response.answers[scoreQuestionId(style)]
+      if (!answer || answer.type !== 'score') continue
+      result[style] = fromScore(answer)
+    }
+    const songAnswer = response.answers[SONG_SCORE_QUESTION_ID]
+    const songQuality =
+      songAnswer?.type === 'score' ? { raw: songAnswer.score, confidence: songAnswer.confidence } : undefined
+    return { scores: result, songQuality, exchanges: [exchange] }
   }
 
   /**
-   * Debug experiment: one extra request after the plan. Jev picks a 4-slot
-   * rhythm and four scale degrees for bar 1's right-hand line. Code validates
-   * the closed schema; the caller falls back to renderPlan on failure.
+   * Debug experiment: repeated closed-schema picks after the plan. Jev writes
+   * a 4-slot RH phrase for every plan bar that is new material; theme-return
+   * bars reuse the source rhythm and degrees, re-spelled on the later chord.
+   * Code validates the closed schema; the caller falls back to renderPlan on
+   * failure. Bass / left hand stay with renderPlan.
    */
   async writeNotes(
     plan: CompositionPlan,
     input: Pick<PlanInput, 'pick' | 'seed' | 'brief'>,
     options?: Pick<PlanOptions, 'signal'>,
-  ): Promise<{ phrase: NotePhrase; exchange: Required<Exchange> }> {
-    const bar = plan.bars[0]
-    if (!bar) throw new Error('Jev notes: plan has no bars')
-    const op: JevOp = {
-      op: 'notes',
-      style: plan.style,
-      brief: input.brief,
-      character: plan.character,
-      key: plan.key,
-      meter: plan.meter,
-      tempo: plan.tempo,
-      texture: plan.texture,
-      palette: plan.palette,
-      bar,
-    }
-    const exchange = await this.exchange('opening melody', op, options?.signal)
-    const answers = exchange.response.answers
+  ): Promise<{ phrases: NotePhrase[]; exchanges: Required<Exchange>[] }> {
+    if (plan.bars.length === 0) throw new Error('Jev notes: plan has no bars')
+    const returns = themeSources(plan.form, plan.bars.length as BarCount)
+    const phrases: NotePhrase[] = []
+    const exchanges: Required<Exchange>[] = []
     const random = rng(input.seed ^ 0x4e07e5)
     const rhythmTable = rhythmsFor(plan.meter)
-    const rhythm = parseOption(rhythmTable, pickFrom(choiceAnswer(answers, 'rhythm').probabilities, input.pick, random), 'jev.rhythm')
-    const degrees = Array.from({ length: PHRASE_NOTE_COUNT }, (_, i) =>
-      parseOption(MELODY_DEGREES, pickFrom(choiceAnswer(answers, pitchQuestionId(i)).probabilities, input.pick, random), `jev.${pitchQuestionId(i)}`),
-    )
-    const choices = parseJevNoteChoices({ rhythm, degrees }, plan.meter)
-    return { phrase: realizeJevNoteChoices(choices, plan), exchange }
+
+    const pickChoices = (answers: Record<string, Answer>) => {
+      const rhythm = parseOption(rhythmTable, pickFrom(choiceAnswer(answers, 'rhythm').probabilities, input.pick, random), 'jev.rhythm')
+      const degrees = Array.from({ length: PHRASE_NOTE_COUNT }, (_, i) =>
+        parseOption(MELODY_DEGREES, pickFrom(choiceAnswer(answers, pitchQuestionId(i)).probabilities, input.pick, random), `jev.${pitchQuestionId(i)}`),
+      )
+      return parseJevNoteChoices({ rhythm, degrees }, plan.meter)
+    }
+
+    for (let i = 0; i < plan.bars.length; i++) {
+      const source = returns[i]
+      const from = source !== undefined ? phrases[source] : undefined
+      if (from) {
+        phrases.push(realizeJevNoteChoices({ rhythm: from.rhythm, degrees: from.degrees }, plan, { barIndex: i }))
+        continue
+      }
+      const bar = plan.bars[i]
+      const op: JevOp = {
+        op: 'notes',
+        style: plan.style,
+        brief: input.brief,
+        character: plan.character,
+        key: plan.key,
+        meter: plan.meter,
+        tempo: plan.tempo,
+        texture: plan.texture,
+        palette: plan.palette,
+        bar,
+        barIndex: i,
+      }
+      const exchange = await this.exchange(`melody bar ${i + 1}`, op, options?.signal)
+      exchanges.push(exchange)
+      phrases.push(realizeJevNoteChoices(pickChoices(exchange.response.answers), plan, { barIndex: i }))
+    }
+    return { phrases, exchanges }
   }
 }

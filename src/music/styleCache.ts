@@ -8,8 +8,11 @@ export interface Generated extends PlanResult {
   notice: string | null
   /** Precomputed style-match (best-of-N already scored the winner). */
   matches?: ScoreResult
-  /** Debug-only: Jev's validated opening melody, applied on top of renderPlan. */
-  notePhrase?: NotePhrase
+  /**
+   * Debug-only: Jev's validated RH phrases, one per plan bar, applied on top
+   * of renderPlan. `undefined` = not tried; `[]` = tried and failed.
+   */
+  notePhrases?: NotePhrase[]
   noteExchanges?: Exchange[]
 }
 

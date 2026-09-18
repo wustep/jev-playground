@@ -107,7 +107,7 @@ export type JevOp =
       contours: ContourId[]
     }
   | { op: 'score'; plan: CompositionPlan; styles: StyleId[] }
-  /** Debug-only: one opening right-hand phrase. Small — first bar, closed enums. */
+  /** Debug-only: one right-hand phrase. Closed enums; callers repeat per plan bar. */
   | {
       op: 'notes'
       style: StyleId
@@ -119,6 +119,8 @@ export type JevOp =
       texture: TextureId
       palette: PaletteId
       bar: BarPlan
+      /** 0-based plan bar this request writes. Omitted = bar 1 (legacy). */
+      barIndex?: number
     }
 
 // ── State helpers ───────────────────────────────────────────────────────────
@@ -142,8 +144,8 @@ function describeGlobals(globals: PlanGlobals): Json {
     dynamics: DYNAMICS[globals.dynamics],
     dynamic_shape: DYNAMIC_SHAPES[globals.dynamicShape],
     instrument: INSTRUMENTS[globals.defaultInstrument],
-    ...(globals.arrangement ? { arrangement: ARRANGEMENTS[globals.arrangement] } : {}),
-    ...(globals.opening ? { opening: OPENINGS[globals.opening] } : {}),
+    arrangement: ARRANGEMENTS[globals.arrangement ?? 'lift_on_return'],
+    opening: OPENINGS[globals.opening ?? 'straight_in'],
     ...(globals.pedal ? { sustain_pedal: PEDALS[globals.pedal] } : {}),
   }
 }
@@ -358,36 +360,55 @@ export function describePlan(plan: CompositionPlan): Json {
 
 export const scoreQuestionId = (style: StyleId) => `match_${style}`
 
+/** Song-quality Score on the existing `score` op — Appendix B. Not a new op. */
+export const SONG_SCORE_QUESTION_ID = 'song_quality'
+
 function styleMatchQuestion(style: StyleId): ScoreQuestion {
   const name = STYLE_LABELS[style]
   return {
     type: 'score',
-    instructions: `How closely does the composition plan in \`plan\` match the musical style of ${name}? Judge texture, chord vocabulary, tempo, dynamics and instrument together.`,
+    instructions: `How closely does \`plan\` match the musical style of ${name}? Judge character, phrase layout, texture, harmony, arrangement, opening, tempo and dynamics together. The style name is not written on the plan; do not reward a lucky guess at the label.`,
     criteria: [
-      `The plan's texture, harmony, tempo and dynamics belong to a clearly different musical tradition from ${name}; someone who knows ${name}'s music would not recognise it here.`,
-      `Some of the plan's choices are typical of ${name}, but others are generic or point to a different composer; the resemblance is only partial.`,
-      `The plan's texture, chord vocabulary, tempo, dynamics and instrument are all characteristic of ${name}; someone who knows the music would recognise the style immediately.`,
+      "A different tradition: texture, phrase layout and harmony would not be recognised as this musician's.",
+      'Partial: some globals fit, but the form, arrangement or chord vocabulary point elsewhere or at a generic étude.',
+      'Immediate: someone who knows the music would recognise the kind of piece, the texture, the harmony and how it opens and returns.',
+    ],
+  }
+}
+
+/** Appendix B.3 — copy the locked criteria; four standalone levels, raw 0–3. */
+function songQualityQuestion(): ScoreQuestion {
+  return {
+    type: 'score',
+    instructions:
+      'How song-like is the composition plan in `plan`? Judge only the labels in `plan` — character, phrase_layout, texture, arrangement, opening, dynamic_shape, length_in_bars, and each bar\'s role. Do not imagine notes, rests, MIDI, or a performance. A song here means a short keyboard piece a listener would hear as a tune that returns, can breathe, and changes clothes; an étude means unbroken figuration that starts again every bar. Loop-and-layer plans (a short cycle that builds or peaks then drops, often with a vamp) count as songs in the film-score and minimal sense.',
+    criteria: [
+      'Étude / perpetual study. The character is continuous figuration or a motor pulse, the texture is two-hand perpetual motion or unbroken broken-chord / cell figuration, the opening is straight in (or omitted), and the arrangement is constant. The phrase layout does not bring a three-to-four-bar idea back — it spins, fantasises, or loops without a sung line on top. Bar roles have no single late peak: no climax, or climaxes scattered through the middle. Realising this plan would attack every downbeat and never change clothes.',
+      "A finished piece, not yet a song. There is a real character, texture and phrase layout, but the song cues are missing or they fight each other. Either the layout does not return a phrase-length idea (a fantasia, or a loop/spin with a constant arrangement and no melody riding an ostinato), or a returning layout is paired with a straight-in opening, a perpetual or on-the-beat character, and a constant arrangement. Dynamics may swell, but climaxes sit at the midpoint or repeat. Someone would hear a coherent miniature, still an étude's cousin.",
+      'Song-shaped. The phrase layout is one where a three-to-four-bar idea comes back (question and answer, sentence, arch with return, call and response, vamp and tag, or a binary that returns home), or it is a loop/layer form whose texture is a tune over a repeating figure. The character and texture are a singing line over accompaniment — lyrical, hymn, dance, warm groove, searching, still, or hazy; nocturne, alberti, chordal melody, aria, stride, chorale, ostinato-under-tune, pulsing chords — not a two-hand perpetual. The opening is a vamp or a pickup, or the character is one that lands and rests at phrase ends. Arrangement may still be constant. At most one clear climax, and it is not early. On the page this is a short song without words, even if the return is not yet dressed.',
+      'A song that returns in new clothes. Song-shaped, and the plan also marks the return and the peak. Arrangement is lift-on-return, a build, peak-then-bare, or terraced blocks — not constant. There is one summit late in the piece: a climax role in the last third of the bars, or a late-surge / arch dynamic shape whose climax is past the midpoint, not a climax at half-time and again at the end. A film-score or minimal plan qualifies at this level when a short loop accumulates layers or peaks then drops to a bare texture, the opening is a vamp, and a melody sits on the ostinato. A straight-in perpetual texture with a constant arrangement cannot be this level.',
     ],
   }
 }
 
 function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): SystemOneRequest {
+  const barNumber = (op.barIndex ?? 0) + 1
   const questions: Record<string, Question> = {
     rhythm: choice(
-      'Which rhythm should the opening right-hand melody of bar 1 use? Each option fills the bar with exactly four slots on the sixteenth-note grid.',
+      `Which rhythm should the right-hand melody of bar ${barNumber} use? Each option fills the bar with exactly four slots on the sixteenth-note grid.`,
       rhythmsFor(op.meter),
     ),
   }
   for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
     questions[pitchQuestionId(i)] = choice(
-      `Which scale degree (or rest) should slot ${i + 1} of that four-note opening melody sing? Degrees are relative to the key in \`piece.key\`, coloured by the harmony in \`opening_bar\`.`,
+      `Which scale degree (or rest) should slot ${i + 1} of that four-note melody sing? Degrees are relative to the key in \`piece.key\`, coloured by the harmony in \`this_bar\`.`,
       MELODY_DEGREES,
     )
   }
   return {
     model,
     state: {
-      task: 'Write the opening right-hand melody for bar 1 of a short keyboard piece. Software will place your choices on a sixteenth-note grid; pick only from the options given — never invent pitches or durations.',
+      task: `Write the right-hand melody for bar ${barNumber} of a short keyboard piece. Software will place your choices on a sixteenth-note grid; pick only from the options given — never invent pitches or durations.`,
       requested_style: styleState(op.style, op.brief),
       piece_character: CHARACTERS[op.character],
       piece: {
@@ -397,13 +418,14 @@ function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): Syste
         texture: TEXTURES[op.texture],
         melodic_palette: PALETTES[op.palette],
       },
-      opening_bar: {
+      this_bar: {
+        bar_number: barNumber,
         chord: `${op.bar.chord} — ${CHORDS[op.bar.chord]}`,
         ...(op.bar.chord2 ? { second_half_chord: `${op.bar.chord2} — ${CHORDS[op.bar.chord2]}` } : {}),
         role: `${op.bar.role} — ${BAR_ROLES[op.bar.role]}`,
         melodic_shape: CONTOURS[op.bar.contour],
       },
-      voice: 'treble — the singing right-hand line of bar 1 only',
+      voice: `treble — the singing right-hand line of bar ${barNumber}`,
     },
     questions,
   }
@@ -411,9 +433,11 @@ function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): Syste
 
 function scoreRequest(op: Extract<JevOp, { op: 'score' }>, model: string): SystemOneRequest {
   // The plan's own `style` field is withheld: the model should judge the
-  // musical content, not read the label.
+  // musical content, not read the label. Style questions and the song
+  // Score share this one POST — not a new op.
   const questions: Record<string, Question> = {}
   for (const style of op.styles) questions[scoreQuestionId(style)] = styleMatchQuestion(style)
+  questions[SONG_SCORE_QUESTION_ID] = songQualityQuestion()
   return {
     model,
     state: { task: 'Judge a composition plan for a short solo keyboard piece.', plan: describePlan(op.plan) },
@@ -503,7 +527,11 @@ export function parseOp(raw: unknown): JevOp {
       if (unique.length === 0) throw new PlanValidationError('op.styles: expected at least one style')
       return { op: 'score', plan: parsePlan(obj.plan), styles: unique }
     }
-    case 'notes':
+    case 'notes': {
+      const barIndex = obj.barIndex
+      if (barIndex !== undefined && (typeof barIndex !== 'number' || !Number.isInteger(barIndex) || barIndex < 0)) {
+        throw new PlanValidationError('op.barIndex: expected a non-negative integer')
+      }
       return {
         op: 'notes',
         style: parseStyle(obj.style),
@@ -515,7 +543,9 @@ export function parseOp(raw: unknown): JevOp {
         texture: parseOption(TEXTURES, obj.texture, 'op.texture'),
         palette: parseOption(PALETTES, obj.palette, 'op.palette'),
         bar: parseBarPlan(obj.bar, 'op.bar'),
+        ...(barIndex !== undefined ? { barIndex } : {}),
       }
+    }
     default:
       throw new PlanValidationError('op.op: expected "concept", "globals", "bar", "phrase", "score" or "notes"')
   }
