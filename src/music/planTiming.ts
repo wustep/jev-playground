@@ -44,6 +44,16 @@ export function generatedPlanStatus(bars: number, latencyMs: number): string {
   return `Generated plan and ${bars} bars in ${formatPlanSeconds(latencyMs)}s`
 }
 
+/** Dial cache hit / prewarm land / stub ready — never fake Generate timing. */
+export function readyPlanStatus(bars: number): string {
+  return `Ready — ${bars} bars`
+}
+
+/** Session restore of a previously shown plan — never fake Generate timing. */
+export function restoredPlanStatus(bars: number): string {
+  return `Restored plan · ${bars} bars`
+}
+
 /** Offline stub sample with a measured wall-clock duration written into the trace. */
 export async function planHeuristicSample(input: PlanInput): Promise<Generated> {
   const started = performance.now()

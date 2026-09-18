@@ -5,6 +5,8 @@ import {
   generateStatusLatencyMs,
   generatedPlanStatus,
   planHeuristicSample,
+  readyPlanStatus,
+  restoredPlanStatus,
   stampGenerateLatency,
   stampWallClockLatency,
 } from './planTiming'
@@ -68,5 +70,26 @@ describe('planHeuristicSample', () => {
     expect(made.trace.latencyMs).toBeGreaterThan(0)
     expect(formatPlanSeconds(made.trace.latencyMs)).not.toBe('0.00')
     expect(generatedPlanStatus(made.input.bars, made.trace.latencyMs)).toMatch(/^Generated plan and 16 bars in 0\.\d+s$/)
+  })
+
+  it('does not surface Generate timing when a stub is only landing from cache', async () => {
+    const made = await planHeuristicSample({ style: 'bach', bars: 16, pick: 'sample', brief: true, seed: 3 })
+    expect(readyPlanStatus(made.input.bars)).toBe('Ready — 16 bars')
+    expect(readyPlanStatus(made.input.bars)).not.toMatch(/Generated|in \d/)
+    expect(restoredPlanStatus(made.input.bars)).toBe('Restored plan · 16 bars')
+    expect(restoredPlanStatus(made.input.bars)).not.toMatch(/Generated|in \d/)
+  })
+})
+
+describe('readyPlanStatus / restoredPlanStatus', () => {
+  it('uses quiet ready/restored copy with no generate seconds', () => {
+    expect(readyPlanStatus(16)).toBe('Ready — 16 bars')
+    expect(readyPlanStatus(32)).toBe('Ready — 32 bars')
+    expect(restoredPlanStatus(16)).toBe('Restored plan · 16 bars')
+    expect(restoredPlanStatus(8)).toBe('Restored plan · 8 bars')
+    expect(readyPlanStatus(16)).not.toContain('Generated')
+    expect(restoredPlanStatus(16)).not.toContain('Generated')
+    expect(readyPlanStatus(16)).not.toMatch(/in \d/)
+    expect(restoredPlanStatus(16)).not.toMatch(/in \d/)
   })
 })
