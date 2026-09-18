@@ -1,10 +1,21 @@
 /** Keep the sounding bar in view while playing, until the listener takes the scroll. */
 
 export const FOLLOW_PADDING = 10
+/** Matches the mobile sheet / sticky-transport breakpoint in `styles.css`. */
+export const FOLLOW_NARROW_MAX_WIDTH = 760
+/** Air above the sounding system on a phone (chord labels, not under chrome). */
+export const FOLLOW_NARROW_TOP_RATIO = 0.12
+/** Keep the playhead out of the lower half so the bar sits above center. */
+export const FOLLOW_NARROW_BOTTOM_RATIO = 0.45
 /** Smooth `scrollTo` keeps emitting `scroll` events; ignore those for this long. */
 export const PROGRAMMATIC_HOLD_MS = 520
 /** Ignore tap jitter; a real touch-scroll moves more than this. */
 export const TOUCH_CANCEL_PX = 8
+
+export type FollowInsets = {
+  top: number
+  bottom: number
+}
 
 export type ScrollBox = {
   scrollTop: number
@@ -25,18 +36,49 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+export function resolveFollowInsets(padding: number | FollowInsets = FOLLOW_PADDING): FollowInsets {
+  return typeof padding === 'number' ? { top: padding, bottom: padding } : padding
+}
+
+/**
+ * Desktop: a tight 10px gutter (minimal scroll to just reveal the bar).
+ * Narrow: a high comfort band — more top air, and enough bottom inset that
+ * “just peeking at the bottom of the frame” is not considered in view.
+ * `chromeTop` is extra viewport cover (sticky transport) when the *page* scrolls.
+ */
+export function followInsets(clientHeight: number, viewportWidth: number, chromeTop = 0): FollowInsets {
+  if (viewportWidth > FOLLOW_NARROW_MAX_WIDTH) {
+    return { top: FOLLOW_PADDING, bottom: FOLLOW_PADDING }
+  }
+  const cover = Math.max(0, chromeTop)
+  return {
+    top: Math.max(FOLLOW_PADDING, Math.round(clientHeight * FOLLOW_NARROW_TOP_RATIO)) + cover,
+    bottom: Math.max(FOLLOW_PADDING, Math.round(clientHeight * FOLLOW_NARROW_BOTTOM_RATIO)),
+  }
+}
+
+/** Height of a sticky/fixed sibling sitting over the viewport top, else 0. */
+export function stickyChromeHeight(frame: HTMLElement): number {
+  const chrome = frame.previousElementSibling
+  if (!(chrome instanceof HTMLElement)) return 0
+  const position = getComputedStyle(chrome).position
+  if (position !== 'sticky' && position !== 'fixed') return 0
+  return Math.ceil(chrome.getBoundingClientRect().height)
+}
+
 /** Target `scrollTop` that reveals `range`, or `null` when nothing should move. */
-export function followScrollTop(box: ScrollBox, range: Range, padding = FOLLOW_PADDING): number | null {
+export function followScrollTop(box: ScrollBox, range: Range, padding: number | FollowInsets = FOLLOW_PADDING): number | null {
   if (box.scrollHeight <= box.clientHeight + 1) return null
+  const { top: padTop, bottom: padBottom } = resolveFollowInsets(padding)
   const maxScroll = Math.max(0, box.scrollHeight - box.clientHeight)
   const viewTop = box.scrollTop
   const viewBottom = viewTop + box.clientHeight
-  if (range.top >= viewTop + padding && range.bottom <= viewBottom - padding) return null
-  if (range.bottom - range.top + padding * 2 >= box.clientHeight) {
-    return clamp(range.top - padding, 0, maxScroll)
+  if (range.top >= viewTop + padTop && range.bottom <= viewBottom - padBottom) return null
+  if (range.bottom - range.top + padTop + padBottom >= box.clientHeight) {
+    return clamp(range.top - padTop, 0, maxScroll)
   }
-  if (range.top < viewTop + padding) return clamp(range.top - padding, 0, maxScroll)
-  return clamp(range.bottom + padding - box.clientHeight, 0, maxScroll)
+  if (range.top < viewTop + padTop) return clamp(range.top - padTop, 0, maxScroll)
+  return clamp(range.bottom + padBottom - box.clientHeight, 0, maxScroll)
 }
 
 export function isUserScrollKey(code: string): boolean {
@@ -149,9 +191,15 @@ export function touchMovedEnough(startY: number | null, currentY: number | null,
 }
 
 /** Next scrollTop to apply, or `null` when follow is off / already in view / already requested. */
-export function nextFollowScroll(session: FollowSession, box: ScrollBox, range: Range, lastRequested: number | null): number | null {
+export function nextFollowScroll(
+  session: FollowSession,
+  box: ScrollBox,
+  range: Range,
+  lastRequested: number | null,
+  padding: number | FollowInsets = FOLLOW_PADDING,
+): number | null {
   if (!session.following) return null
-  const top = followScrollTop(box, range)
+  const top = followScrollTop(box, range, padding)
   if (top == null || (lastRequested != null && Math.abs(top - lastRequested) < 1)) return null
   return top
 }
