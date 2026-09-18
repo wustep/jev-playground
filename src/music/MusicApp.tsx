@@ -9,7 +9,7 @@ import { DebugPanel } from '../ui/DebugPanel'
 import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
-import { DIAL_PLANNER, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
+import { DIAL_PLANNER, autoplayAfterStyleSwitch, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
 import { generateStatusLatencyMs, generatedPlanStatus, planHeuristicSample, stampGenerateLatency } from './planTiming'
 import { styleCache, type Generated } from './styleCache'
 
@@ -68,6 +68,9 @@ export default function MusicApp() {
 
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
+  /** Dial switch while sounding: play the new piece once its score is up. */
+  const resumePlayRef = useRef(false)
+  const playRef = useRef<( ) => Promise<void>>(async () => {})
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -131,6 +134,7 @@ export default function MusicApp() {
         }
         if (planner === heuristicPlanner) {
           settle.fn?.(null)
+          resumePlayRef.current = false
           if (mountedRef.current) {
             setProgress(null)
             setPendingStyle(null)
@@ -174,6 +178,7 @@ export default function MusicApp() {
     const inputStyle = style
 
     if (mountedRef.current) {
+      resumePlayRef.current = false
       engine.stop()
       setPlaying(false)
       setError(null)
@@ -301,6 +306,8 @@ export default function MusicApp() {
 
   /** Dial click: show cache at once. Never call Jev — only Generate may. */
   const chooseStyle = (id: StyleId) => {
+    const keepPlaying = autoplayAfterStyleSwitch(playing)
+    resumePlayRef.current = keepPlaying
     setStyle(id)
     const action = resolveDialPlan({ cached: styleCache.get(id), inflight: styleCache.getInflight(id), bars })
     if (action.kind === 'await-inflight') {
@@ -338,6 +345,11 @@ export default function MusicApp() {
       setPlanStatus(generatedPlanStatus(action.cached.input.bars, action.cached.trace.latencyMs))
       setPendingStyle(null)
       setPendingAsksJev(false)
+      // Same cached object → score identity does not change, so restart now.
+      if (keepPlaying && generated === action.cached) {
+        resumePlayRef.current = false
+        void playRef.current()
+      }
       return
     }
     const next = newSeed()
@@ -380,6 +392,7 @@ export default function MusicApp() {
       setPlaying(false)
     }
   }, [engine, score, instrument, loop])
+  playRef.current = play
 
   /** A click on bar N: jump there if sounding, otherwise start playing from there. */
   const seekBar = useCallback(
@@ -402,11 +415,18 @@ export default function MusicApp() {
     setPlaying(false)
   }, [engine])
 
-  // A new score invalidates whatever is sounding.
+  // A new score invalidates whatever is sounding. Dial-switch can ask us to
+  // start the replacement (resumePlayRef) — same as hitting Play, so follow re-enables.
   useEffect(() => {
     engine.stop()
     setPlaying(false)
   }, [engine, score])
+
+  useEffect(() => {
+    if (!score || !resumePlayRef.current) return
+    resumePlayRef.current = false
+    void play()
+  }, [score, play])
 
   const chooseInstrument = (id: InstrumentId) => {
     setInstrument(id)
@@ -523,6 +543,7 @@ export default function MusicApp() {
             disabled={busy}
             title="A new piece in this style (new seed)"
             onClick={() => {
+              resumePlayRef.current = false
               const next = newSeed()
               setSeed(next)
               // Uses plannerChoice — live Jev when available. Dial clicks never take this path.
@@ -550,6 +571,7 @@ export default function MusicApp() {
           aria-label="Planner policy (debug)"
           onSubmit={(event) => {
             event.preventDefault()
+            resumePlayRef.current = false
             void generate()
           }}
         >
