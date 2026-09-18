@@ -17,6 +17,7 @@ import {
   CHARACTERS,
   CHARACTER_IDS,
   CONTOURS,
+  CONTOUR_IDS,
   GLOBAL_FIELDS,
   GLOBAL_FIELD_IDS,
   MATCH_LEVELS,
@@ -37,7 +38,7 @@ import {
 } from '../plan/schema'
 import { MELODY_DEGREES, PHRASE_NOTE_COUNT, parseJevNoteChoices, pitchQuestionId, rhythmsFor } from '../plan/notes'
 import { realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
-import { formRoles, formSlots } from '../plan/forms'
+import { formRoles, formSlots, themeSources } from '../plan/forms'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
 import { marginConfidence, normalize, pickFrom, rng } from './pick'
@@ -170,6 +171,7 @@ export class JevPlanner implements Planner {
     // 3 ─ one HarmonyBook phrase per 4-bar slot. Cadence splits are applied in
     // code from the book's `splits` list (no extra approach Choice).
     const slots = formSlots(globals.form as FormId, barCount)
+    const returns = themeSources(globals.form as FormId, barCount)
     const book = bookFor(input.style, globals.key as KeyId)
     const pickedChords: ChordId[] = []
     const contours: ContourId[] = []
@@ -198,7 +200,16 @@ export class JevPlanner implements Planner {
       )
       pickedChords.push(...expandPhrase(phraseId, book, slot))
       for (let k = 0; k < 4; k++) {
-        contours.push(decide(answers, slotContourQuestionId(k), `bars[${slotIndex * 4 + k}].contour`, CONTOURS))
+        const bar = slotIndex * 4 + k
+        const source = returns[bar]
+        if (source === undefined) {
+          contours.push(decide(answers, slotContourQuestionId(k), `bars[${bar}].contour`, CONTOURS))
+          continue
+        }
+        // A returning bar IS the earlier bar's tune: its shape is the form's decision, not a fresh one.
+        const contour = contours[source]
+        contours.push(contour)
+        decisions.push({ field: `bars[${bar}].contour`, choice: contour, confidence: 1, probabilities: normalize(Object.fromEntries(CONTOUR_IDS.map((id) => [id, id === contour ? 1 : 0]))) })
       }
     }
     const harmony = finishPhraseHarmony(pickedChords, slots, book)

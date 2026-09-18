@@ -7,7 +7,8 @@
 // Pure and deterministic: the same (plan, seed) always yields the same notes.
 
 import { Note as TonalNote } from 'tonal'
-import { DYNAMIC_IDS, ROLE_BASE, TEMPO_BPM, type BarRoleId, type CharacterId, type CompositionPlan, type DynamicId, type DynamicShapeId } from '../plan/schema'
+import { themeSources } from '../plan/forms'
+import { BAR_COUNT_VALUES, DYNAMIC_IDS, ROLE_BASE, TEMPO_BPM, type BarCount, type BarRoleId, type CharacterId, type CompositionPlan, type DynamicId, type DynamicShapeId } from '../plan/schema'
 import { rng } from '../planner/pick'
 import { newMemory, type BarContext, type BarNotes, type RenderMemory, type Texture } from './context'
 import { applyCadenceOrnament, STYLE_DIALECTS, timingOffsetSeconds } from './dialect'
@@ -44,6 +45,9 @@ function shapeOffset(shape: DynamicShapeId, index: number, count: number, role: 
       return t < 0.75 ? -12 + (t / 0.75) * 30 : -16
   }
 }
+
+/** Roles that never bring a tune back, whatever the form says: a phrase's punctuation and its exits. */
+const PUNCTUATION: ReadonlySet<BarRoleId> = new Set<BarRoleId>(['cadence', 'half_cadence', 'surprise', 'dissolve'])
 
 /** Dynamic inflection a role adds on top of the shape. */
 const ROLE_VELOCITY: Partial<Record<BarRoleId, number>> = { climax: 8, echo: -18, dissolve: -14, surprise: 6 }
@@ -153,6 +157,8 @@ function renderSplitBar(texture: Texture, base: Omit<BarContext, 'chord' | 'next
   const onSecond = texture({ ...base, chord: second, next, scale: scaleFor(key, palette, second), rand: replayRng(recorder.drawn, live), memory })
   // The bar ends on the second chord, so its memory stands — except a motif stated in this bar, which the first pass heard on the downbeat chord.
   for (const [line, motif] of Object.entries(memoryAfterFirst.motifs)) if (!before.motifs[line]) memory.motifs[line] = motif
+  // Likewise the theme remembers this bar as it began: over its downbeat chord.
+  for (const [line, figures] of Object.entries(memoryAfterFirst.figures)) if (figures[base.index]) (memory.figures[line] ??= {})[base.index] = figures[base.index]
   const splice = (a: Voice[], b: Voice[]) => Array.from({ length: Math.max(a.length, b.length) }, (_, i) => spliceVoice(a[i], b[i], meter.splitTick, second))
   return { treble: splice(onFirst.treble, onSecond.treble), bass: splice(onFirst.bass, onSecond.bass) }
 }
@@ -170,6 +176,11 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   const chords = plan.bars.map((bar) => resolveChord(key, bar.chord))
   const seconds = plan.bars.map((bar) => (bar.chord2 ? resolveChord(key, bar.chord2) : undefined))
   const baseVelocity = DYNAMIC_VELOCITY[plan.dynamics]
+  // Which bars bring an earlier bar's tune back: the form's returning phrases.
+  // A hand-edited plan may disagree with its form label, so a bar only returns
+  // while its role still allows it (a cadence is always written fresh).
+  const barCount = plan.bars.length as BarCount
+  const returns = (BAR_COUNT_VALUES as readonly number[]).includes(barCount) ? themeSources(plan.form, barCount) : []
   const velocities = plan.bars.map((barPlan, index) =>
     clamp(baseVelocity + shapeOffset(plan.dynamicShape, index, plan.bars.length, barPlan.role) + (ROLE_VELOCITY[barPlan.role] ?? 0), 24, 118),
   )
@@ -193,6 +204,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       count: plan.bars.length,
       isLast: index === plan.bars.length - 1,
       plan: barPlan,
+      returns: PUNCTUATION.has(barPlan.role) ? undefined : returns[index],
       role: ROLE_BASE[barPlan.role],
       character: plan.character,
       palette: plan.palette,

@@ -4,6 +4,14 @@ import type { KeyInfo, ResolvedChord } from './harmony'
 import { clamp } from './pitch'
 import type { MeterInfo, Note, Voice } from './score'
 
+/** A remembered bar of one line: its pitches, and the chord they were heard over. */
+export interface Figure {
+  chord: string
+  root: string
+  core: string[]
+  pitches: string[]
+}
+
 /** State a texture carries from bar to bar (voice-leading, motif memory). */
 export interface RenderMemory {
   /** Last sounding pitch of a named line, as MIDI. */
@@ -18,11 +26,19 @@ export interface RenderMemory {
    * chord, transposed onto a distant one); a development bar fragments it and
    * sequences the fragment.
    */
-  motifs: Record<string, { chord: string; root: string; core: string[]; pitches: string[] }>
+  motifs: Record<string, Figure>
   /** Rhythm of the previous bar per line, so `sequence` and `echo` bars can repeat its figure. */
   lastRhythms: Record<string, number[]>
   /** Pitches of the previous bar per line, with that bar's chord root: what a `sequence` moves onto the new harmony. */
   lastFigures: Record<string, { root: string; pitches: string[] }>
+  /**
+   * The theme: every bar's figure per line, by bar index, and every bar's
+   * rhythm per rhythm key. A bar that brings an earlier one back
+   * (`BarContext.returns`) reads its tune from here, so what returns is the
+   * phrase — three bars of it — and not only its first bar.
+   */
+  figures: Record<string, Record<number, Figure>>
+  barRhythms: Record<string, Record<number, number[]>>
   /**
    * Per-piece pattern choices (which Alberti figure, which cell shape …),
    * rolled once from the seed so a piece is consistent with itself but two
@@ -32,7 +48,7 @@ export interface RenderMemory {
   bass?: string
 }
 
-export const newMemory = (): RenderMemory => ({ lines: {}, voicings: {}, rhythms: {}, motifs: {}, lastRhythms: {}, lastFigures: {}, choices: {} })
+export const newMemory = (): RenderMemory => ({ lines: {}, voicings: {}, rhythms: {}, motifs: {}, lastRhythms: {}, lastFigures: {}, figures: {}, barRhythms: {}, choices: {} })
 
 /** Pick one of `count` variants for this piece, once, and remember it. */
 export function pieceChoice(bar: BarContext, key: string, count: number): number {
@@ -48,6 +64,12 @@ export interface BarContext {
   count: number
   isLast: boolean
   plan: BarPlan
+  /**
+   * The earlier bar whose tune this bar brings back, when the form says this
+   * phrase is a return (src/plan/forms.ts `themeSources`). Undefined where the
+   * line is new.
+   */
+  returns?: number
   /** `plan.role` folded onto the seven roles the gesture tables are keyed by. */
   role: BaseRoleId
   character: CharacterId
@@ -144,11 +166,17 @@ const BANK_FOR_ROLE: Record<BaseRoleId, keyof RhythmBank> = {
  * is most of what makes a generated line read as a motif.
  */
 export function rhythmFor(bar: BarContext, bank: RhythmBank, memoryKey: string): number[] {
-  const remember = (rhythm: number[]) => (bar.memory.lastRhythms[memoryKey] = rhythm)
+  const remember = (rhythm: number[]) => {
+    ;(bar.memory.barRhythms[memoryKey] ??= {})[bar.index] = rhythm
+    return (bar.memory.lastRhythms[memoryKey] = rhythm)
+  }
   if (bar.isLast) return remember(choose(bank.close, bar.rand))
+  // A returning phrase comes back with its rhythm, bar for bar.
+  const returning = bar.returns === undefined ? undefined : bar.memory.barRhythms[memoryKey]?.[bar.returns]
+  if (returning) return remember(returning)
   // A sequence or an echo IS the previous bar's figure on a new chord / at a new dynamic.
   const previous = bar.memory.lastRhythms[memoryKey]
-  if ((bar.plan.role === 'sequence' || bar.plan.role === 'echo') && previous) return previous
+  if ((bar.plan.role === 'sequence' || bar.plan.role === 'echo') && previous) return remember(previous)
   if (bar.role === 'statement' || bar.role === 'restatement') {
     const remembered = bar.memory.rhythms[memoryKey]
     if (remembered) return remember(remembered)

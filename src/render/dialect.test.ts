@@ -8,6 +8,7 @@ import {
   timingOffsetSeconds,
   type StyleDialect,
 } from './dialect'
+import { newMemory } from './context'
 import { bassPartner } from './voiceLeading'
 import { keyInfo, resolveChord } from './harmony'
 import { midiOf } from './pitch'
@@ -98,7 +99,7 @@ describe('dialect knobs in the renderer', () => {
       key: keyInfo('C_major'),
       dialect: STYLE_DIALECTS.glass,
       rand: () => 0.5,
-      memory: { lines: {}, voicings: {}, rhythms: {}, motifs: {}, lastRhythms: {}, lastFigures: {}, choices: {} },
+      memory: newMemory(),
     }).treble[0]).toHaveLength(1)
   })
 

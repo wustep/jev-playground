@@ -19,6 +19,11 @@ import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 //                 two chords' roots (a step, a third, a fourth …)
 //   development   the head of the motif, transposed onto this chord, then the
 //                 fragment once more a step higher or lower — fragmentation
+// Above the bar there is the theme: a line keeps every bar it has played, and
+// a bar the form marks as a return (`bar.returns`) brings that earlier bar
+// back the way a restatement does — so a consequent is its antecedent again
+// up to the cadence, and an A section comes back whole. A returning climax
+// bar is the same figure reaching a third higher.
 // Transposition is diatonic: pitches move by scale steps of this bar's scale,
 // so a sequence changes quality with the harmony the way a real one does.
 
@@ -76,6 +81,9 @@ function commonTones(a: readonly string[], b: readonly string[]): number {
   const chromas = new Set(a.map((pc) => Note.chroma(pc)))
   return b.filter((pc) => chromas.has(Note.chroma(pc))).length
 }
+
+/** Semitones a returning bar is raised when it is the phrase's climax: the same figure, reaching a third higher. */
+const CLIMAX_LIFT = 4
 
 /** Which way a development bar's second fragment steps. */
 const FRAGMENT_STEP: Record<ContourId, number> = { rise: 1, arch: 1, wave: 1, leap_fall: 1, fall: -1, dip: -1, drop_rise: -1, pendulum: -1, static: 0 }
@@ -159,7 +167,19 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
   const previousFigure = bar.memory.lastFigures[line]
   const isMain = options.contour == null
   let recalled: string[] | undefined
-  if ((bar.plan.role === 'sequence' || bar.plan.role === 'echo') && previousFigure && previousFigure.pitches.length > 0 && slots.length > 0) {
+  const theme = bar.returns === undefined ? undefined : bar.memory.figures[line]?.[bar.returns]
+  if (theme && theme.pitches.length > 0 && slots.length > 0) {
+    const fitted = fitTo(theme.pitches, slots.length)
+    const related = theme.chord === bar.chord.id || commonTones(theme.core, bar.chord.core) >= 2
+    const shift = related ? 0 : rootShift(theme.root, bar.chord.root)
+    recalled = related ? reconcile(bar, fitted, slots, isStrong, lo, hi) : transposeFigure(bar, fitted, shift, slots, isStrong, lo, hi)
+    if (bar.plan.role === 'climax') {
+      // Only if there is room above: a figure folded down an octave is no climax.
+      const lifted = transposeFigure(bar, fitted, shift + CLIMAX_LIFT, slots, isStrong, lo, hi)
+      const top = (pitches: readonly string[]) => Math.max(...pitches.map(midiOf))
+      if (top(lifted) > top(recalled)) recalled = lifted
+    }
+  } else if ((bar.plan.role === 'sequence' || bar.plan.role === 'echo') && previousFigure && previousFigure.pitches.length > 0 && slots.length > 0) {
     recalled = transposeFigure(bar, fitTo(previousFigure.pitches, slots.length), rootShift(previousFigure.root, bar.chord.root), slots, isStrong, lo, hi)
   } else if (bar.plan.role === 'restatement' && isMain && motif && motif.pitches.length > 0 && slots.length > 0) {
     const fitted = fitTo(motif.pitches, slots.length)
@@ -206,7 +226,8 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
     if (landing.length > 0) pitches[pitches.length - 1] = landing[nearestIndex(landing, around)]
   }
 
-  if (bar.palette === 'chromatic_approach' && bar.dialect.nonChordTone !== 'leave_added') {
+  // (A returning bar already carries the approach tones it was first heard with.)
+  if (bar.palette === 'chromatic_approach' && bar.dialect.nonChordTone !== 'leave_added' && !theme) {
     for (let k = 0; k < slots.length - 1; k++) {
       const approachable = !isStrong(slots[k]) && isStrong(slots[k + 1]) && slots[k].dur <= 2
       if (approachable && bar.rand() < 0.45) {
@@ -218,6 +239,7 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
   if (pitches.length > 0) {
     bar.memory.lines[line] = midiOf(pitches[pitches.length - 1])
     bar.memory.lastFigures[line] = { root: bar.chord.root, pitches: [...pitches] }
+    ;(bar.memory.figures[line] ??= {})[bar.index] = { chord: bar.chord.id, root: bar.chord.root, core: [...bar.chord.core], pitches: [...pitches] }
   }
   return pitches
 }
