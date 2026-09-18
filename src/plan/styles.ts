@@ -110,7 +110,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   bach: {
     brief:
-      'German Baroque keyboard music, c. 1720. Functional harmony whose bass moves by step through inverted chords, circle-of-fifths sequences, pedal points and clear dominant–tonic cadences. Pieces are preludes of unbroken figuration, two-part inventions, chorales, or binary dances (sarabande, minuet, gigue). Dynamics change in blocks, not swells. Written for harpsichord, clavichord and organ.',
+      'German Baroque keyboard, c. 1720: the bass walks by step through inversions (I–ii4/2–V6/5), circle-of-fifths sequences and pedal points — not a singing tune over wide arpeggios, not root-to-root leaps. Eight to sixteen bars are a spun-out head–sequence–cadence or a binary-dance strain that cadences in V (major) or III (minor) at the midpoint; textures are unbroken prelude figuration, two-part invention, four-part chorale, or sarabande/gigue. Terraced dynamics on harpsichord or organ — dry, no swells, no rubato.',
     priors: {
       form: { spinning_out: 35, binary_dance: 30, period: 20, sentence: 10, call_and_response: 5 },
       key: { C_major: 12, G_major: 10, D_major: 9, F_major: 8, Bb_major: 6, A_major: 5, Eb_major: 4, E_major: 3, D_minor: 12, G_minor: 9, C_minor: 9, A_minor: 8, E_minor: 6, B_minor: 6, F_minor: 3 },
@@ -259,7 +259,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   beethoven: {
     brief:
-      'Viennese Classical-to-Romantic piano music, c. 1800. Tonic and dominant in every inversion, cadential six-fours, diminished-seventh shocks, Neapolitan and minor-subdominant colour; one harmony may be held for bars before the pace quickens into a cadence. Themes are sentences and periods built from a short motto. Dynamics avoid the middle: pianissimo against fortissimo, long crescendos cut off by a sudden piano, sforzando accents. Stormy tremolo-and-chords allegros, singing adagios, staccato scherzos, solemn marches. Written for the piano.',
+      'Viennese piano, c. 1800. A short motto becomes a sentence or period; one harmony often sits two to four bars, then the pace snaps into a cadential 6/4–V–I, a diminished-seventh jolt or a Neapolitan. Left hand is Alberti, repeated chords, octaves or storm tremolo — not a rolling wide-span nocturne, not a rotating cell — and dynamics skip the middle: pianissimo against fortissimo, crescendo cut by sudden piano, sforzando; stormy allegros, singing adagios, staccato scherzos, solemn marches.',
     priors: {
       form: { sentence: 35, period: 35, call_and_response: 10, arch_return: 10, free_fantasia: 5, layered_build: 5 },
       key: { C_minor: 16, F_minor: 10, D_minor: 8, Cs_minor: 5, A_minor: 6, E_minor: 4, G_minor: 4, Eb_major: 12, C_major: 10, G_major: 7, Ab_major: 7, E_major: 5, F_major: 5, D_major: 4, A_major: 4, Db_major: 2 },
@@ -414,7 +414,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   chopin: {
     brief:
-      'Mid-nineteenth-century Polish and French piano music, c. 1840. A singing right-hand cantabile over left-hand arpeggio, waltz or nocturne figuration; rubato-friendly slow pieces; mazurka and waltz dance lilt in triple meter; stormy ballade and scherzo drama. Harmony is functional Romantic: chromatic approach over a diatonic base, secondary dominants, Neapolitan colour, and clear dominant–tonic and half cadences. Pedalled piano, written for the grand piano.',
+      'Polish–French piano, c. 1840. An ornamented vocal right hand (fioritura, delayed resolutions) over a wide-span left-hand arpeggio, a waltz bass-chord-chord, or a mazurka that accents beat two or three — not Alberti, not jazz stride, not block-chord shocks. Harmony stays tonal: chromatic inner voices, cadential 6/4 sharing the bar with V7, Neapolitan in minor, mazurka mixture; eight bars are a 4+4 period whose return is ornamented, often after a pickup. Pedalled grand piano, rubato-friendly; no parallel planing, no ii–V jazz turnaround.',
     priors: {
       form: { period: 30, sentence: 20, arch_return: 20, binary_dance: 15, spinning_out: 10, free_fantasia: 5 },
       key: { Db_major: 14, Ab_major: 12, Bb_major: 8, Eb_major: 8, Gb_major: 6, F_major: 5, C_major: 4, Cs_minor: 10, B_minor: 8, Fs_minor: 6, C_minor: 5, E_minor: 5, F_minor: 5, G_minor: 4 },
@@ -570,7 +570,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   debussy: {
     brief:
-      'French piano music, c. 1905. Harmony is colour, not function: triads, ninths and hollow fifths glide in parallel; pentatonic, whole-tone and old church modes blur the key; added sixths and ninths hang unresolved over pedal notes. Phrases are short ideas said twice and set side by side like tiles. Dominant–tonic cadences are avoided — pieces settle by a plagal or modal step, or simply fade. Very soft, pedalled, with one gentle swell.',
+      'French piano, c. 1905. Harmony is colour: parallel triads, ninths and hollow fifths; pentatonic, whole-tone and church modes; added sixths and ninths left hanging over a pedal — closes are plagal, modal or a fade, never V7–I. Phrases are two-bar tiles said twice and set beside the next (mosaic), or an arch whose return is an echo. Very soft, fully pedalled; not a singing 4+4 tonal period, not stacked jazz ninths, not an additive cell process.',
     priors: {
       form: { mosaic_pairs: 40, arch_return: 40, free_fantasia: 10, layered_build: 5, period: 5 },
       key: { Db_major: 14, Gb_major: 8, E_major: 10, B_major: 6, F_major: 8, Bb_major: 5, A_major: 5, G_major: 5, C_major: 6, D_minor: 8, Fs_minor: 8, E_minor: 6, A_minor: 5, Cs_minor: 6 },
@@ -720,7 +720,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   glass: {
     brief:
-      'American minimalism, c. 1980. Process music: a small cell is stated and then changed a little at a time — a note added, the figure rotated so it starts one note later, a layer doubled in speed — so that nothing is repeated unchanged for long. The harmony is a cycle of two to eight plain chords related by thirds and common tones rather than by function; each pass takes a new inversion and so a new bass, and every eight bars or so a different cycle takes over. Rocking thirds, arpeggio cells and two-against-three cross-rhythms over a slow bass, often under a bare slow melody. Dynamics move in blocks, with sudden terraces instead of a climax. Mostly minor, no leading-tone cadences — pieces stop rather than close. Piano, electric organ, strings, voices.',
+      'American minimalism, c. 1980. A small cell changes a little each pass — a note added, the figure rotated to start one note later — over a two-to-eight-chord cycle related by thirds and common tones; the next pass takes a new inversion (new bass), and about every eight bars a different cycle takes over. Rocking thirds and two-against-three over a slow bass; pieces stop on a low tonic or tonic 6/4 rather than cadence. Terraced blocks, mostly minor: a process of rotation and addition, not the same ostinato getting louder, not colour-planing haze.',
     priors: {
       form: { additive_loop: 40, layered_build: 30, arch_return: 18, call_and_response: 12 },
       key: { F_minor: 16, A_minor: 14, D_minor: 12, G_minor: 12, C_minor: 10, E_minor: 10, C_major: 8, F_major: 8, A_major: 4, Eb_major: 3, Ab_major: 3 },
@@ -854,7 +854,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   hans_zimmer: {
     brief:
-      'Film-score piano and hybrid texture, c. 2000s–2020s. Slow-building layered ostinatos, simple diatonic or modal loops that escalate, pedal drones, sparse then heroic surges, minor-key gravity, and occasional warm major anthems. Pulse and crescendo drama with a melody riding over the ostinato — cells may thicken, but the piece is a build, not a process of additive rotation. Written for grand piano, strings, and occasionally electric piano.',
+      'Film-score piano and hybrid, 2000s–2020s. A slow long-note chant rides a left-hand ostinato that keeps the same figure while layers thicken and the dynamic climbs — loops of i–bVI–bVII–V or i–iv–bVI–V, or a tonic drone held across the barline; harmony never moves faster than the bar. Eight to sixteen bars vamp, add weight, surge late, then often drop to bare. Four-four pulse, piano and strings: a layered build, not cell rotation, not a 4+4 song period.',
     priors: {
       form: { layered_build: 32, additive_loop: 22, vamp_and_tag: 18, arch_return: 16, period: 8, sentence: 4 },
       key: { D_minor: 14, A_minor: 12, C_minor: 12, G_minor: 10, F_minor: 8, E_minor: 6, C_major: 8, Eb_major: 8, F_major: 6, G_major: 6, D_major: 5, Ab_major: 5 },
@@ -1018,7 +1018,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   laufey: {
     brief:
-      'Icelandic-Chinese jazz-pop singer-songwriter pianist, 2020s. Warm major-key song forms: a clear singing melody over swinging or lightly syncopated piano — close mid-register chords, gentle broken-chord accompaniment, or a soft stride. Harmony is functional and jazz-tinged — ii–V colour, major sevenths, the occasional chromatic approach — without dense stacked extensions. Intimate, unhurried and romantic; soft dynamics. Acoustic grand piano, sometimes a light electric piano.',
+      'Jazz-pop singer-songwriter piano, 2020s. A vocal-range hook in even four-bar phrases (period, returning A, or vamp-and-tag) over mid-register close voicings, a soft stride, or light broken chords — swing or gentle bossa syncopation, not a wide nocturne arpeggio and not sixteenths grouped 5+5+6. Harmony is song-form jazz: I–vi–ii–V and inverted ii–V–I, major sevenths, borrowed iv; no stacked ninths or thirteenths, no planing, no drone-loop build. Intimate, unhurried, mostly major; acoustic piano first.',
     priors: {
       form: { period: 32, arch_return: 26, vamp_and_tag: 26, call_and_response: 16 },
       key: { F_major: 12, Bb_major: 11, Eb_major: 10, C_major: 10, Ab_major: 8, G_major: 7, A_major: 6, D_major: 5, D_minor: 8, A_minor: 7, C_minor: 6, F_minor: 5, G_minor: 5 },
@@ -1148,7 +1148,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   elijah_fox: {
     brief:
-      'Contemporary jazz-trained pianist-producer, 2020s, whose solo piano miniatures blend jazz, impressionism and psychedelic soul. Flowing arpeggio patterns whose accents are displaced into uneven groups, modal mixture (chords borrowed from the parallel minor set against the major), melodies carried on top of close chords with moving inner voices, short loops that are varied rather than developed, colour-chord endings left hanging. Soft and unhurried. Acoustic piano, Wurlitzer electric piano, ambient pads.',
+      'Jazz-trained pianist-producer, 2020s: solo-piano miniatures, not sung song forms. Continuous sixteenths whose accents fall in uneven groups (5+5+6, 7+5+4); modal mixture as the hook — bVImaj7 set against IVmaj7, maj7(#5) against add6 — with sliding inner voices and endings left hanging on colour chords (maj7#11, 6/9). Short vamps are varied, not spun into an additive process and not a clear vocal hook over stride; no parallel planing or whole-tone veils; soft, unhurried, piano or Wurlitzer.',
     priors: {
       form: { vamp_and_tag: 40, arch_return: 25, mosaic_pairs: 12, additive_loop: 10, free_fantasia: 8, period: 5 },
       key: { C_major: 12, Db_major: 10, D_major: 10, E_major: 10, B_major: 8, Ab_major: 8, Eb_major: 8, F_major: 6, G_major: 5, Fs_minor: 10, C_minor: 6, F_minor: 4, Cs_minor: 3 },

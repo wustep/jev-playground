@@ -102,11 +102,16 @@ describe('JevPlanner', () => {
     expect(top).toBeCloseTo(0.8)
   })
 
-  it('hands Chopin, Hans Zimmer and Laufey briefs to Jev when asked', () => {
+  it('hands every style brief to Jev when asked', () => {
     for (const [style, name, snippet] of [
-      ['chopin', 'Frédéric Chopin', 'cantabile'],
-      ['hans_zimmer', 'Hans Zimmer', 'ostinato'],
-      ['laufey', 'Laufey', 'jazz-pop'],
+      ['bach', 'Johann Sebastian Bach', 'ii4/2'],
+      ['beethoven', 'Ludwig van Beethoven', 'sforzando'],
+      ['chopin', 'Frédéric Chopin', 'fioritura'],
+      ['debussy', 'Claude Debussy', 'never V7–I'],
+      ['glass', 'Philip Glass', 'minimalism'],
+      ['hans_zimmer', 'Hans Zimmer', 'i–bVI–bVII–V'],
+      ['laufey', 'Laufey', 'vocal-range'],
+      ['elijah_fox', 'Elijah Fox', '5+5+6'],
     ] as const) {
       const on = buildRequest({ op: 'concept', style, brief: true }, 'jev-latest')
       const off = buildRequest({ op: 'concept', style, brief: false }, 'jev-latest')
