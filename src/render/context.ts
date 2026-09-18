@@ -1,4 +1,5 @@
 import type { BarPlan, BaseRoleId, CharacterId, PaletteId } from '../plan/schema'
+import type { StyleDialect } from './dialect'
 import type { KeyInfo, ResolvedChord } from './harmony'
 import { clamp } from './pitch'
 import type { MeterInfo, Note, Voice } from './score'
@@ -59,6 +60,8 @@ export interface BarContext {
   velocity: number
   meter: MeterInfo
   key: KeyInfo
+  /** Closed per-style renderer knobs (non-chord tones, cadence ornament, bass, timing). */
+  dialect: StyleDialect
   rand: () => number
   memory: RenderMemory
 }

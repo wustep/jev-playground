@@ -5,6 +5,7 @@
 import { Note } from 'tonal'
 import type { ContourId } from '../plan/schema'
 import type { BarContext, Slot } from './context'
+import { applyNonChordTones } from './dialect'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 
 // ── motif memory: the same figure on a new chord ────────────────────────────
@@ -148,7 +149,8 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
   const span = options.span ?? CONTOUR_SPAN[contour] + (role === 'climax' && contour !== 'static' ? 3 : 0)
 
   const chordRungs = ladder(bar.chord.core, lo, hi)
-  const scaleRungs = ladder(bar.scale, lo, hi)
+  const colour = bar.dialect.nonChordTone === 'leave_added' ? [...bar.scale, ...bar.chord.extensions] : bar.scale
+  const scaleRungs = ladder(colour, lo, hi)
   const isStrong = (slot: Slot) => slot.start % strongEvery === 0 || slot.dur >= bar.meter.beatTicks
 
   // Thematic memory (see the notes at the top of this file). The rhythm
@@ -190,6 +192,7 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
     pitches.push(rungs[index])
     previousDesired = desired
   })
+  if (!recalled && isMain) applyNonChordTones(bar, slots, pitches, isStrong)
   if (bar.plan.role === 'statement' && !motif && isMain && pitches.length > 0) {
     bar.memory.motifs[line] = { chord: bar.chord.id, root: bar.chord.root, core: [...bar.chord.core], pitches: [...pitches] }
   }
@@ -203,7 +206,7 @@ export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: 
     if (landing.length > 0) pitches[pitches.length - 1] = landing[nearestIndex(landing, around)]
   }
 
-  if (bar.palette === 'chromatic_approach') {
+  if (bar.palette === 'chromatic_approach' && bar.dialect.nonChordTone !== 'leave_added') {
     for (let k = 0; k < slots.length - 1; k++) {
       const approachable = !isStrong(slots[k]) && isStrong(slots[k + 1]) && slots[k].dur <= 2
       if (approachable && bar.rand() < 0.45) {

@@ -56,7 +56,7 @@ export function parallelPlaning(bar: BarContext): BarNotes {
   const register = bar.role === 'contrast' ? 48 : 38
   const root = lowBass(bar.chord, bar.memory.bass, register, register - 6, register + 8)
   bar.memory.bass = root
-  const fifth = bassPartner(bar.chord, root)
+  const fifth = bassPartner(bar.chord, root, bar.dialect.bassSpacing)
   const pedalTone = bar.role === 'climax' ? [root, fifth, nearestNote([bar.chord.bass], midiOf(root) + 12)] : [root, fifth]
   const left: Voice = [note(0, meter.ticksPerBar, pedalTone, velocity - 8, { roll: true })]
   return { treble: [right], bass: [left] }

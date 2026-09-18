@@ -84,7 +84,7 @@ export function ariaWalkingBass(bar: BarContext): BarNotes {
   })
   if (bar.isLast) {
     const low = bassFor(bar.chord, bar.memory.bass, { lo: 36, hi: 50, allowInversion: false })
-    return { treble: [melody], bass: [[note(0, meter.ticksPerBar, [low, bassPartner(bar.chord, low)], velocity - 4)]] }
+    return { treble: [melody], bass: [[note(0, meter.ticksPerBar, [low, bassPartner(bar.chord, low, bar.dialect.bassSpacing)], velocity - 4)]] }
   }
   return { treble: [melody], bass: [walkingEighths(bar, 38, 58)] }
 }
@@ -194,7 +194,7 @@ export function strideDance(bar: BarContext): BarNotes {
   }
 
   const left: Voice = []
-  const alternate = nearestNote([bassPartner(bar.chord, low).replace(/-?\d+$/, '')], midiOf(low) + 5, 33, 52)
+  const alternate = nearestNote([bassPartner(bar.chord, low, bar.dialect.bassSpacing).replace(/-?\d+$/, '')], midiOf(low) + 5, 33, 52)
   if (meter.id === 'six_eight') {
     // Two swung groups: bass – chord – chord, the second bass on the partner tone.
     for (let group = 0; group < 2; group++) {

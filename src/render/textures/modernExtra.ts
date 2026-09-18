@@ -105,7 +105,7 @@ export function melodyOverOstinato(bar: BarContext): BarNotes {
   const { meter, velocity } = bar
   const low = lowBass(bar.chord, bar.memory.bass, 45, 36, 52)
   bar.memory.bass = low
-  const partner = bassPartner(bar.chord, low)
+  const partner = bassPartner(bar.chord, low, bar.dialect.bassSpacing)
   const third = nearestNote([bar.chord.core[1] === bar.chord.bass ? bar.chord.core[2] : bar.chord.core[1]], midiOf(low) + 15)
   const tenth = nearestNote([Note.pitchClass(third)], midiOf(low) + 16, midiOf(low) + 12, midiOf(low) + 24)
 
@@ -172,7 +172,7 @@ export function interlockingHands(bar: BarContext): BarNotes {
     const low = lowBass(bar.chord, bar.memory.bass, 48, 40, 55)
     return {
       treble: [[note(0, meter.ticksPerBar, sortAscending([rightSet[0], rightSet[1]]), velocity)]],
-      bass: [[note(0, meter.ticksPerBar, [low, bassPartner(bar.chord, low)], velocity - 6)]],
+      bass: [[note(0, meter.ticksPerBar, [low, bassPartner(bar.chord, low, bar.dialect.bassSpacing)], velocity - 6)]],
     }
   }
 
@@ -209,7 +209,7 @@ export function displacedArpeggio(bar: BarContext): BarNotes {
   const role: BaseRoleId = bar.isLast ? 'cadence' : bar.role
   const low = lowBass(bar.chord, bar.memory.bass, 40, 33, 48)
   bar.memory.bass = low
-  const partner = bassPartner(bar.chord, low)
+  const partner = bassPartner(bar.chord, low, bar.dialect.bassSpacing)
   const center = role === 'climax' ? 74 : role === 'contrast' ? 76 : 67
   // Every chord tone, colour tones included, stacked from the middle of the keyboard up.
   const tones = ladder(bar.chord.pcs, center - 9, center + 12)
@@ -283,7 +283,7 @@ export function chordalMelody(bar: BarContext): BarNotes {
 
   const low = lowBass(bar.chord, bar.memory.bass, 41, 34, 48)
   bar.memory.bass = low
-  if (bar.isLast) return { treble: [right], bass: [[note(0, meter.ticksPerBar, [low, bassPartner(bar.chord, low)], velocity - 6, { roll: true })]] }
+  if (bar.isLast) return { treble: [right], bass: [[note(0, meter.ticksPerBar, [low, bassPartner(bar.chord, low, bar.dialect.bassSpacing)], velocity - 6, { roll: true })]] }
 
   // Inner voice: slides by half-steps from one guide tone toward the next chord's.
   const guide = bar.chord.core[3] ?? bar.chord.core[1]

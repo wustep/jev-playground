@@ -28,7 +28,7 @@ export function minimalCells(bar: BarContext): BarNotes {
   bar.memory.voicings.cell = voicing
   const low = lowBass(bar.chord, bar.memory.bass, 43, 36, 50)
   bar.memory.bass = low
-  const fifth = bassPartner(bar.chord, low)
+  const fifth = bassPartner(bar.chord, low, bar.dialect.bassSpacing)
 
   if (bar.isLast) {
     // The machine simply stops: one held sonority.
@@ -136,7 +136,7 @@ export function syncopatedOstinato(bar: BarContext): BarNotes {
 
   const root = lowBass(bar.chord, bar.memory.bass, 41, 34, 48)
   bar.memory.bass = root
-  const fifth = bassPartner(bar.chord, root)
+  const fifth = bassPartner(bar.chord, root, bar.dialect.bassSpacing)
   const colour = nearestNote([bar.chord.extensions[0] ?? bar.chord.core[3] ?? bar.chord.root], midiOf(root) + 13)
   const cycle = [root, fifth, colour]
 
@@ -217,7 +217,7 @@ export function lushVoicings(bar: BarContext): BarNotes {
   // (or a shell with the seventh) that rings to the barline.
   const root = lowBass(bar.chord, bar.memory.bass, 41, 34, 48)
   bar.memory.bass = root
-  const fifth = bassPartner(bar.chord, root)
+  const fifth = bassPartner(bar.chord, root, bar.dialect.bassSpacing)
   const seventh = bar.chord.core[3] && bar.chord.core[3] !== bar.chord.bass ? nearestNote([bar.chord.core[3]], midiOf(root) + 10) : undefined
   const push = 6
   const left: Voice =

@@ -10,6 +10,7 @@ import { Note as TonalNote } from 'tonal'
 import { DYNAMIC_IDS, ROLE_BASE, TEMPO_BPM, type BarRoleId, type CharacterId, type CompositionPlan, type DynamicId, type DynamicShapeId } from '../plan/schema'
 import { rng } from '../planner/pick'
 import { newMemory, type BarContext, type BarNotes, type RenderMemory, type Texture } from './context'
+import { applyCadenceOrnament, STYLE_DIALECTS, timingOffsetSeconds } from './dialect'
 import { keyInfo, resolveChord, scaleFor, type ResolvedChord } from './harmony'
 import { clamp, midiOf } from './pitch'
 import { METER_INFO, type Bar, type Note, type Score, type TimedNote, type Voice } from './score'
@@ -164,6 +165,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   // A second stream for touch, so adding expression never reshuffles the notes.
   const touch = rng(seed ^ 0x51ed270b)
   const feel = FEEL[plan.character]
+  const dialect = STYLE_DIALECTS[plan.style]
   const memory = newMemory()
   const chords = plan.bars.map((bar) => resolveChord(key, bar.chord))
   const seconds = plan.bars.map((bar) => (bar.chord2 ? resolveChord(key, bar.chord2) : undefined))
@@ -197,11 +199,13 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       velocity,
       meter,
       key,
+      dialect,
     }
     const second = seconds[index]
-    const notes = second
+    const raw = second
       ? renderSplitBar(texture, base, [chords[index], second], chords[index + 1], rand, memory)
       : texture({ ...base, chord: chords[index], next: chords[index + 1], scale: scaleFor(key, plan.palette, chords[index]), rand, memory })
+    const notes = applyCadenceOrnament(raw, { ...base, chord: chords[index], next: chords[index + 1], scale: scaleFor(key, plan.palette, second ?? chords[index]), rand, memory })
     return {
       index,
       plan: barPlan,
@@ -253,7 +257,7 @@ export function timeline(score: Score, options: { sustain?: boolean } = {}): Tim
     for (const [hand, voice] of voices) {
       for (const n of voice) {
         n.pitches.forEach((pitch, k) => {
-          const time = barStart + n.start * tick + (n.roll ? k * ROLL_SPREAD : 0)
+          const time = barStart + n.start * tick + (n.roll ? k * ROLL_SPREAD : 0) + timingOffsetSeconds(score, n.start, tick)
           // Character touch: short notes are clipped (staccato wit) or held (legato song); long ones always sing.
           const held = n.dur <= score.meter.beatTicks / 2 ? score.articulation : Math.max(score.articulation, 0.9)
           const written = n.dur * tick * 0.96 * held
