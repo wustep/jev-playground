@@ -213,7 +213,7 @@ export const INSTRUMENTS = {
   harpsichord: 'Harpsichord — plucked, bright, no touch dynamics',
   church_organ: 'Pipe organ — sustained, no decay',
   strings: 'Bowed string ensemble — sustained, swelling',
-  choir: 'Wordless choir singing "aah"',
+  choir: 'Wordless choir',
 } as const
 export type InstrumentId = keyof typeof INSTRUMENTS
 export const INSTRUMENT_IDS = keysOf<InstrumentId>(INSTRUMENTS)

@@ -507,7 +507,6 @@ export default function MusicApp() {
                     {INSTRUMENT_IDS.map((id) => (
                       <option key={id} value={id}>
                         {INSTRUMENTS[id].split(' — ')[0]}
-                        {id === plan.defaultInstrument ? '  ← plan' : ''}
                       </option>
                     ))}
                   </select>
