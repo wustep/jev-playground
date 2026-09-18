@@ -431,6 +431,7 @@ const FIELD_WEIGHT: Record<GlobalField, number> = {
   meter: 0.5,
   arrangement: 0.75,
   opening: 0.5,
+  pedal: 0.75,
 }
 
 /** 0–1: how typical the plan's globals are for one of the style's kinds of piece. */

@@ -94,10 +94,13 @@ interface CompositionPlan {
   meter: MeterId              // four_four | three_four | two_four | six_eight | nine_eight | twelve_eight
   texture: TextureId          // 22 textures: chorale … toccata_perpetual, rolling_nocturne, bell_organum
   palette: PaletteId          // diatonic | chromatic_approach | pentatonic | whole_tone | modal | modal_dark | blues
-  tempo: TempoId              // largo … presto (bucketed bpm)
+  tempo: TempoId              // larghissimo … prestissimo (bucketed bpm)
   dynamics: DynamicId         // pp … ff
   dynamicShape: DynamicShapeId// steady | terraced | crescendo | … | waves | late_surge | build_then_drop
   defaultInstrument: InstrumentId
+  arrangement?: ArrangementId // how density changes when material returns
+  opening?: OpeningId         // straight_in | vamp_intro | pickup
+  pedal?: PedalId             // dry | half | full — sustain for the piece
   bars: BarPlan[]             // 4 | 8 | 16 | 32 × { chord: ChordId (107 key-relative labels, inversions included), role (11), contour (9) }
 }
 ```
@@ -135,7 +138,7 @@ Same interface, no network, same order of decisions: a character (one of the sty
 
 ### Audio (`src/audio/engine.ts`)
 
-One `AudioContext`, created on the first user gesture. Every instrument and the reverb send run `→ master gain → limiter → destination`; nothing else touches the destination. A 25 ms two-clock lookahead scheduler feeds smplr, so stop / instrument swap / loop are immediate and nothing is queued more than ~180 ms ahead. Status is truthful (`idle / loading n/m / ready / error`). `dispose()` stops voices, disconnects nodes and closes the context (StrictMode-safe). Instruments: SplendidGrandPiano, ElectricPiano, and Soundfont harpsichord / church organ / strings / choir.
+One `AudioContext`, created on the first user gesture. Every instrument and the existing smplr Reverb send (one short room, ≈11 % wet, darker Dattorro decay/damping — no second room, no pedal wash) run `→ master gain → limiter → destination`; nothing else touches the destination. A 25 ms two-clock lookahead scheduler feeds smplr, so stop / instrument swap / loop are immediate and nothing is queued more than ~180 ms ahead. Status is truthful (`idle / loading n/m / ready / error`). `dispose()` stops voices, disconnects nodes and closes the context (StrictMode-safe). Instruments: SplendidGrandPiano, ElectricPiano, and Soundfont harpsichord / church organ / strings / choir. Sustain is a plan global (`dry` | `half` | `full`), realised as note hold in the renderer and CC64 in MIDI — not as a wet-path wash.
 
 ## Debug view
 

@@ -1,7 +1,7 @@
 // The renderer's output: notes on a sixteenth-note grid, already split into
 // staves and voices. Sheet, playback and MIDI export all read this one shape.
 
-import type { BarPlan, CompositionPlan, DynamicId, MeterId } from '../plan/schema'
+import type { BarPlan, CompositionPlan, DynamicId, MeterId, PedalId } from '../plan/schema'
 
 /** Sixteenth notes. Every duration and onset in a Score is a whole number of ticks. */
 export const TICKS_PER_QUARTER = 4
@@ -65,8 +65,8 @@ export interface Score {
   meter: MeterInfo
   bpm: number
   bars: Bar[]
-  /** Hold the sustain pedal through each bar (playback + MIDI CC64). */
-  pedal: boolean
+  /** Sustain for the piece: dry cuts, half overlaps, full rings to the barline. */
+  pedal: PedalId
   /** 0–1: how much of a short note's written length sounds (the character's touch). */
   articulation: number
   /**

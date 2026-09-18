@@ -1,4 +1,4 @@
-import type { TextureId } from '../../plan/schema'
+import type { CompositionPlan, PedalId, TextureId } from '../../plan/schema'
 import type { Texture } from '../context'
 import { brokenChordPrelude, chorale, twoVoiceCounterpoint } from './baroque'
 import { albertiMelody, dramaticChords } from './classical'
@@ -44,3 +44,8 @@ export const PEDALLED: ReadonlySet<TextureId> = new Set<TextureId>([
   'chordal_melody',
   'bell_organum',
 ])
+
+/** Planner pick, or the texture's habit for a hand-edited plan that omitted it. */
+export function pedalOf(plan: Pick<CompositionPlan, 'pedal' | 'texture'>): PedalId {
+  return plan.pedal ?? (PEDALLED.has(plan.texture) ? 'full' : 'dry')
+}
