@@ -331,6 +331,7 @@ export class HeuristicPlanner implements Planner {
     }
 
     const plan: CompositionPlan = { version: 1, style: input.style, ...(globals as PlanGlobals), bars }
+    const exchanges = shadowExchanges(plan, input.brief)
     return {
       plan,
       trace: {
@@ -338,7 +339,7 @@ export class HeuristicPlanner implements Planner {
         requests: 0,
         latencyMs: performance.now() - started,
         decisions,
-        exchanges: shadowExchanges(plan, input.brief),
+        exchanges,
       },
     }
   }
