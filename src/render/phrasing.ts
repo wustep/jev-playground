@@ -9,7 +9,7 @@
 import { themeSources } from '../plan/forms'
 import { BAR_COUNT_VALUES, type BarCount, type CharacterId, type FormId } from '../plan/schema'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
-import { clamp, ladder, midiOf, nearestIndex } from './pitch'
+import { clamp, ladder, midiOf, nearestIndex, nearestNote } from './pitch'
 import type { MeterInfo, Note, Score, Voice } from './score'
 
 export type Phrasing = 'none' | 'breathing' | 'long'
@@ -135,7 +135,13 @@ export function pickupNotes(
   const start = ticksPerBar - pickupTicks
   const count = pickupTicks >= 4 ? 2 : 1
   const durs = count === 1 ? [pickupTicks] : [Math.floor(pickupTicks / 2), Math.ceil(pickupTicks / 2)]
-  const rungs = ladder(scale, Math.min(midiOf(from), midiOf(to)) - 14, Math.max(midiOf(from), midiOf(to)) + 14)
+  // Anacrusis approaches the downbeat, not the basement: fold `from` into the
+  // destination octave so a bass C2 → melody C5 does not write C2 on the treble staff.
+  const toMidi = midiOf(to)
+  let fromMidi = midiOf(from)
+  while (fromMidi < toMidi - 9) fromMidi += 12
+  while (fromMidi > toMidi + 9) fromMidi -= 12
+  const rungs = ladder(scale, Math.min(fromMidi, toMidi) - 14, Math.max(fromMidi, toMidi) + 14)
   const write = (startAt: number, dur: number, pitch: string): Note => ({
     start: startAt,
     dur,
@@ -143,8 +149,8 @@ export function pickupNotes(
     velocity: clamp(Math.round(velocity - 8), 1, 127),
   })
   if (rungs.length === 0) return durs.map((dur, k) => write(start + durs.slice(0, k).reduce((a, b) => a + b, 0), dur, from))
-  let fromI = nearestIndex(rungs, midiOf(from))
-  const toI = nearestIndex(rungs, midiOf(to))
+  let fromI = nearestIndex(rungs, fromMidi)
+  const toI = nearestIndex(rungs, toMidi)
   if (fromI === toI) fromI = clamp(fromI - count, 0, rungs.length - 1)
   const toward = Math.sign(toI - fromI) || 1
   const path = Array.from({ length: count }, (_, k) => clamp(fromI + toward * (k + 1), 0, rungs.length - 1))
@@ -152,7 +158,17 @@ export function pickupNotes(
   if (path[path.length - 1] === toI && count > 0) path[path.length - 1] = clamp(toI - toward, 0, rungs.length - 1)
   let at = start
   return durs.map((dur, k) => {
-    const written = write(at, dur, rungs[path[k] ?? fromI])
+    let pitch = rungs[path[k] ?? fromI]
+    // Last guard: never write a pickup more than a seventh below the target.
+    if (pitch && midiOf(pitch) < toMidi - 10) {
+      const pc = pitch.replace(/-?\d+$/, '')
+      try {
+        pitch = nearestNote([pc], toMidi - 4, toMidi - 10, toMidi)
+      } catch {
+        pitch = rungs[toI] ?? pitch
+      }
+    }
+    const written = write(at, dur, pitch)
     at += dur
     return written
   })

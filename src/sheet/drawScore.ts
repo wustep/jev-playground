@@ -76,6 +76,8 @@ const marginX = (width: number) => (width >= 720 ? 34 : 20)
 const SYSTEM_TOP = 46 // room above the treble staff for chord symbols
 const STAFF_GAP = 96
 const SYSTEM_HEIGHT = 292
+/** Room under the bass staff for bar labels (SYSTEM_HEIGHT − top − gap). */
+const SYSTEM_BELOW = SYSTEM_HEIGHT - SYSTEM_TOP - STAFF_GAP
 /** Extra pixels either side of a notehead. VexFlow's default (3) makes dense 16ths look like one bar. */
 export const LEDGER_STROKE_PX = 1
 
@@ -106,6 +108,168 @@ function restKey(clef: 'treble' | 'bass', voiceIndex: number, voiceCount: number
   if (voiceCount === 1) return clef === 'treble' ? 'b/4' : 'd/3'
   if (clef === 'treble') return voiceIndex === 0 ? 'g/5' : 'd/4'
   return voiceIndex === 0 ? 'b/3' : 'f/2'
+}
+
+function ticksOf(note: StaveNote): number {
+  return note.getTicks().value()
+}
+
+function noteLines(note: { getKeys(): string[]; getKeyLine?(index: number): number }): number[] {
+  try {
+    if (!note.getKeyLine) return []
+    return note.getKeys().map((_, i) => note.getKeyLine!(i))
+  } catch {
+    return []
+  }
+}
+
+function spansOverlap(aStart: number, aDur: number, bStart: number, bDur: number): boolean {
+  return aStart < bStart + bDur && bStart < aStart + aDur
+}
+
+/** Keep a rest on the staff if we can; otherwise one ledger either side. */
+function restLineAwayFrom(otherLines: number[], preferAbove: boolean): number {
+  const lo = Math.min(...otherLines)
+  const hi = Math.max(...otherLines)
+  const above = hi + 2
+  const below = lo - 2
+  if (preferAbove) {
+    if (above <= 9) return Math.max(5.5, above)
+    if (below >= -1) return below
+    return 5.5
+  }
+  if (below >= -1) return Math.min(0.5, below)
+  if (above <= 9) return above
+  return 0.5
+}
+
+/**
+ * Sit each rest in its own voice's register, then push colliding rests off
+ * the other voice's noteheads. Default rest keys are only a first guess.
+ */
+export function settleRests(voices: BuiltVoice[]) {
+  for (const built of voices) {
+    const lines = built.notes.filter((note) => !note.isRest()).flatMap(noteLines)
+    if (!lines.length) continue
+    const mid = (Math.min(...lines) + Math.max(...lines)) / 2
+    for (const note of built.notes) {
+      if (!note.isRest()) continue
+      try {
+        note.setKeyLine(0, mid)
+      } catch {
+        /* keep the default rest key */
+      }
+    }
+  }
+  if (voices.length < 2) return
+  for (let i = 0; i < voices.length; i++) {
+    let t = 0
+    for (const note of voices[i].notes) {
+      const dur = ticksOf(note)
+      if (note.isRest()) {
+        const otherLines: number[] = []
+        for (let j = 0; j < voices.length; j++) {
+          if (j === i) continue
+          let u = 0
+          for (const other of voices[j].notes) {
+            const otherDur = ticksOf(other)
+            if (spansOverlap(t, dur, u, otherDur) && !other.isRest()) otherLines.push(...noteLines(other))
+            u += otherDur
+          }
+        }
+        if (otherLines.length) {
+          let restLine = 0
+          try {
+            restLine = note.getKeyLine(0)
+          } catch {
+            restLine = i === 0 ? 5.5 : 0.5
+          }
+          if (otherLines.some((line) => Math.abs(line - restLine) < 1.5)) {
+            try {
+              note.setKeyLine(0, restLineAwayFrom(otherLines, i === 0))
+            } catch {
+              /* a colliding rest is still a rest */
+            }
+          }
+        }
+      }
+      t += dur
+    }
+  }
+}
+
+/** Empty staves still need a whole-bar rest (vamp bars often drop the tune). */
+export function voicesForStaff(voices: Voice[], clef: 'treble' | 'bass', meter: MeterInfo): BuiltVoice[] {
+  if (!voices.length) return [buildVoice([], clef, 0, 1, meter)]
+  return voices.map((voice, i) => buildVoice(voice, clef, i, voices.length, meter))
+}
+
+function midiSafe(pitch: string): number | null {
+  const midi = Tonal.midi(pitch)
+  return midi == null || !Number.isFinite(midi) ? null : midi
+}
+
+/**
+ * Extra pixels when a system has notes far above the treble, far below the
+ * bass, or in the crack between staves (high bass / low treble).
+ */
+export function systemPadding(bars: readonly Bar[]): { above: number; gap: number; below: number } {
+  let above = 0
+  let extraGap = 0
+  let below = 0
+  for (const bar of bars) {
+    for (const voice of bar.treble) {
+      for (const n of voice) {
+        for (const pitch of n.pitches) {
+          const midi = midiSafe(pitch)
+          if (midi == null) continue
+          if (midi > 84) above = Math.max(above, (midi - 84) * 3)
+          if (midi < 62) extraGap = Math.max(extraGap, (62 - midi) * 3)
+        }
+      }
+    }
+    for (const voice of bar.bass) {
+      for (const n of voice) {
+        for (const pitch of n.pitches) {
+          const midi = midiSafe(pitch)
+          if (midi == null) continue
+          if (midi > 57) extraGap = Math.max(extraGap, (midi - 57) * 3)
+          if (midi < 40) below = Math.max(below, (40 - midi) * 3)
+        }
+      }
+    }
+  }
+  return {
+    above: Math.min(36, Math.round(above)),
+    gap: Math.min(48, Math.round(extraGap)),
+    below: Math.min(32, Math.round(below)),
+  }
+}
+
+function systemHeight(pad: { above: number; gap: number; below: number }): number {
+  return SYSTEM_TOP + pad.above + STAFF_GAP + pad.gap + SYSTEM_BELOW + pad.below
+}
+
+/** Flatten a beam whose notes span more than an octave on the staff. */
+export function flattenWideBeams(beam: Beam) {
+  const lines = beam.getNotes().filter((note) => !note.isRest()).flatMap((note) => noteLines(note as StaveNote))
+  if (lines.length >= 2 && Math.max(...lines) - Math.min(...lines) >= 5) {
+    beam.renderOptions.flatBeams = true
+  }
+}
+
+/** Tie only the keys that exist on both ends, not a blind prefix of indexes. */
+export function tieIndexes(first: StaveNote, last: StaveNote): { firstIndexes: number[]; lastIndexes: number[] } {
+  const firstIndexes: number[] = []
+  const lastIndexes: number[] = []
+  first.getKeys().forEach((key, i) => {
+    const j = last.getKeys().indexOf(key)
+    if (j >= 0) {
+      firstIndexes.push(i)
+      lastIndexes.push(j)
+    }
+  })
+  return { firstIndexes, lastIndexes }
 }
 
 function staveRest(clef: 'treble' | 'bass', voiceIndex: number, voiceCount: number, duration: string, dots: number): StaveNote {
@@ -195,10 +359,11 @@ export function buildVoice(source: Voice, clef: 'treble' | 'bass', voiceIndex: n
     sounding.push(isSounding)
     const previous = engraved[i - 1]
     if (previous?.tieToNext && sounding[i - 1] && isSounding) {
-      const count = Math.min(notes[i - 1].getKeys().length, staveNote.getKeys().length)
-      if (count > 0) {
-        const indexes = Array.from({ length: count }, (_, k) => k)
-        ties.push(new StaveTie({ firstNote: notes[i - 1], lastNote: staveNote, firstIndexes: indexes, lastIndexes: indexes }))
+      const { firstIndexes, lastIndexes } = tieIndexes(notes[i - 1], staveNote)
+      if (firstIndexes.length) {
+        const tie = new StaveTie({ firstNote: notes[i - 1], lastNote: staveNote, firstIndexes, lastIndexes })
+        if (stemDirection !== undefined) tie.setDirection(stemDirection)
+        ties.push(tie)
       }
     }
   })
@@ -208,8 +373,11 @@ export function buildVoice(source: Voice, clef: 'treble' | 'bass', voiceIndex: n
   try {
     beams = Beam.generateBeams(notes, {
       groups: Beam.getDefaultBeamGroups(`${meter.num}/${meter.den}`),
+      beamRests: true,
+      beamMiddleOnly: true,
       ...(stemDirection === undefined ? {} : { stemDirection, maintainStemDirections: true }),
     })
+    beams.forEach(flattenWideBeams)
   } catch {
     beams = []
   }
@@ -304,7 +472,11 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
   const signatureWidth = 54 + keySignatureWidth(score.keySignature)
   const barsPerSystem = chooseBarsPerSystem(score, width, signatureWidth + 30)
   const systemCount = Math.ceil(score.bars.length / barsPerSystem)
-  const height = systemCount * SYSTEM_HEIGHT + 8
+  const systems = Array.from({ length: systemCount }, (_, system) => {
+    const bars = score.bars.slice(system * barsPerSystem, (system + 1) * barsPerSystem)
+    return { bars, pad: systemPadding(bars) }
+  })
+  const height = systems.reduce((sum, system) => sum + systemHeight(system.pad), 8)
 
   const renderer = new Renderer(canvas, Renderer.Backends.CANVAS)
   renderer.resize(cssWidth, Math.ceil(height * scale))
@@ -317,9 +489,11 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
   const layout: SheetLayout = { width: cssWidth, height: Math.ceil(height * scale), scale, bars: [] }
   let lastDynamic: string | undefined
 
+  let systemTop = 0
   for (let system = 0; system < systemCount; system++) {
-    const bars = score.bars.slice(system * barsPerSystem, (system + 1) * barsPerSystem)
-    const top = system * SYSTEM_HEIGHT + SYSTEM_TOP
+    const { bars, pad } = systems[system]
+    const top = systemTop + SYSTEM_TOP + pad.above
+    const gap = STAFF_GAP + pad.gap
     const lead = signatureWidth + (system === 0 ? 30 : 0)
     const barWidth = (width - marginX(width) * 2 - lead) / barsPerSystem
     let x = marginX(width)
@@ -328,7 +502,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       const first = column === 0
       const staveWidth = barWidth + (first ? lead : 0)
       const treble = new Stave(x, top, staveWidth)
-      const bass = new Stave(x, top + STAFF_GAP, staveWidth)
+      const bass = new Stave(x, top + gap, staveWidth)
       if (first) {
         treble.addClef('treble').addKeySignature(score.keySignature)
         bass.addClef('bass').addKeySignature(score.keySignature)
@@ -358,8 +532,10 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
 
       const all: BuiltVoice[] = []
       try {
-        const upper = bar.treble.map((voice, i) => buildVoice(voice, 'treble', i, bar.treble.length, meter))
-        const lower = bar.bass.map((voice, i) => buildVoice(voice, 'bass', i, bar.bass.length, meter))
+        const upper = voicesForStaff(bar.treble, 'treble', meter)
+        const lower = voicesForStaff(bar.bass, 'bass', meter)
+        settleRests(upper)
+        settleRests(lower)
         attachVoicesToStave(upper, treble)
         attachVoicesToStave(lower, bass)
         if (upper.length) Accidental.applyAccidentals(upper.map((b) => b.voice), score.keySignature)
@@ -402,7 +578,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       }
       if (!anchorMap.has(0)) anchorMap.set(0, noteStart)
       const anchors = [...anchorMap.entries()].map(([tick, ax]) => ({ tick, x: ax })).sort((a, b) => a.tick - b.tick)
-      layout.bars.push({ index: bar.index, x, width: staveWidth, top: top - 8, bottom: top + STAFF_GAP + 96, anchors })
+      layout.bars.push({ index: bar.index, x, width: staveWidth, top: top - 8, bottom: top + gap + 96 + pad.below, anchors })
 
       // Plan labels: what Jev (or the stub) decided for this bar.
       const labelX = first ? noteStart - 6 : x + 8
@@ -429,17 +605,18 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       }
       pen.fillStyle = theme.muted
       pen.font = '500 10.5px "JetBrains Mono", ui-monospace, monospace'
-      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace(/_/g, ' ')}`, labelX, top + STAFF_GAP + 134)
+      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace(/_/g, ' ')}`, labelX, top + gap + 134)
       if (bar.dynamic !== lastDynamic) {
         pen.fillStyle = theme.ink
         pen.font = 'italic 600 17px "Academico", "Fraunces", Georgia, serif'
-        pen.fillText(bar.dynamic, first ? noteStart - 16 : x + 4, top + 120)
+        pen.fillText(bar.dynamic, first ? noteStart - 16 : x + 4, top + 40 + gap / 2)
         lastDynamic = bar.dynamic
       }
       pen.restore()
 
       x += staveWidth
     })
+    systemTop += systemHeight(pad)
   }
   if (scale !== 1) {
     for (const bar of layout.bars) {
