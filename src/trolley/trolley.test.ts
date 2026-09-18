@@ -149,7 +149,7 @@ describe('simpler draws are the default', () => {
       ahead_1_entity: choice('goldfish', { goldfish: 1 }),
       ahead_1_count: choice('1', Object.fromEntries(Object.keys(COUNTS).map((id) => [id, id === '1' ? 1 : 0]))),
       ahead_1_trait: choice('owes_you_money', { owes_you_money: 1 }),
-      ahead_2_entity: choice('stranger', { stranger: 1 }),
+      ahead_2_entity: choice('grandma', { grandma: 1 }),
       ahead_2_count: choice('1', { '1': 1 }),
       ahead_2_trait: choice('plain', { plain: 1 }),
       siding_1_entity: choice('stranger', { stranger: 1 }),

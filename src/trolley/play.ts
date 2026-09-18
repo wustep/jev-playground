@@ -76,10 +76,10 @@ const anyOf = <T>(items: readonly T[], random: () => number) => items[Math.floor
 
 /** Pick a trait that can plausibly apply, defaulting to no detail. */
 export function pickTraitFor(entity: EntityId, random: () => number, probabilities?: Record<string, number>): TraitId {
-  const allowed = traitsFor(entity).filter((trait) => trait !== 'plain')
+  const allowed = traitsFor(entity).filter((trait): trait is Exclude<TraitId, 'plain'> => trait !== 'plain')
   if (allowed.length === 0 || random() < PLAIN_CHANCE) return 'plain'
   if (probabilities) {
-    const offered = Object.fromEntries(Object.entries(probabilities).filter(([id]) => allowed.includes(id as TraitId)))
+    const offered = Object.fromEntries(Object.entries(probabilities).filter(([id]) => allowed.some((trait) => trait === id)))
     if (Object.keys(offered).length === 0) return 'plain'
     return pickFrom(offered, 'sample', random) as TraitId
   }
