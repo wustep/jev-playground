@@ -398,6 +398,25 @@ describe('/api/jev handler', () => {
     expect(() => parseOp({ ...notes, arrangement: 'wall_of_sound' })).toThrow(/arrangement/)
     expect(() => parseOp({ ...notes, op: 'midi' })).toThrow(/notes/)
     expect(() => parseOp({ ...notes, palette: 'serial' })).toThrow()
+    expect(parseOp({ ...notes, mode: 'guide', figure: 'step_to_goal', goal: 'fifth' })).toMatchObject({
+      op: 'notes',
+      mode: 'guide',
+      figure: 'step_to_goal',
+      goal: 'fifth',
+    })
+    expect(parseOp({
+      ...notes,
+      mode: 'guide',
+      barIndex: 1,
+      melodySoFar: [{ figure: 'neighbour', goal: 'root' }],
+    })).toMatchObject({
+      mode: 'guide',
+      melodySoFar: [{ figure: 'neighbour', goal: 'root' }],
+    })
+    expect(() => parseOp({ ...notes, mode: 'guide', barIndex: 1, melodySoFar: [{ rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic'] }] })).toThrow(/figure/)
+    expect(() => parseOp({ ...notes, mode: 'sketch' })).toThrow(/mode/)
+    expect(() => parseOp({ ...notes, figure: 'glissando' })).toThrow(/figure/)
+    expect(() => parseOp({ ...notes, goal: 'ninth' })).toThrow(/goal/)
   })
 })
 

@@ -3,14 +3,18 @@ import {
   lastSoundingDegree,
   melodyMemoryFrom,
   parseBassSoFar,
+  parseGuideSoFar,
   parseMelodySoFar,
   type MelodyMemoryBar,
 } from '../../plan/notes'
 import { PlanValidationError } from '../../plan/schema'
 import {
+  describeGuideSoFar,
   describeMelodySoFar,
   melodyMotionHint,
   notesContinuityState,
+  notesGuideContinuityState,
+  notesGuideTask,
   notesTask,
 } from './notesContinuity'
 
@@ -110,5 +114,29 @@ describe('multi-bar melody continuity helpers', () => {
     expect(parseBassSoFar(['root_hold', 'pedal'], 2)).toEqual(['root_hold', 'pedal'])
     expect(() => parseBassSoFar(['walk_sideways'], 1)).toThrow(PlanValidationError)
     expect(() => parseBassSoFar(undefined, 2)).toThrow(/bassSoFar/)
+  })
+
+  it('builds guide melody_so_far from figures and goals', () => {
+    const guided = [
+      { figure: 'step_to_goal' as const, goal: 'fifth' as const },
+      { figure: 'motif_echo' as const, goal: 'root' as const },
+    ]
+    const state = notesGuideContinuityState({
+      barIndex: 2,
+      bar: { chord: 'V7', role: 'development', contour: 'rise' },
+      nextChord: 'I',
+      melodySoFar: guided,
+      character: 'lyrical_song',
+    })
+    expect(state.melody_so_far).toHaveLength(2)
+    expect(state.melody_so_far[0]).toMatchObject({ bar: 1, figure_id: 'step_to_goal', goal_id: 'fifth' })
+    expect(state.last_sounding_degree).toContain('root')
+    expect(state.motif_echo).toMatch(/figure/)
+    expect(describeGuideSoFar([])).toEqual([])
+    expect(notesGuideTask(1, false)).toMatch(/melody_so_far` is empty/)
+    expect(notesGuideTask(4, true)).toMatch(/prior figures and goals/)
+    expect(parseGuideSoFar(guided, 2)).toEqual(guided)
+    expect(() => parseGuideSoFar(guided, 1)).toThrow(PlanValidationError)
+    expect(() => parseGuideSoFar([{ figure: 'not_a_figure', goal: 'root' }], 1)).toThrow()
   })
 })

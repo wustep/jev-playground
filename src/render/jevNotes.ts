@@ -24,15 +24,21 @@ import {
   NOTE_TICKS,
   PHRASE_NOTE_COUNT,
   PHRASE_RHYTHMS,
+  guideRestSlot,
   isNoteTick,
+  parseJevGuideChoices,
   parseJevNoteChoices,
   parseNoteTick,
   parseSpelledPitch,
+  rhythmForGuideFigure,
   startsFromRhythm,
   melodyAllowsLeap,
   type BassPatternId,
+  type JevGuideChoices,
   type JevNoteChoices,
   type MelodyDegreeId,
+  type MelodyFigureId,
+  type MelodyGoalId,
   type PhraseRhythmId,
 } from '../plan/notes.js'
 import { PlanValidationError, type BarRoleId, type CompositionPlan } from '../plan/schema.js'
@@ -172,12 +178,17 @@ export interface NotePhrase {
   rhythm: PhraseRhythmId
   /**
    * Jev's closed degree picks (the plan), after optional variation nudge.
-   * Register / spelling lives on `notes`, not here.
+   * Register / spelling lives on `notes`, not here. Guide mode fills these
+   * from the realized line so overlay validation stays on the same path.
    */
   degrees: MelodyDegreeId[]
   /** Realized RH: voice-led spelling of `degrees` on the sixteenth grid. */
   notes: Voice
   bass?: BassPhrase
+  /** D1 guide picks. Omitted on the 4-slot line path. */
+  figure?: MelodyFigureId
+  goal?: MelodyGoalId
+  mode?: 'guide' | 'line'
 }
 
 /** Stepwise / small-leap register snap, unless the role is allowed to leap. */
@@ -503,6 +514,272 @@ export function realizeJevNoteChoices(
     }
   }
   return phrase
+}
+
+/** True when the stacked chord includes a minor or major seventh. */
+export function chordHasSeventh(chord: ResolvedChord): boolean {
+  const root = midiOf(`${chord.root}4`) % 12
+  return chord.pcs.some((pc) => {
+    const ivl = (midiOf(`${pc}4`) % 12 - root + 12) % 12
+    return ivl === 10 || ivl === 11
+  })
+}
+
+/** Chord-relative goal pitch class. Missing seventh snaps to the fifth. */
+export function goalPitchClass(chord: ResolvedChord, goal: MelodyGoalId): string {
+  if (goal === 'root') return chord.root
+  if (goal === 'third') return chord.pcs[1] ?? chord.root
+  if (goal === 'fifth') return chord.pcs[2] ?? chord.root
+  if (chordHasSeventh(chord)) return chord.pcs[3] ?? chord.core[3] ?? chord.pcs[2] ?? chord.root
+  return chord.pcs[2] ?? chord.root
+}
+
+export function isChordTonePc(pc: string, chord: ResolvedChord): boolean {
+  const chroma = midiOf(`${pc}4`) % 12
+  return chord.pcs.some((tone) => midiOf(`${tone}4`) % 12 === chroma)
+}
+
+/** Map a sounding pitch back onto a closed degree id (debug / overlay). */
+export function degreeIdForPitch(pitch: string, tonic: string, minor: boolean): MelodyDegreeId {
+  const tonicMidi = midiOf(`${tonic}4`)
+  const intended = midiOf(pitch)
+  const interval = ((intended - tonicMidi) % 12 + 12) % 12
+  const octave = Math.round((intended - (tonicMidi + interval)) / 12)
+  const steps = minor ? FUNCTION_SEMITONES.minor : FUNCTION_SEMITONES.major
+  let best = 0
+  let bestDist = 99
+  for (let i = 0; i < steps.length; i++) {
+    const dist = circularDistance(interval, steps[i])
+    if (dist < bestDist) {
+      bestDist = dist
+      best = i
+    }
+  }
+  if (best === 0 && octave >= 1) return 'tonic_high'
+  if (best === 4 && octave < 0) return 'dominant_low'
+  if (best === 2 && octave >= 1) return 'mediant_high'
+  const names: Exclude<MelodyDegreeId, 'rest'>[] = [
+    'tonic',
+    'supertonic',
+    'mediant',
+    'subdominant',
+    'dominant',
+    'submediant',
+    'leading',
+  ]
+  return names[best]
+}
+
+function stepToward(from: string, goal: string, scale: string[]): string {
+  const rungs = ladder(scale, TREBLE_LO, TREBLE_HI)
+  if (rungs.length === 0) return goal
+  const fromI = nearestIndex(rungs, midiOf(from))
+  const goalI = nearestIndex(rungs, midiOf(goal))
+  if (fromI === goalI) return rungs[fromI]
+  return rungs[fromI + (goalI > fromI ? 1 : -1)]
+}
+
+function neighbourOf(goal: string, scale: string[], fromMidi: number): string {
+  const rungs = ladder(scale, TREBLE_LO, TREBLE_HI)
+  if (rungs.length < 2) return goal
+  const goalI = nearestIndex(rungs, midiOf(goal))
+  const upper = Math.min(rungs.length - 1, goalI + 1)
+  const lower = Math.max(0, goalI - 1)
+  const preferUpper = fromMidi <= midiOf(goal)
+  const pick = preferUpper ? upper : lower
+  return rungs[pick === goalI ? (preferUpper ? lower : upper) : pick]
+}
+
+function nextChordTone(fromMidi: number, chord: ResolvedChord, dir: 1 | -1): string {
+  const tones = chord.core.length >= 3 ? chord.core : chord.pcs
+  const rungs = ladder(tones, TREBLE_LO, TREBLE_HI)
+  if (rungs.length === 0) return spellPc(chord.root, fromMidi, { lo: TREBLE_LO, hi: TREBLE_HI })
+  const idx = nearestIndex(rungs, fromMidi)
+  const stepped = Math.max(0, Math.min(rungs.length - 1, idx + dir))
+  return rungs[stepped]
+}
+
+function pitchClassOf(pitch: string): string {
+  return pitch.replace(/\d+$/, '')
+}
+
+function nearestChordTone(pitch: string, chord: ResolvedChord): string {
+  const tones = chord.core.length >= 3 ? chord.core : chord.pcs
+  const rungs = ladder(tones, TREBLE_LO, TREBLE_HI)
+  if (rungs.length === 0) return pitch
+  return rungs[nearestIndex(rungs, midiOf(pitch))]
+}
+
+function guideFigurePitches(
+  figure: MelodyFigureId,
+  goalPitch: string,
+  fromMidi: number,
+  scale: string[],
+  chord: ResolvedChord,
+  lastNotes?: Voice,
+): (string | null)[] {
+  const goal = goalPitch
+  const lastNamed = lastNotes ? lastSoundingMidi(lastNotes) : undefined
+  const previousPc = (() => {
+    if (!lastNotes) return pitchClassOf(spellPc(scale[0] ?? chord.root, fromMidi, { lo: TREBLE_LO, hi: TREBLE_HI }))
+    for (let i = lastNotes.length - 1; i >= 0; i--) {
+      const named = lastNotes[i]?.pitches[0]
+      if (named) return pitchClassOf(named)
+    }
+    return pitchClassOf(spellPc(scale[0] ?? chord.root, fromMidi, { lo: TREBLE_LO, hi: TREBLE_HI }))
+  })()
+  const previous = spellPc(previousPc, lastNamed ?? fromMidi, { lo: TREBLE_LO, hi: TREBLE_HI })
+
+  if (figure === 'motif_echo' && lastNotes && lastNotes.length > 0) {
+    const last = lastSoundingMidi(lastNotes) ?? fromMidi
+    const shift = midiOf(goal) - last
+    return Array.from({ length: PHRASE_NOTE_COUNT }, (_, i) => {
+      const sample = lastNotes[Math.min(i, lastNotes.length - 1)]
+      if (!sample?.pitches[0]) return goal
+      const moved = midiOf(sample.pitches[0]) + shift
+      return spellPc(sample.pitches[0].replace(/\d+$/, ''), moved, { lo: TREBLE_LO, hi: TREBLE_HI })
+    })
+  }
+
+  if (figure === 'arpeggio_up' || figure === 'arpeggio_down') {
+    const dir: 1 | -1 = figure === 'arpeggio_up' ? 1 : -1
+    const out: string[] = []
+    let cursor = fromMidi
+    for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
+      const pitch = nextChordTone(cursor, chord, dir)
+      out.push(pitch)
+      cursor = midiOf(pitch)
+    }
+    out[out.length - 1] = goal
+    return out
+  }
+
+  if (figure === 'neighbour') {
+    const neighbour = neighbourOf(goal, scale, fromMidi)
+    return [stepToward(previous, goal, scale), neighbour, goal, goal]
+  }
+
+  if (figure === 'leap_recover') {
+    const delta = midiOf(goal) - fromMidi
+    const leapMidi = fromMidi + (delta === 0 ? 7 : Math.sign(delta) * Math.max(7, Math.min(12, Math.abs(delta))))
+    const leap = spellPc(goal.replace(/\d+$/, ''), leapMidi, { lo: TREBLE_LO, hi: TREBLE_HI })
+    const recover = stepToward(leap, goal, scale)
+    return [previous, leap, recover, goal]
+  }
+
+  if (figure === 'hold_resolve') {
+    const hold = Math.abs(midiOf(previous) - midiOf(goal)) <= 2 ? previous : stepToward(previous, goal, scale)
+    return [hold, hold, stepToward(hold, goal, scale), goal]
+  }
+
+  // step_to_goal (and motif_echo with no memory)
+  const p0 = stepToward(previous, goal, scale)
+  const p1 = stepToward(p0, goal, scale)
+  const p2 = stepToward(p1, goal, scale)
+  return [p0, p1, p2, goal]
+}
+
+export function realizeJevGuideChoices(
+  choices: JevGuideChoices,
+  plan: CompositionPlan,
+  options: {
+    barIndex?: number
+    velocity?: number
+    lastSoundingMidi?: number
+    lastNotes?: Voice
+    lastRhythm?: PhraseRhythmId
+    /** Prefer a long tone + a rest (lyrical characters / song-like roles). */
+    lyrical?: boolean
+    voiceLead?: boolean
+  } = {},
+): NotePhrase {
+  const parsed = parseJevGuideChoices(choices)
+  const barIndex = options.barIndex ?? 0
+  const velocity = options.velocity ?? DEFAULT_VELOCITY
+  const meter = METER_INFO[plan.meter]
+  const key = keyInfo(plan.key)
+  const bar = plan.bars[barIndex]
+  if (!bar) throw new PlanValidationError(`notes: plan has no bar ${barIndex + 1}`)
+  const chord = resolveChord(key, bar.chord)
+  const chord2 = bar.chord2 ? resolveChord(key, bar.chord2) : undefined
+  const lyrical = options.lyrical === true && !melodyAllowsLeap(bar.role)
+  const rhythm = rhythmForGuideFigure(parsed.figure, plan.meter, {
+    lyrical,
+    echoRhythm: parsed.figure === 'motif_echo' ? options.lastRhythm : undefined,
+  })
+  const spec = PHRASE_RHYTHMS[rhythm]
+  if (spec.meter !== plan.meter) {
+    throw new PlanValidationError(`notes.rhythm: "${rhythm}" does not fit ${plan.meter}`)
+  }
+  const starts = startsFromRhythm(rhythm)
+  const lead = options.voiceLead ?? shouldVoiceLeadMelody(bar.role)
+  const fromMidi = options.lastSoundingMidi ?? DEFAULT_TREBLE_MIDI
+  const goalMidiTarget = lead ? fromMidi : DEFAULT_TREBLE_MIDI
+  const primaryScale = scaleAt(key, plan.palette, chord, chord2, 0, meter.splitTick)
+  const goalPitch = spellPc(goalPitchClass(chord, parsed.goal), goalMidiTarget, { lo: TREBLE_LO, hi: TREBLE_HI })
+  let pitches = guideFigurePitches(parsed.figure, goalPitch, fromMidi, primaryScale, chord, options.lastNotes)
+
+  const restAt = lyrical ? guideRestSlot(spec.ticks, meter.beatTicks, meter.ticksPerBar) : null
+  if (restAt != null) pitches = pitches.map((pitch, i) => (i === restAt ? null : pitch))
+
+  // Q3: strong beats prefer chord tones. Then force the last sounding slot onto the goal.
+  let target = fromMidi
+  const spelled: (string | null)[] = pitches.map((pitch, i) => {
+    if (!pitch) return null
+    const start = starts[i]
+    const harmony = chord2 && start >= meter.splitTick ? chord2 : chord
+    const strong = start % meter.beatTicks === 0
+    let next = pitch
+    if (strong && !isChordTonePc(pitchClassOf(next), harmony)) {
+      next = nearestChordTone(next, harmony)
+    } else if (lead) {
+      next = spellPc(pitchClassOf(next), target, { lo: TREBLE_LO, hi: TREBLE_HI })
+    }
+    target = midiOf(next)
+    return next
+  })
+
+  let lastSounding = -1
+  for (let i = spelled.length - 1; i >= 0; i--) {
+    if (spelled[i]) {
+      lastSounding = i
+      break
+    }
+  }
+  if (lastSounding >= 0) {
+    const start = starts[lastSounding]
+    const harmony = chord2 && start >= meter.splitTick ? chord2 : chord
+    const aim = lastSounding > 0 && spelled[lastSounding - 1] ? midiOf(spelled[lastSounding - 1]!) : fromMidi
+    spelled[lastSounding] = spellPc(goalPitchClass(harmony, parsed.goal), aim, { lo: TREBLE_LO, hi: TREBLE_HI })
+  }
+
+  const notes: Voice = []
+  const degrees: MelodyDegreeId[] = []
+  spelled.forEach((pitch, i) => {
+    const start = starts[i]
+    const dur = spec.ticks[i]
+    if (!isFiniteTick(dur) || !Object.hasOwn(NOTE_TICKS, String(dur))) {
+      throw new PlanValidationError(`notes: rhythm slot ${i + 1} has illegal duration ${dur}`)
+    }
+    if (!pitch) {
+      degrees.push('rest')
+      return
+    }
+    notes.push(parseScoreNote({ start, dur, pitches: [pitch], velocity }, `notes[${i}]`, meter.ticksPerBar))
+    degrees.push(degreeIdForPitch(pitch, key.tonic, key.minor))
+  })
+  if (notes.length === 0) throw new JevNotesError('Jev notes produced only rests')
+  const treble = parseScoreVoice(notes, meter.ticksPerBar)
+  return {
+    barIndex,
+    voice: 'treble',
+    rhythm,
+    degrees,
+    notes: treble,
+    figure: parsed.figure,
+    goal: parsed.goal,
+    mode: 'guide',
+  }
 }
 
 function isFiniteTick(value: number): boolean {

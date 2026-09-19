@@ -38,19 +38,27 @@ import {
 } from '../plan/schema'
 import {
   BASS_PATTERN_QUESTION_ID,
+  FIGURE_QUESTION_ID,
+  GOAL_QUESTION_ID,
   MELODY_DEGREES,
   PHRASE_NOTE_COUNT,
   lastSoundingDegree,
   melodyMemoryFrom,
+  guideMemoryFrom,
   parseBassPattern,
+  parseJevGuideChoices,
   parseJevNoteChoices,
+  parseMelodyFigure,
+  parseMelodyGoal,
   pitchQuestionId,
   rhythmsFor,
   type BassPatternId,
+  type GuideMemoryBar,
   type MelodyDegreeId,
   type MelodyMemoryBar,
+  type NotesWriteMode,
 } from '../plan/notes'
-import { lastSoundingMidi, realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
+import { lastSoundingMidi, realizeJevGuideChoices, realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
 import {
   degreesNearlyIdentical,
   nudgeMelodyDegrees,
@@ -282,21 +290,22 @@ export class JevPlanner implements Planner {
   }
 
   /**
-   * Debug experiment: repeated closed-schema picks after the plan. Jev writes
-   * a 4-slot RH phrase plus a bass pattern for every plan bar that is new
-   * material; theme-return bars reuse the source rhythm, degrees and bass
-   * pattern, re-spelled on the later chord. Each notes request carries prior
-   * closed choices so later bars can continue the line. After the picks, code
-   * voice-leads register (degrees stay the plan) and, when sampling, lightly
-   * blends Jev's probabilities toward nearby degrees / lyrical long+rest
-   * rhythms. Illegal RH falls back to renderPlan, illegal bass keeps that
-   * bar's renderPlan left hand.
+   * Debug experiment: repeated closed-schema picks after the plan.
+   *
+   * `mode: 'line'` (default) — today’s 4-slot RH phrase plus a bass pattern
+   * for every new-material plan bar; theme-return bars reuse the source
+   * rhythm, degrees and bass pattern, re-spelled on the later chord.
+   *
+   * `mode: 'guide'` — D1: Jev picks a closed figure + chord-tone goal; code
+   * writes the singing line. Theme returns reuse source figure+goal.
+   * No `pitch_1..4`. Accompaniment stays with renderPlan.
    */
   async writeNotes(
     plan: CompositionPlan,
     input: Pick<PlanInput, 'pick' | 'seed' | 'brief'>,
-    options?: Pick<PlanOptions, 'signal'>,
+    options?: Pick<PlanOptions, 'signal'> & { mode?: NotesWriteMode },
   ): Promise<{ phrases: NotePhrase[]; exchanges: Required<Exchange>[] }> {
+    if ((options?.mode ?? 'line') === 'guide') return this.writeGuideNotes(plan, input, options)
     if (plan.bars.length === 0) throw new Error('Jev notes: plan has no bars')
     const returns = themeSources(plan.form, plan.bars.length as BarCount)
     const phrases: NotePhrase[] = []
@@ -388,6 +397,97 @@ export class JevPlanner implements Planner {
       remember(phrase, choices.bassPattern)
       lastNewDegrees = choices.degrees
       lastBarWasNew = true
+    }
+    return { phrases, exchanges }
+  }
+
+  /**
+   * D1: Jev picks figure + goal; code realizes the singing line. Theme-return
+   * bars reuse the source figure and goal, re-spelled on the later chord.
+   * `melody_so_far` carries prior figure/goal ids. No parallel degrees.
+   */
+  private async writeGuideNotes(
+    plan: CompositionPlan,
+    input: Pick<PlanInput, 'pick' | 'seed' | 'brief'>,
+    options?: Pick<PlanOptions, 'signal'>,
+  ): Promise<{ phrases: NotePhrase[]; exchanges: Required<Exchange>[] }> {
+    if (plan.bars.length === 0) throw new Error('Jev notes: plan has no bars')
+    const returns = themeSources(plan.form, plan.bars.length as BarCount)
+    const phrases: NotePhrase[] = []
+    const exchanges: Required<Exchange>[] = []
+    const random = rng(input.seed ^ 0x4e07e5)
+    const guideSoFar: GuideMemoryBar[] = []
+    const lyrical = prefersLongAndRest(plan.character)
+    let previousMidi: number | undefined
+    let lastNotes: NotePhrase['notes'] | undefined
+    let lastRhythm: NotePhrase['rhythm'] | undefined
+
+    const pickGuide = (answers: Record<string, Answer>) => {
+      const figure = parseMelodyFigure(
+        pickFrom(choiceAnswer(answers, FIGURE_QUESTION_ID).probabilities, input.pick, random),
+        `jev.${FIGURE_QUESTION_ID}`,
+      )
+      const goal = parseMelodyGoal(
+        pickFrom(choiceAnswer(answers, GOAL_QUESTION_ID).probabilities, input.pick, random),
+        `jev.${GOAL_QUESTION_ID}`,
+      )
+      return parseJevGuideChoices({ figure, goal })
+    }
+
+    const realize = (choices: { figure: NotePhrase['figure']; goal: NotePhrase['goal'] }, barIndex: number) =>
+      realizeJevGuideChoices(
+        { figure: choices.figure!, goal: choices.goal! },
+        plan,
+        {
+          barIndex,
+          lastSoundingMidi: previousMidi,
+          lastNotes,
+          lastRhythm,
+          lyrical,
+        },
+      )
+
+    const remember = (phrase: NotePhrase) => {
+      guideSoFar.push(...guideMemoryFrom([phrase]))
+      previousMidi = lastSoundingMidi(phrase.notes) ?? previousMidi
+      lastNotes = phrase.notes
+      lastRhythm = phrase.rhythm
+    }
+
+    for (let i = 0; i < plan.bars.length; i++) {
+      const source = returns[i]
+      const from = source !== undefined ? phrases[source] : undefined
+      if (from?.figure && from.goal) {
+        const phrase = realize({ figure: from.figure, goal: from.goal }, i)
+        phrases.push(phrase)
+        remember(phrase)
+        continue
+      }
+      const bar = plan.bars[i]
+      const next = plan.bars[i + 1]
+      const op: JevOp = {
+        op: 'notes',
+        style: plan.style,
+        brief: input.brief,
+        character: plan.character,
+        key: plan.key,
+        meter: plan.meter,
+        tempo: plan.tempo,
+        texture: plan.texture,
+        palette: plan.palette,
+        bar,
+        barIndex: i,
+        mode: 'guide',
+        melodySoFar: [...guideSoFar],
+        ...(next ? { nextChord: next.chord } : {}),
+        ...(plan.arrangement ? { arrangement: plan.arrangement } : {}),
+      }
+      const exchange = await this.exchange(`notes bar ${i + 1}`, op, options?.signal)
+      exchanges.push(exchange)
+      const choices = pickGuide(exchange.response.answers)
+      const phrase = realize(choices, i)
+      phrases.push(phrase)
+      remember(phrase)
     }
     return { phrases, exchanges }
   }

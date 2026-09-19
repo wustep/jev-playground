@@ -300,3 +300,233 @@ export function startsFromRhythm(rhythm: PhraseRhythmId): number[] {
   }
   return starts
 }
+
+// ── D1: Jev guides the tune (figure + goal; code writes the line) ───────────
+
+/**
+ * Debug notes write path. Omitted on the op = `line` (today’s 4-slot rhythm +
+ * degrees), so a Coder allowlist that only knows the original notes shape
+ * still validates. `guide` is D1: closed figure + goal, no `pitch_1..4`.
+ */
+export const NOTES_WRITE_MODES = {
+  guide: 'Jev guides the tune — a closed figure and a chord-tone goal; code writes the singing line',
+  line: 'Jev writes the line — a closed 4-slot rhythm and four scale degrees',
+} as const
+export type NotesWriteMode = keyof typeof NOTES_WRITE_MODES
+export const NOTES_WRITE_MODE_IDS = Object.keys(NOTES_WRITE_MODES) as NotesWriteMode[]
+
+export const FIGURE_QUESTION_ID = 'figure'
+export const GOAL_QUESTION_ID = 'goal'
+
+/** Closed singing-line figures. ~7 well-described shapes; code realizes them. */
+export const MELODY_FIGURES = {
+  step_to_goal:
+    'Step toward this bar’s goal tone — mostly conjunct motion, landing on the goal by the last sounding slot',
+  neighbour:
+    'A neighbour-tone figure around the goal: sit or approach the goal, lean a step above or below, then return',
+  arpeggio_up: 'Rise through the chord tones of this bar, finishing on the goal',
+  arpeggio_down: 'Fall through the chord tones of this bar, finishing on the goal',
+  motif_echo: 'Echo the previous bar’s figure and shape, re-aimed at this bar’s goal tone',
+  leap_recover: 'Leap toward or past the goal, then recover by step onto it',
+  hold_resolve: 'Hold a long tone, then resolve onto the goal — a sung arrival, not four even attacks',
+} as const
+export type MelodyFigureId = keyof typeof MELODY_FIGURES
+export const MELODY_FIGURE_IDS = Object.keys(MELODY_FIGURES) as MelodyFigureId[]
+
+/** Chord-relative goal tones. Seventh is only a real seventh when the chord has one. */
+export const MELODY_GOALS = {
+  root: 'The chord root — the home tone of this bar’s harmony',
+  third: 'The chord third — the colour tone that makes the harmony major or minor',
+  fifth: 'The chord fifth — the open, stable tone of this bar’s harmony',
+  seventh: 'The chord seventh when this harmony has one; otherwise the fifth (still a chord tone)',
+} as const
+export type MelodyGoalId = keyof typeof MELODY_GOALS
+export const MELODY_GOAL_IDS = Object.keys(MELODY_GOALS) as MelodyGoalId[]
+
+export interface JevGuideChoices {
+  figure: MelodyFigureId
+  goal: MelodyGoalId
+}
+
+/** Prior bar’s closed guide picks — ids only, so the notes op stays allowlisted. */
+export interface GuideMemoryBar {
+  figure: MelodyFigureId
+  goal: MelodyGoalId
+}
+
+export function parseNotesWriteMode(value: unknown, path = 'notes.mode'): NotesWriteMode {
+  return parseOption(NOTES_WRITE_MODES, value, path)
+}
+
+export function parseMelodyFigure(value: unknown, path = 'notes.figure'): MelodyFigureId {
+  return parseOption(MELODY_FIGURES, value, path)
+}
+
+export function parseMelodyGoal(value: unknown, path = 'notes.goal'): MelodyGoalId {
+  return parseOption(MELODY_GOALS, value, path)
+}
+
+export function parseJevGuideChoices(raw: unknown): JevGuideChoices {
+  if (!raw || typeof raw !== 'object') throw new PlanValidationError('notes: expected an object')
+  const obj = raw as Record<string, unknown>
+  return {
+    figure: parseMelodyFigure(obj.figure, 'notes.figure'),
+    goal: parseMelodyGoal(obj.goal, 'notes.goal'),
+  }
+}
+
+export function isGuideMemoryBar(value: unknown): value is GuideMemoryBar {
+  return !!value && typeof value === 'object' && 'figure' in value && 'goal' in value
+}
+
+export function parseGuideMemoryBar(raw: unknown, path: string): GuideMemoryBar {
+  if (!raw || typeof raw !== 'object') throw new PlanValidationError(`${path}: expected an object`)
+  const obj = raw as Record<string, unknown>
+  return {
+    figure: parseMelodyFigure(obj.figure, `${path}.figure`),
+    goal: parseMelodyGoal(obj.goal, `${path}.goal`),
+  }
+}
+
+export function guideMemoryFrom(phrases: readonly { figure?: MelodyFigureId; goal?: MelodyGoalId }[]): GuideMemoryBar[] {
+  return phrases.map((phrase, i) => {
+    if (!phrase.figure || !phrase.goal) {
+      throw new PlanValidationError(`notes.guideSoFar[${i}]: expected figure and goal`)
+    }
+    return { figure: phrase.figure, goal: phrase.goal }
+  })
+}
+
+/**
+ * Prior guide picks on the notes op. Omitted = none.
+ * When `expectedLength` is set (the current `barIndex`), the list must match.
+ */
+export function parseGuideSoFar(raw: unknown, expectedLength?: number): GuideMemoryBar[] {
+  if (raw === undefined) {
+    if (expectedLength !== undefined && expectedLength > 0) {
+      throw new PlanValidationError('op.melodySoFar: expected one entry per earlier bar')
+    }
+    return []
+  }
+  if (!Array.isArray(raw)) throw new PlanValidationError('op.melodySoFar: expected an array')
+  if (raw.length > 32) throw new PlanValidationError('op.melodySoFar: expected at most 32 bars')
+  if (expectedLength !== undefined && raw.length !== expectedLength) {
+    throw new PlanValidationError('op.melodySoFar: expected one entry per earlier bar')
+  }
+  return raw.map((bar, i) => parseGuideMemoryBar(bar, `op.melodySoFar[${i}]`))
+}
+
+/**
+ * Default 4-slot rhythm for a guide figure in this meter. Lyrical characters
+ * borrow the hold_resolve rhythm (a long tone) except on arpeggios. Motif
+ * echo reuses the previous bar’s rhythm when one is given.
+ */
+export const GUIDE_RHYTHMS: Record<MeterId, Record<MelodyFigureId, PhraseRhythmId>> = {
+  four_four: {
+    step_to_goal: 'four_even',
+    neighbour: 'four_dotted',
+    arpeggio_up: 'four_even',
+    arpeggio_down: 'four_even',
+    motif_echo: 'four_even',
+    leap_recover: 'four_gallop',
+    hold_resolve: 'four_long_short',
+  },
+  three_four: {
+    step_to_goal: 'triple_long_shorts',
+    neighbour: 'triple_rock',
+    arpeggio_up: 'triple_long_shorts',
+    arpeggio_down: 'triple_long_shorts',
+    motif_echo: 'triple_long_shorts',
+    leap_recover: 'triple_shorts_long',
+    hold_resolve: 'triple_opening',
+  },
+  two_four: {
+    step_to_goal: 'two_even',
+    neighbour: 'two_swing',
+    arpeggio_up: 'two_even',
+    arpeggio_down: 'two_even',
+    motif_echo: 'two_even',
+    leap_recover: 'two_upbeat',
+    hold_resolve: 'two_march',
+  },
+  six_eight: {
+    step_to_goal: 'compound_even',
+    neighbour: 'compound_rock',
+    arpeggio_up: 'compound_even',
+    arpeggio_down: 'compound_even',
+    motif_echo: 'compound_even',
+    leap_recover: 'compound_close',
+    hold_resolve: 'compound_long',
+  },
+  nine_eight: {
+    step_to_goal: 'nine_even',
+    neighbour: 'nine_rock',
+    arpeggio_up: 'nine_even',
+    arpeggio_down: 'nine_even',
+    motif_echo: 'nine_even',
+    leap_recover: 'nine_close',
+    hold_resolve: 'nine_long',
+  },
+  twelve_eight: {
+    step_to_goal: 'twelve_even',
+    neighbour: 'twelve_sway',
+    arpeggio_up: 'twelve_even',
+    arpeggio_down: 'twelve_even',
+    motif_echo: 'twelve_even',
+    leap_recover: 'twelve_close',
+    hold_resolve: 'twelve_long',
+  },
+}
+
+export function rhythmForGuideFigure(
+  figure: MelodyFigureId,
+  meter: MeterId,
+  options: { lyrical?: boolean; echoRhythm?: PhraseRhythmId } = {},
+): PhraseRhythmId {
+  if (figure === 'motif_echo' && options.echoRhythm && PHRASE_RHYTHMS[options.echoRhythm]?.meter === meter) {
+    return options.echoRhythm
+  }
+  const table = GUIDE_RHYTHMS[meter]
+  if (options.lyrical && figure !== 'arpeggio_up' && figure !== 'arpeggio_down') {
+    return table.hold_resolve
+  }
+  return table[figure]
+}
+
+/**
+ * Q2: a rest may sit on a short weak slot, never the longest slot and never
+ * the first mid-phrase beat (first slot that starts on a beat at or after
+ * the bar’s midpoint).
+ */
+export function guideRestSlot(
+  ticks: readonly number[],
+  beatTicks: number,
+  ticksPerBar: number,
+): number | null {
+  if (ticks.length === 0) return null
+  const starts: number[] = []
+  let at = 0
+  for (const dur of ticks) {
+    starts.push(at)
+    at += dur
+  }
+  const longest = Math.max(...ticks)
+  const longestIndex = ticks.findIndex((tick) => tick === longest)
+  const mid = Math.floor(ticksPerBar / 2)
+  let midPhrase = ticks.findIndex((_, i) => starts[i] >= mid && starts[i] % beatTicks === 0)
+  if (midPhrase < 0) {
+    midPhrase = ticks.findIndex((_, i) => starts[i] > 0 && starts[i] % beatTicks === 0)
+  }
+  const eligible = ticks
+    .map((_, i) => i)
+    .filter((i) => i !== longestIndex && i !== midPhrase)
+  if (eligible.length === 0) return null
+  eligible.sort((a, b) => {
+    const aStrong = starts[a] % beatTicks === 0 ? 1 : 0
+    const bStrong = starts[b] % beatTicks === 0 ? 1 : 0
+    if (ticks[a] !== ticks[b]) return ticks[a] - ticks[b]
+    if (aStrong !== bStrong) return aStrong - bStrong
+    return a - b
+  })
+  return eligible[0]
+}
