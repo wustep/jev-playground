@@ -1,353 +1,286 @@
-# Generated vs reference (post-#46)
+# Generated vs reference — the notes (post-#46)
 
-Stephen, 2026-09-19, branch `cursor/generated-vs-reference-4e47`, on `main` after #46 (`phrasing`, Chopin `twelve_eight` prior, Laufey `bossa_comp`, Zimmer same-figure layer). Compares **what we actually emit** — HeuristicPlanner plans realized through `renderPlan` (Notes:**code**), Notes:**guide**, and Notes:**line** — to the in-repo reverse-labelled plans and public-domain MIDI.
+Stephen, 2026-09-19, after #46. This note is about **sounding music**: the realized Score skyline from three note-producing paths, compared to the real references.
 
-**This is not another reverse-label study.** `REFERENCE_PLAN_GAP.md` asked what the vocabulary *should* say. This note asks: after #46, do we *pick* those labels, and do the three realize paths *sound like* the references?
-
-**Thesis.** #46 closed the cheap dialect labels (12/8 nocturne, `phrasing`, `bossa_comp`, ostinato layer-keep). The stub’s **argmax now aims at the right piece-type for Chopin and Laufey**, which it did not before. What still blocks a first listen is **above the bar and inside the singing line**: 8-bar / 4-bar return units (`hook_bars`), Beethoven’s storm-as-mode, Debussy holds flattening verified phrases, Guide inventing a tune on preludes/cells, and a line that still attacks every downbeat even when the plan says `breathing`.
-
----
-
-## 0. Method
-
-**Planners.** `HeuristicPlanner` only. Argmax seed 1 + sample seeds 1 / 7 / 19, 16 bars, brief on. No live Jev: this environment has **no `TYPESAFE_API_KEY` / `VITE_JEV_API_KEY`** (confirmed empty; only `.env.example` on disk). `GET /api/jev` was not required. Guide and line overlays are **fake closed picks** run through the same realize paths MusicApp uses (`realizeJevGuideChoices` / `realizeJevNoteChoices` → `applyNotePhrases`). That is not “Jev sang this.” It is “if the closed picks look like the dump-script sketch, here is the Score.” Say so in every Guide / Line sentence.
-
-**References.** Primary per dial (same pieces as the gap study):
-
-| Style | Primary plan JSON | MIDI |
+| Path | How notes get written | What we ran |
 | --- | --- | --- |
-| Bach | [`bach-bwv846-prelude.json`](reference-plans/bach-bwv846-prelude.json) | [`bach-bwv846-wtk1-prelude1.mid`](../ref-midi/public/bach-bwv846-wtk1-prelude1.mid) |
-| Beethoven | [`beethoven-op13-pathetique-ii.json`](reference-plans/beethoven-op13-pathetique-ii.json) | [`beethoven-op13-pathetique-2.mid`](../ref-midi/public/beethoven-op13-pathetique-2.mid) |
-| Chopin | [`chopin-op9-2-nocturne.json`](reference-plans/chopin-op9-2-nocturne.json) | [`chopin-op9-2-nocturne.mid`](../ref-midi/public/chopin-op9-2-nocturne.mid) |
-| Debussy | [`debussy-l66-arabesque-1.json`](reference-plans/debussy-l66-arabesque-1.json) | [`debussy-l66-arabesque-1.mid`](../ref-midi/public/debussy-l66-arabesque-1.mid) |
-| Glass | [`glass-glassworks-opening.json`](reference-plans/glass-glassworks-opening.json) | none (in copyright) |
-| Zimmer | [`zimmer-time.json`](reference-plans/zimmer-time.json) | none |
-| Laufey | [`laufey-from-the-start.json`](reference-plans/laufey-from-the-start.json) | none |
-| Fox | [`fox-city-in-the-sky.json`](reference-plans/fox-city-in-the-sky.json) | none |
+| **code** | labels → `renderPlan` | Heuristic argmax, 16 bars. Default Generate. |
+| **guide** | closed figure+goal → `realizeJevGuideChoices` → overlay on that Score | Showcase path. **Fake picks** (no live Jev). |
+| **line** | closed 4-slot rhythm+degrees → `realizeJevNoteChoices` → overlay | Raw experiment. **Fake picks.** |
 
-Committed reference `plan` objects still **omit `phrasing`** (it lived in `_stretch` when #45 wrote them). `parsePlan` fills the character default. Where `_stretch` names a proposed phrasing, that is the *wanted* label.
+**Reference notes**
 
-**Metrics** (first 16 sounding bars; generated skyline = top of `treble`; MIDI skyline = highest onset in the Mutopia file). Same family as `FIDELITY_FINDINGS.md`: silent-beat %, downbeats attacked, `ret4` / `ret8` / longest returning run (≥ 75 % pitch-class match per beat), chord-tone rate on the plan’s RN, leap mean/max, register mean, LH onset density early vs on the return. Q1: LH fingerprint identical after overlay?
+- Bach / Beethoven / Chopin / Debussy: Mutopia MIDI skyline (highest onset, first 16 bars). Same family as `FIDELITY_FINDINGS.md`.
+- Glass / Zimmer / Laufey / Fox (no MIDI): the singing line you get by **rendering the committed reference plan JSON** through the same three paths. That is what those labels imply for the notes — not a transcription.
 
-Script: `npx --yes tsx scripts/compare-generated-vs-reference.ts` (JSON only; never writes MIDI). `--live-jev --live-styles chopin,laufey` is wired and will no-op without a key.
+Plan labels are **supporting context** only: they explain why a path wrote these notes. They are not the score.
 
-**Modes.**
+**Thesis (from the notes).** #46 changed some *notes*: Chopin now *sounds* in 12/8 with a 4-bar returning skyline and a matching register; Laufey’s left hand is a bossa pattern, not even jazz-pop chords. What you still hear is an **étude singing line**: every lyrical downbeat is attacked, Guide rest-slots do not become silence, Guide **rewrites** a returning tune instead of ornamenting it, Beethoven Generate is a high tremolo storm (MIDI Adagio sits an octave lower), and Glass / Zimmer never return a 4-bar cell in the skyline (`ret4` ≈ 0). `hook_bars` is still the highest leftover because it is a *note* problem (the theme in the skyline is 1–2 bars).
 
-| Mode | What we ran | Honesty |
-| --- | --- | --- |
-| **code** | labels → `renderPlan` | Live stub. Default Generate. |
-| **guide** | fake figure+goal → `realizeJevGuideChoices` | Showcase path, **stub picks**. Live Jev not heard. |
-| **line** | fake 4-slot rhythm+degrees → `realizeJevNoteChoices` | Raw experiment, **stub picks**. |
+No `TYPESAFE_API_KEY` here. Guide/Line are not “Jev sang this.” They are the production realize functions fed the dump-script figure/goal and 4-slot sketches.
 
 ---
 
-## 1. What #46 already closed
+## 0. Ear metrics
 
-Measured, not hoped:
+First 16 sounding bars (8 when the reference JSON is an 8-bar sketch). Generated skyline = top of `treble`. MIDI skyline = highest onset. Occupancy per felt beat: attacked / held / silent. A bar “returns” at ≥ 75 % pitch-class match per beat (`ret4`, longest run). Chord-tone rate is against the *plan’s* RN (MIDI has none). Q1: is the LH fingerprint identical after overlay?
 
-| #46 item | Evidence this pass |
-| --- | --- |
-| Chopin `twelve_eight` prior | Argmax meter is **`twelve_eight`**. Pre-#46 gap study: 4/4. Mutopia Op. 9/2 is 12/8; generated `ret4` 0.75 vs MIDI 0.81, longest run **4 = 4**. |
-| `phrasing` global | Argmax writes it on every style. Chopin **`upbeat`** (the `_stretch` ask). Laufey / Fox lyrical **`breathing`**. Zimmer **`long_breathed`**. Bach prelude **`on_the_beat`**. Beethoven storm **`on_the_beat`** (correct for that caricature, wrong for the Adagio). |
-| Laufey `bossa_comp` | Argmax texture is **`bossa_comp`**. Pre-#46: `chordal_melody`. |
-| Laufey `ii9` / `V13` heads | Argmax bars: `Imaj7, Imaj7, ii9, V13` then `ii9\|V13`. The gap study’s “no V13” is closed on the mode. |
-| Zimmer same-figure layer | Renderer rule is bound to `melody_over_ostinato` / `syncopated_ostinato` + `build` / `peak_then_bare`. Argmax still picks **`pulsing_chords`**, so the new rule does not fire on the mode. Sample seed 7 *does* pick the ostinato texture. Density on return still rises (bass onsets 4 → 11) via `applyArrangement`. |
-
-**Do not re-propose `phrasing` or `bossa_comp`.** They ship and the stub uses them.
-
-What #46 did *not* move, even when the label is right:
-
-- **Downbeats are still 100 % attacked** on every lyrical Generate (Chopin / Laufey / Fox / Debussy best). `upbeat` / `breathing` carve a phrase-end rest and then a **pickup fills the next downbeat**, so the FIDELITY “étude” tell (fresh attack on every barline) is intact. Silent-beat % on code is 1–8 %, not the 13–26 % of the sung repertoire.
-- **Borrowed iv** still never appears on Laufey argmax or the three samples. The language sketch (`I – V7/IV – vi7 – iv6`) is in the book; the mode does not pick it.
-- **Beethoven argmax is still the C-minor storm.** `phrasing` cannot save a piece that never chose `lyrical_song`.
+Script: `npx --yes tsx scripts/compare-generated-vs-reference.ts` (JSON only; no MIDI written). `--live-jev` is wired and no-ops without a key.
 
 ---
 
-## 2. Per style — reference vs best generated
+## 1. Scoreboard — what the notes do
 
-“Best generated” = highest global-label overlap with the primary reference (14 fields). Argmax is also always reported: that is what Generate (decide-by argmax) plays.
+Generate = heuristic **argmax**. Living-artist “Ref” = reference JSON → `renderPlan` skyline.
 
-Guide / line numbers are **fake-pick realize**, not live Jev.
+| Dial | Ref notes | code notes | guide notes | line notes |
+| --- | --- | --- | --- | --- |
+| **Bach** MIDI prelude | 4/4; 0 % silent; **16/16** downbeats; ret4 0.38 / run 1; leaps 6.7 / 22; register **66.4** | Same register **66.8**, leaps 6.0 / 12. Skyline is the *figure*, not a tune: 48 % “silent” beats, **1/16** downbeats — do not read as breath. | **Invents a tune**: 16/16 downbeats, 0 % silent, contour fall, leap max 17. LH kept (Q1). | 16/16 downbeats; ret4 0.88 is four even degrees, not Fortspinnung; register jumps to **75.5**. |
+| **Beethoven** MIDI Adagio | 2/4; ret8 **0.94** / run **8**; register **62**; summit ×1; LH 13 → 20.5 | **Wrong piece in the notes**: 4/4 tremolo, register **80.6**, summit ×4, ret4 0.06, LH 4 → 8. ret8 0.79 is a sentence copy, not the cantabile. | Still the storm: register 80.3, 16/16 downbeats, `arpeggio_up` rise, summit ×**26**. | Same storm, higher fake ret4 (0.75). Register 79.4. |
+| **Chopin** MIDI Op. 9/2 | 12/8; ret4 **0.81** / run **4**; register **72.4**; 16/16 downbeats; leaps 6.7 / 27 | **Closest code win.** 12/8; ret4 **0.75** / run **4**; register **71.4**; leaps 6.8 / 22. Still **16/16** downbeats, 1.6 % silent. LH 1.25 → 1.75 (almost constant). | Register 69.3, chord-tone 1.00, 14/16 bars have a rest *slot* — **0 % silent beats, 16/16 downbeats**. ret4 **collapses 0.75 → 0.25** (rewrites A′). Leap max 17. Q1 yes. | ret4 0.44; 16/16 downbeats; leap max 15. Q1 yes. |
+| **Debussy** MIDI Arabesque | 4/4; ret4 0.13 / run 2; register **65.1**; leaps 8.4 / 38; 16/16 downbeats | 9/8 planing, register **80.1**, ret4 0.67 / run 2, 15/16 downbeats. Higher and squarer than the MIDI wash. | 16/16 downbeats, 0 % silent, 12 rest slots, register 70.1. A chord-tone tune on top of planing. | Same: 16/16, rest slots 13, register 69.2. |
+| **Glass** JSON→code | 4/4 cells; ret4 **0.06** / run 1; static; register 65.6; 8/8 downbeats | Same hole in the *notes*: ret4 **0.06** / run **1**, 16/16 downbeats, summit ×11. Even arpeggios, no 4-bar skyline return. | Invents a rising neighbour-tune (register 76.6, ret4 0). 16/16 downbeats. Q1 yes. | ret4 0.88 — **ignore** (four even degrees copied). |
+| **Zimmer** JSON→code | ostinato skyline; ret4 0.38; contour arch; register 78.2; 8/16 downbeats silent; LH 4 → 8 | Static chant-ish (leap mean **0.64**) but ret4 **0.00** / run 2; 15/16 downbeats; summit ×**16**; LH 4 → **11**. Thickens, does not return the 4-bar cell. | Rise, not chant. ret4 0; 16/16 downbeats; summit ×16. Q1 yes. | Leap max **24**; fake ret4 0.88. |
+| **Laufey** JSON→code | arch; silent 12.5 %; ret4 0.54; register 79.7; leaps 5.4 / 18; LH 1.5 | Bossa LH (2 → 2.5). Skyline still **16/16** downbeats, 4.7 % silent, ret4 0.69, contour **rise**, leaps 5.6 / 18, register 73.5. | 14 rest slots → **0 % silent, 16/16 downbeats**. Leap max **29**. ret4 drops to 0.44. Q1: partido-alto LH **survives**. | Leap max 29; 16/16 downbeats; fake ret4 0.81. |
+| **Fox** JSON→code | rise; silent 9 %; ret4 0.25; register 76.5; leaps 5.2 / 12 | Displacement skyline; ret4 0.54 / run 3; 16/16 downbeats; leap max **26**; register 70.3. | 16/16 downbeats, 0 % silent, leap max **28**, ret4 0.88. Q1 yes. | **Only path with real air** (17 % silent) — long-short + rest actually vacates beats. Leap max 21. Still 16/16 downbeats. |
+
+**One listen, three paths**
+
+- **code** can now *pulse* like Op. 9/2 and *comp* like a bossa. It still **attacks every lyrical downbeat** and does not return 4–8 bar cells except where `period` already copies a 4-bar A (Chopin).
+- **guide** (showcase) keeps the accompaniment (Q1 closed) and then **sings on every downbeat**, often with a 17–29 st leap. On Chopin it is *worse* than code for the thing the nocturne is (A / A′ in the skyline).
+- **line** (experiment) is four slots. High `ret4` is usually “same four degrees,” not a theme. Fox is the one time a rest slot became silence.
+
+---
+
+## 2. Per style — notes first
 
 ### 2.1 Bach — BWV 846
 
-| | Reference | Argmax (also best, 14/14 globals) |
-| --- | --- | --- |
-| character / form / key / meter / texture | flowing_perpetual, spinning_out, C, 4/4, broken_chord_prelude | **exact** |
-| arrangement / opening / pedal / phrasing | constant, straight_in, dry, on_the_beat | **exact** |
-| first 8 chords | I, ii42, V65, I, vi6, V7/V, V6, Imaj42 | I, ii42, then **vi7–ii7 fifths** (book phrase unused after bar 2) |
-
-| Metric (16 bars) | MIDI | code | guide (fake) | line (fake) |
+| | MIDI skyline | code | guide | line |
 | --- | --- | --- | --- | --- |
-| silent beats | 0 % | 48 % † | 0 % | 0 % |
-| downbeats attacked | 16/16 | 1/16 † | **16/16** | **16/16** |
-| ret4 / longest run | 0.38 / 1 | 0.25 / 6 | 0.25 / — | 0.88 / — |
-| chord-tone rate | — | 0.99 | 1.00 | 0.69 |
-| leap mean / max | 6.7 / 22 | 6.0 / 12 | 2.8 / 17 | 3.9 / 17 |
-| register mean | 66.4 | 66.8 | 65.5 | 75.5 |
-| Q1 LH survived | — | — | **yes** | **yes** |
+| silent / downbeats | 0 % / 16/16 | 48 % / 1/16 † | 0 % / **16/16** | 0 % / **16/16** |
+| ret4 / run | 0.38 / 1 | 0.25 / 6 | 0.25 / 2 | 0.88 / 8 ‡ |
+| leaps mean/max | 6.7 / 22 | 6.0 / 12 | 2.8 / 17 | 3.9 / 17 |
+| register | **66.4** | **66.8** | 65.5 | **75.5** |
+| Q1 LH | — | — | yes | yes |
 
-† Code skyline of `broken_chord_prelude` is not “a tune”: many beats have no top-voice attack. MIDI skyline of the real prelude *is* the figure and hits every downbeat. Do not read 48 % silence as breath.
+† Code skyline of broken-chord figuration is not a singing line; MIDI skyline *is* the figure and hits every beat. ‡ Line ret4 is repeated degrees.
 
-**Still missing.** Sample seed 1 still wanders to `lyrical_song` / 6/8 / `stride_dance` (5/14). Holds + head/seq assembly skip the verified I–ii42–V65–I phrase after two bars. Guide **hurts** this dial: it writes a singing line (`step_to_goal` / `motif_echo`) that attacks every downbeat on a piece that should have none. Line’s high `ret4` is four even degrees repeating, not Fortspinnung.
+**Hear.** Code is in the right register and leap size as the Mutopia prelude — a perpetual figure, not a song. Guide and Line **add a melody the piece does not have**, attacking every downbeat. That is audible damage on this dial.
+
+*Plan context (not the headline):* argmax globals match the reference JSON (prelude / 4/4 / broken_chord / on_the_beat). Harmony wanders after I–ii42. Sample seed 1 can emit a 6/8 stride siciliano — different notes.
 
 ### 2.2 Beethoven — Pathétique II
 
-| | Reference (Adagio) | Argmax / best (5/14) |
-| --- | --- | --- |
-| character / form | lyrical_song, period | **stormy_drama, sentence** |
-| key / meter / texture | A♭, 2/4, alberti_melody | **C minor, 4/4, tremolo_storm** |
-| tempo / dynamics / phrasing | adagio, *p*, breathing | allegro, *f*, **on_the_beat** |
-| arrangement / opening | lift_on_return, straight_in | match |
-| first 8 | I, vi, V7/V, V, I, vi, I64\|V7, I | i×4, V7/IV, iv, iv, i64\|V |
-
-| Metric | MIDI Adagio | code (storm) | guide (fake) | line (fake) |
+| | MIDI Adagio | code | guide | line |
 | --- | --- | --- | --- | --- |
-| meter | 2/4 | 4/4 | 4/4 | 4/4 |
-| ret8 / longest run | **0.94 / 8** | 0.79 / 8 | 0.19 / — | 0.75 / — |
-| register mean | **62** | **80.6** | 80.3 | 79.4 |
-| LH density early → return | 13 → 20.5 onsets | 4 → 8 | (LH same) | (LH same) |
-| downbeats attacked | 16/16 | 16/16 | 16/16 | 16/16 |
-| Q1 | — | — | yes | yes |
+| pulse | **2/4** | 4/4 | 4/4 | 4/4 |
+| ret8 / run | **0.94 / 8** | 0.79 / 8 | 0.75 / 8 | 0.94 / 8 |
+| register / summit | **62** / ×1 | **80.6** / ×4 | 80.3 / ×**26** | 79.4 / ×26 |
+| LH density | 13 → **20.5** | 4 → 8 | same LH | same LH |
+| downbeats | 16/16 | 16/16 | 16/16 | 16/16 |
+| contour | sung 8-bar A | **rise** (storm) | rise | rise |
 
-**#46 did nothing here.** The lyrical archetype still exists (A♭ / adagio / *p* / period — `STYLE_BRIEF_AUDIT`). Argmax never draws it. Samples: heroic 6/8 scherzo, stormy 3/4 chords. We are scoring the wrong piece against the Adagio MIDI.
+**Hear.** Generate does not sound like the Adagio. The MIDI theme sits around MIDI 62 and comes back an octave of *form* (ret8 0.94) with a thicker left hand. Our notes sit around **81**, start as tremolo, and hit the top note four (code) or twenty-six (guide/line) times. Matching ret8 on line is a copied 4-slot pattern, not an 8-bar cantabile.
 
-Guide on the storm is `arpeggio_up` × many — a motto-less rise, not an 8-bar cantabile. Line is four even attacks, high `ret4` from repetition, register still an octave too high.
+Reference JSON → code (the labels’ implied Adagio) is already high (register 79.6 on 8 bars) — even the *right* plan does not drop the tune to the MIDI tessitura. The wrong plan makes it a different piece.
+
+*Plan context:* argmax is stormy_drama / C minor / tremolo / allegro / on_the_beat. The lyrical archetype exists and is not drawn. #46’s `phrasing` never reaches these notes.
 
 ### 2.3 Chopin — Op. 9/2
 
-| | Reference | Argmax / best (11/14) |
-| --- | --- | --- |
-| character / form / texture | lyrical_song, period, rolling_nocturne | **match** |
-| meter | **twelve_eight** | **twelve_eight** ← #46 |
-| phrasing | **upbeat** (proposed) | **upbeat** ← #46 |
-| key / tempo | E♭, andante | D♭, adagio |
-| opening / pedal | pickup, full | **match** |
-| arrangement | **constant** (LH never breaks) | lift_on_return |
-| first 8 | I, V65, I6, V7, I, V65, I64\|V7, I | I, I, I6, I64\|V, I, I, I64\|V7, I (**holds** on I) |
-
-| Metric | MIDI | code | guide (fake) | line (fake) |
+| | MIDI | code | guide | line |
 | --- | --- | --- | --- | --- |
-| meter | 12/8 | twelve_eight | twelve_eight | twelve_eight |
-| silent beats | 0 % | 1.6 % | 0 % | 1.6 % |
-| downbeats attacked | 16/16 | **16/16** | **16/16** | **16/16** |
-| ret4 / longest run | **0.81 / 4** | **0.75 / 4** | 0.25 / — | 0.44 / — |
-| chord-tone rate | — | 0.97 | 1.00 | 0.99 |
-| leap mean / max | 6.7 / 27 | 6.8 / 22 | 5.3 / 17 | 5.6 / 15 |
-| register mean | 72.4 | 71.4 | 69.3 | 69.0 |
-| LH early → return | 30 → 34 (ornament) | 1.25 → 1.75 | same LH | same LH |
-| guide rest slots | — | — | 14/16 bars | 15/16 bars |
-| Q1 | — | — | **yes** | **yes** |
+| pulse | **12/8** | **12/8** | 12/8 | 12/8 |
+| silent / downbeats | 0 % / 16/16 | 1.6 % / **16/16** | 0 % / **16/16** | 1.6 % / **16/16** |
+| ret4 / run | **0.81 / 4** | **0.75 / 4** | **0.25 / 2** | 0.44 / 3 |
+| leaps mean/max | 6.7 / 27 | 6.8 / 22 | 5.3 / 17 | 5.6 / 15 |
+| register | **72.4** | **71.4** | 69.3 | 69.0 |
+| LH early → return | 30 → 34 (ornament in the MIDI skyline) | 1.25 → 1.75 | same | same |
+| rest slots | — | — | 14/16 | 15/16 |
 
-**#46 win.** The nocturne *frame* is now the mode: 12/8, rolling LH, pickup, upbeat phrasing, 4-bar return. Register matches the Mutopia file. Sample seed 1 is still the stormy 3/4 tremolo (3/14) — the wander risk is unchanged.
+**Hear.** This is the #46 note-level win: the generated skyline is now in **12/8**, in the **same register** as the Mutopia file, with a **4-bar returning pitch-class shape** (0.75 vs 0.81). Leaps are in family. The LH barely thickens — closer to the nocturne’s constant roll than to a ballade lift.
 
-**Still missing.** (1) Arrangement `lift_on_return` vs this page’s constant LH. (2) Holds sit on I and skip V65. (3) No fioritura — Guide’s figure set is `step_to_goal` / `motif_echo` / `hold_resolve`, no `turn`. (4) Phrase-end rest + pickup does **not** create silent downbeats. (5) Guide `ret4` *drops* (0.75 → 0.25): the overlay rewrites the returning tune instead of ornamenting it. That is the showcase path failing the nocturne’s actual trick (same A, more lace).
+What you still hear: **every barline is attacked**. Phrase-end air is filled by a pickup, so occupancy does not move. Guide’s rest slots are inaudible as silence; worse, Guide **destroys the return** (0.75 → 0.25). The nocturne’s trick is the same A with more lace. Showcase path writes a new chord-tone line.
+
+*Plan context:* argmax picked twelve_eight, upbeat, rolling_nocturne, pickup — that is why the pulse and register moved. Holds still sit on I (V65 unused). Arrangement is lift_on_return; the notes barely lift, so the label is louder than the LH.
 
 ### 2.4 Debussy — Arabesque 1
 
-| | Reference | Argmax (4/14) | “Best” sample 19 (6/14) |
-| --- | --- | --- | --- |
-| character / form | flowing_perpetual, mosaic_pairs | dreamy_haze, mosaic_pairs | dreamy_haze, mosaic_pairs |
-| key / meter / texture | E, 4/4, wash_arpeggio | D♭, **9/8**, parallel_planing | F♯ minor, 4/4, chordal_melody |
-| phrasing | on_the_beat | long_breathed | long_breathed |
-| first 8 | **IV6–iii6–ii6–I6** … | **I × 8** | i, bIII, i, bIII … |
-
-Argmax is the honest Generate: Clair-ish haze / 9/8 / planing, then **holds erase the Arabesque phrase** (gap study #9, still true). Sample 19 wins the label-count but is not a better Arabesque.
-
-| Metric | MIDI Arabesque | argmax would be I×8 planing | sample-19 code | sample-19 guide |
+| | MIDI | code (argmax) | guide | line |
 | --- | --- | --- | --- | --- |
-| ret4 / longest run | 0.13 / 2 | (not the best row) | 0.13 / 2 | 0.25 |
-| downbeats | 16/16 | — | 16/16 | 16/16 |
-| register | 65.1 | — | 79.9 | 71.5 |
-| Q1 | — | — | — | yes |
+| pulse | 4/4 wash | **9/8** planing | 9/8 | 9/8 |
+| silent / downbeats | 0 % / 16/16 | 10 % / 15/16 | 0 % / 16/16 | 2 % / 16/16 |
+| ret4 / run | 0.13 / 2 | 0.67 / 2 | 0.67 | 0.67 |
+| register | **65.1** | **80.1** | 70.1 | 69.2 |
+| leaps mean/max | 8.4 / 38 | 5.0 / 20 | 4.9 / 17 | 5.8 / 12 |
 
-**Still missing.** Holds vs verified planing phrases. Cross-bar ties (Clair 69 % in FIDELITY; score model still forbids them). Guide on haze writes a chord-tone tune with 12 rest *slots* and **zero silent beats** — floating off the beat is not a figure.
+**Hear.** MIDI is a mid-register wash that barely repeats (ret4 0.13) and leaps widely. Generate is a **higher, more periodic** 9/8 planing texture (register +15, ret4 0.67). Guide/Line pin a chord-tone tune on every downbeat — the opposite of Clair’s tied, off-beat line (FIDELITY: 69 % of Clair downbeats *tied*; our Score cannot tie across a bar).
 
-### 2.5 Glass — Glassworks Opening
+Reference JSON → code (4/4 wash, IV6–iii6–ii6–I6) has a fall contour at register 66.3, closer to MIDI tessitura than argmax — but its skyline misses every downbeat (wash starts off the beat). The *right* labels still do not reproduce the MIDI occupancy.
 
-| | Reference (inferred) | Argmax / best (12/14) |
-| --- | --- | --- |
-| character / form / key / meter / texture | hypnotic_pulse, additive_loop, F minor, 4/4, minimal_cells | **exact** |
-| arrangement / phrasing | terraced_blocks, on_the_beat | **match** |
-| opening / dynamicShape | straight_in, terraced | vamp_intro, steady |
-| first 8 | i i / bVI bVI / bIII bIII / v v | i i / bVI bVI / bIII bIII / V, **v6** |
+*Plan context:* argmax is haze / 9/8 / planing / I×8. Holds flatten the Arabesque phrase, so the notes never walk IV6–I6.
 
-| Metric | JSON process | code | guide (fake) | line (fake) |
+### 2.5 Glass — Opening (JSON → notes)
+
+No MIDI. Ref = reference plan rendered.
+
+| | Ref code | code | guide | line |
 | --- | --- | --- | --- | --- |
-| ret4 (4-bar cell) | should be high | **0.06** | **0.00** | 0.88 † |
-| longest run | 4 | **1** | — | — |
-| downbeats | n/a | 16/16 | 16/16 | 16/16 |
+| silent / downbeats | 3 % / 8/8 | 1.6 % / **16/16** | 0 % / **16/16** | 0 % / **16/16** |
+| ret4 / run | **0.06 / 1** | **0.06 / 1** | **0.00 / 1** | 0.88 / 8 ‡ |
+| contour | static | arch | **rise** | arch |
+| register | 65.6 | 68.9 | 76.6 | 75.5 |
+| summit hits | 5 / 8 bars | **11** / 16 | 8 | 9 |
 | Q1 | — | — | yes | yes |
 
-† Line `ret4` is four even degrees copied, not a 4-bar cell. Ignore it.
+**Hear.** Even the *reference* JSON, rendered, does not return a 4-bar cell in the skyline (`ret4` 0.06). Generate is the same: even arpeggios, run length 1, top note hit 11 times. Guide makes it worse — a rising tune in a higher register. Line’s pretty `ret4` is four repeated degrees.
 
-**#46 irrelevant.** The mode already aimed here. Loop theme memory is still **two bars**; `holds` stretch the cycle to i i / bVI bVI so bars 5–8 are not bars 1–4. Guide invents a neighbour/arpeggio tune on a cell piece (`notes_scope: none` still wanted). 3:2 is still unsayable.
+The 3:2 weave is not in any path’s notes (sixteenth grid). That is an audible identity miss, not a label miss.
 
-### 2.6 Zimmer — “Time”
+*Plan context:* globals already match (F minor, additive_loop, minimal_cells). Loop memory is two bars; holds stretch i i / bVI bVI. `hook_bars: 4` is how you get a 4-bar skyline return.
 
-| | Reference (inferred) | Argmax / best (11/14) |
-| --- | --- | --- |
-| character / form / meter | hypnotic_pulse, layered_build, 4/4 | **match** |
-| phrasing | **long_breathed** (proposed) | **long_breathed** ← #46 |
-| arrangement / opening | peak_then_bare, vamp_intro | **match** |
-| texture | melody_over_ostinato | **pulsing_chords** (same-figure rule does not bind) |
-| key / shape | A minor, late_surge | D minor, crescendo |
-| first 8 | i, bVI, bVII, V ×2 | i i / bVI bVI / bVII bVII / V V |
+### 2.6 Zimmer — “Time” (JSON → notes)
 
-| Metric | Process ask | code | guide (fake) | line (fake) |
+| | Ref code | code | guide | line |
 | --- | --- | --- | --- | --- |
-| ret4 (4-bar cell) | high | **0.00** | 0.00 | 0.88 † |
-| LH early → return | same figure, more layers | 4 → **11** | same LH | same LH |
-| contour | static / one interval | static | **rise** | rise |
-| leap max | small | 12 | 10 | **24** |
+| silent / downbeats | 19 % / 8 silent | 9 % / 1 silent | 0 % / **16/16** | 0 % / **16/16** |
+| ret4 / run | 0.38 / 1 | **0.00 / 2** | 0.00 / 1 | 0.88 / 4 ‡ |
+| contour | arch | **static** | **rise** | rise |
+| leaps mean/max | 3.3 / 11 | **0.64 / 12** | 1.5 / 10 | 2.8 / **24** |
+| summit hits | 2 | **16** | **16** | **16** |
+| LH early → return | 4 → 8 | 4 → **11** | same | same |
+
+**Hear.** Code is the closest to a chant (tiny mean leap, static contour) but the **4-bar block never returns in the skyline** and the summit is the whole piece (16 hits). LH thickens (4 → 11) — you hear a build, not “same figure, new layer.” Guide/Line climb and attack every downbeat; Line leaps a 24 st hole.
+
+Ref JSON → code already has ret4 only 0.38 and an arch (the implied chant is not fully in `renderPlan` either). Generate is flatter and less returning.
+
+*Plan context:* argmax is peak_then_bare + pulsing_chords, so the #46 same-figure keep (ostinato textures only) does not run. Harmony is i i / bVI bVI, not i–bVI–bVII–V.
+
+### 2.7 Laufey — “From the Start” (JSON → notes)
+
+| | Ref code | code | guide | line |
+| --- | --- | --- | --- | --- |
+| silent / downbeats | **12.5 %** / 8/8 | 4.7 % / **16/16** | 0 % / **16/16** | 1.6 % / **16/16** |
+| ret4 | 0.54 | 0.69 | 0.44 | 0.81 ‡ |
+| contour | **arch** | **rise** | rise | rise |
+| leaps mean/max | 5.4 / 18 | 5.6 / 18 | 6.7 / **29** | 5.8 / **29** |
+| register | 79.7 | 73.5 | 67.9 | 68.7 |
+| LH | 1.5 | **2 → 2.5** (bossa) | **same LH** | **same LH** |
+| rest slots | — | — | 14/16 | 15/16 |
+
+**Hear.** #46 is in the **left hand**: bossa density, Q1 holds under Guide/Line. The **singing line** is still an étude — every downbeat attacked, contour a rise (ref JSON sang an arch with 12.5 % silence), and Guide/Line open a 29-semitone hole. Rest slots do not become rests you can hear.
+
+*Plan context:* argmax is bossa_comp + breathing + ii9/V13. Key is F, not D♭ (you hear a different tonic). Borrowed iv never sounds. Even grid under the new texture.
+
+### 2.8 Fox — *City in the Sky* (JSON → notes)
+
+| | Ref code | code | guide | line |
+| --- | --- | --- | --- | --- |
+| silent / downbeats | 9 % / 8/8 | 8 % / **16/16** | 0 % / **16/16** | **17 %** / **16/16** |
+| ret4 / run | 0.25 / 1 | 0.54 / 3 | 0.88 / 4 | 0.88 / 5 |
+| leaps mean/max | 5.2 / 12 | 4.6 / **26** | 3.4 / **28** | 4.2 / 21 |
+| register | 76.5 | 70.3 | 75.4 | 77.8 |
 | Q1 | — | — | yes | yes |
 
-**#46 half-win.** Phrasing label is right. Arrangement thickens. The figure-keep rule misses the mode because texture priors still peak on `pulsing_chords`. The harmonic *cell* is 2+2 holds, not a 4-bar block. Guide writes `neighbour` + `arpeggio_up` — a climbing tune, not a chanted interval. `hook_bars: 4` (LH) + 8 (chant) still warranted.
+**Hear.** Code is a displaced-arpeggio skyline that repeats a bit more than the lesson sketch (ret4 0.54 vs 0.25) and leaps farther (26 vs 12). Guide is a smooth chord-tone top (Q1 keeps the displacement) that never breathes. Line is the only generated path that **vacates beats** (17 %) — still attacks every downbeat.
 
-### 2.7 Laufey — “From the Start” sketch
-
-| | Reference (inferred) | Argmax / best (10/14) |
-| --- | --- | --- |
-| form / meter / opening / phrasing | period, 4/4, vamp_intro, breathing | **match** (phrasing ← #46) |
-| texture | lush_voicings (bossa *wanted*) | **`bossa_comp`** ← #46 (better than the JSON’s stand-in) |
-| character / key / dynamics | warm_groove, D♭, *mp* | lyrical_song, **F**, *p* |
-| first 8 | ii9\|V13, Imaj7 ×4 | Imaj7, Imaj7, **ii9, V13**, … ii9\|V13, Imaj7 |
-
-Borrowed-iv language sketch (`laufey-borrowed-iv-language.json`: I, V7/IV, vi7, **iv6**, Imaj7, IVmaj7, **iv**, I) — **zero** `iv` / `iv6` on argmax or seeds 1 / 7 / 19.
-
-| Metric | Ask | code | guide (fake) | line (fake) |
-| --- | --- | --- | --- | --- |
-| silent beats | vocal air | 4.7 % | 0 % | 1.6 % |
-| downbeats attacked | some silent | **16/16** | **16/16** | **16/16** |
-| ret4 | song 4 | 0.69 | 0.44 | 0.81 |
-| chord-tone rate | ~0.95 diatonic | 0.98 | 0.99 | 0.92 |
-| leap max | sung, small | 18 | **29** | **29** |
-| Q1 (groove stays) | yes | — | **yes** | **yes** |
-| guide rest slots | — | — | 14/16 | 15/16 |
-
-**#46 win on groove + ii–V colour.** The mode is now a bossa-comp song in 4/4 that breathes *as a label*. Q1 holds: Guide/Line swap the skyline and leave the partido-alto LH alone.
-
-**Still missing.** D♭ prior (F is still the mode). Borrowed-iv *phrases* (book has them; planner does not emit). Guide/Line leap a 29-semitone hole — a fake `leap_recover` / register snap, and live Jev could do the same if it picks that figure. Rest *slots* do not become silent *beats* or silent *downbeats*. `feel: swing | bossa` is still even sixteenths under the new texture.
-
-### 2.8 Elijah Fox — *City in the Sky* lesson
-
-| | Reference | Argmax / best (12/14) |
-| --- | --- | --- |
-| character / form / key | dreamy_haze, vamp_and_tag, C | **exact** |
-| phrasing / opening / arrangement | long_breathed, vamp_intro, build | **match** |
-| texture / palette | chordal_melody, modal | displaced_arpeggio, pentatonic (legal lesson colour) |
-| first 8 | bVImaj7, IVmaj7, … Imaj7s5, IVadd6 | bVImaj7×2, IVmaj7×2 ×2 (verified pair, held) |
-
-| Metric | Ask | code | guide (fake) | line (fake) |
-| --- | --- | --- | --- | --- |
-| ret4 | vamp 2–4 | 0.54 | 0.88 | 0.88 |
-| silent beats | long tones | 7.8 % | 0 % | **17 %** |
-| leap max | colour, not scream | 26 | 28 | 21 |
-| Q1 | — | — | yes | yes |
-
-Still the best stub-to-reference fit. Line is the only mode that produced real silent-beat % (long-short + rest slot on 4/4). Guide again invents a stepwise top over displacement that already *is* the lesson.
+*Plan context:* argmax already aims at the lesson pair (bVImaj7 / IVmaj7) on displaced_arpeggio. Best stub-to-reference *aim*; the leftover is leap size and downbeats.
 
 ---
 
-## 3. Still missing, ranked by audible damage — per mode
+## 3. Gaps ranked by what you hear in the notes
 
-Guide is the showcase. Line is the raw experiment. Code is what strangers hear.
+Not by label mismatch. Guide is the showcase; Line is the experiment; code is Generate.
 
-### Code (`renderPlan`)
+### Code — the default singing line + accompaniment
 
-| Rank | Gap | Damage | Why it is still open after #46 |
+| Rank | What you hear | Where | Ship |
 | --- | --- | --- | --- |
-| 1 | **`hook_bars: 2 \| 4 \| 8`** (or an A8 A8 period) | Pathétique theme is 8; Glass Opening is a 4-bar cell ×4; “Time” is 4-bar LH + 8-bar chant; loops still keep **2**. Glass `ret4` 0.06, Zimmer `ret4` 0.00. | Gap study #2. Not in #46 on purpose. |
-| 2 | **Beethoven lyrical is never the mode** | Generate is C-minor storm vs the Adagio MIDI (register 81 vs 62, 4/4 tremolo vs 2/4 alberti). | Character weights. `phrasing` cannot fix a wrong archetype. |
-| 3 | **Downbeat still always attacked** on lyrical code | Chopin / Laufey / Fox / Debussy: 16/16. Pickup fills the air #46 just carved. Étude tell from FIDELITY / QA #1 is **not** gone. | Renderer: phrase-end rest + pickup by design. Need mid-phrase air, or a downbeat that may be silent without a pickup. |
-| 4 | **Holds flatten verified phrases** | Debussy argmax I×8 (Arabesque IV6–iii6–ii6–I6 unused). Chopin sits on I and skips V65. Bach leaves I–ii42 for a fifths sequence. | Gap study #9. No #46 work. |
-| 5 | **Ornamented / layered return** | Chopin A′ is a copy (guide `ret4` even worse). Zimmer mode uses `pulsing_chords` so same-figure keep does not run. | Fioritura still no figure. Bind layer-keep to `pulsing_chords` too, or shift Zimmer argmax onto ostinato. |
-| 6 | **Glass 3:2 / hemiola** | Opening without weaving is even cells in F minor. | Still unsayable. |
-| 7 | **Laufey D♭ + borrowed-iv emission** | Groove is right; key is F; iv never appears. | Priors / assembleHarmony, not new chord ids. |
-| 8 | **`close: cadence \| stop \| fade`** | Glass / Fox / Clair still cadence. | Unchanged. |
+| 1 | **No 4–8 bar theme in the skyline** except Chopin’s 4-bar A. Glass/Zimmer `ret4` ≈ 0; Adagio MIDI is an 8-bar return we never play. | Glass, Zimmer, Beethoven | **`hook_bars: 2 \| 4 \| 8`** |
+| 2 | **Wrong notes for Beethoven** — high tremolo storm (register 81, 4/4) vs Adagio (62, 2/4, thicker return). | Beethoven | Draw the lyrical archetype so *these* notes can exist |
+| 3 | **Every lyrical downbeat is attacked** (16/16). Pickup fills the air #46 carved. Silent-beat % 1–8, not sung. | Chopin, Laufey, Fox, Debussy | Phrase-end rest **without** a mandatory pickup, or a legal silent downbeat |
+| 4 | **Return is a copy, not lace / a new layer** | Chopin A′; Zimmer summit ×16, LH just denser | Ornament on restatement; fire figure-keep on the texture we actually emit |
+| 5 | **Tessitura / pulse off the MIDI** | Debussy +15 semitones and 9/8 vs 4/4 wash; Glass no 3:2 in the grid | Holds vs verified phrases; `pulse` after hook_bars |
+| 6 | **Laufey line rises and never sits on iv** | contour rise vs ref arch; no borrowed-iv sonority | Emit iv phrases (the notes); D♭ if we want that tonic |
 
-### Guide (showcase — fake picks through the real realize path)
+### Guide — showcase overlay
 
-| Rank | Gap | Damage |
+| Rank | What you hear | Where |
 | --- | --- | --- |
-| 1 | **Always writes a tune** | Bach prelude and Glass cells get `step_to_goal` / `neighbour` / `arpeggio_up` and 16/16 downbeats. Need `notes_scope: singing_line \| none` (or disable Guide on `flowing_perpetual` / `hypnotic_pulse` without a melody texture). |
-| 2 | **Return is re-realized, not ornamented** | Chopin code `ret4` 0.75 → guide 0.25. Showcase path destroys the nocturne’s A / A′. Theme memory copies figure+goal ids, then code writes a *new* line on the later chord — not lace on the same contour. |
-| 3 | **Rest slots ≠ breath** | 12–15 bars tagged `rest`, silent-beat % still 0, downbeats still 16/16. Q2 puts the rest on a short weak slot; long tones cover every beat. |
-| 4 | **Leaps** | Laufey / Fox max 28–29 st. No `turn` / `chant_interval`. `leap_recover` is a 7–12 st jump by construction. |
-| 5 | **No off-beat / tie / motto figure** | Clair, Adagio motto, Zimmer chant — cannot name them. |
+| 1 | **A tune on pieces that should not have one** — 16/16 downbeats on the prelude and on Glass cells | Bach, Glass, Zimmer |
+| 2 | **The return disappears** — Chopin skyline ret4 0.75 → 0.25. Same A′ problem the nocturne is made of. | Chopin, Laufey (0.69 → 0.44) |
+| 3 | **Rests you cannot hear** — 12–15 bars tagged rest, 0 % silent beats, 16/16 downbeats. Long tones cover the slot. | All lyrical |
+| 4 | **Leaps that are not vocal** — 17 (Chopin/Bach), 28–29 (Fox/Laufey), summit ×26 (Beethoven storm) | Laufey, Fox, Beethoven |
+| 5 | **Q1 is closed** — LH fingerprint matches code on all eight. Groove/figure stays. That part of the notes is right. | all |
 
-Q1 is **closed** on this path: LH fingerprint matched code on all eight styles.
+Need `notes_scope: none` on perpetual/cells, ornament-on-return (not re-realize), a leap cap, and a rest that vacates a *beat*.
 
-### Line (raw experiment — fake 4-slot)
+### Line — raw 4-slot overlay
 
-| Rank | Gap | Damage |
+| Rank | What you hear | Where |
 | --- | --- | --- |
-| 1 | **Four slots cannot sing** | Even when lyrical bias inserts a rest, occupancy stays on-the-beat. Fox is the exception (17 % silent) because `four_long_short` actually leaves air. |
-| 2 | **False-friend `ret4`** | Glass / Zimmer / Bach line `ret4` 0.88 is “same four degrees every bar,” not a theme. Do not ship on this metric. |
-| 3 | **Chord-tone rate drops** on perpetual / film textures | Bach 0.69, Zimmer 0.72 — degrees wander off the figure. |
-| 4 | **Same leap / register issues as Guide** | Max 24–29 st. Register on Bach line jumps to 75.5 (code 66.8). |
+| 1 | **Four attacks, almost no air** — Fox 17 % is the exception (`four_long_short` actually leaves ticks empty) | 7/8 styles |
+| 2 | **Fake themes** — ret4 0.88 on Bach/Glass/Zimmer is “same four degrees,” not a cell | Glass, Zimmer, Bach |
+| 3 | **Same leap / high-register problems as Guide** — Bach register 75.5 vs MIDI 66; leap max 24–29 | Bach, Zimmer, Laufey |
+| 4 | **Q1 closed**, same as Guide | all |
 
-Q1 also closed. Line is useful as an A/B of “Jev picks ticks,” not as a product path.
+Useful as an A/B of “ticks + degrees,” not as the product path.
 
 ---
 
-## 4. Cross-cutting (all styles)
+## 4. What #46 already changed **in the notes**
 
-What a first listen still notices, after #46:
+Do not re-propose `phrasing` or `bossa_comp`. They shipped; some of the notes moved.
 
-1. **The return unit is too short** except where `period` already keeps a 4-bar A (Chopin `ret4` 0.75 ≈ MIDI 0.81). Eight-bar Adagio and 4-bar film/minimal cells lose.
-2. **Breath is a label, not a downbeat.** `phrasing` is picked correctly; occupancy did not move.
-3. **Guide is the wrong tool on non-songs** and a weaker tool on songs than code for *return*. It is the right tool only if we add ornament-on-return and `notes_scope: none`.
-4. **Sample wander** still produces a Chopin storm and a Bach siciliano. Argmax is much more honest post-#46; sample is the demo risk.
-5. **Living-artist harmony honesty** is unchanged: Glass / Zimmer / Laufey / Fox RNs stay inferred; no copyrighted MIDI.
+| #46 | In the notes (this pass) | Still not in the notes |
+| --- | --- | --- |
+| Chopin 12/8 prior | Generated skyline is **12/8**; ret4 0.75 ≈ MIDI 0.81; register 71 ≈ 72 | Downbeats still 16/16; Guide wipes the return |
+| `phrasing` | Labels are written. Occupancy **did not move** — pickup re-attacks the barline | Breath you can hear |
+| Laufey `bossa_comp` | LH density 2–2.5; Q1 keeps it under overlays | Singing line still étude-shaped; 29 st leaps on Guide/Line |
+| Zimmer same-figure | LH thickens 4 → 11. Figure-keep **does not run** on argmax (`pulsing_chords`) | Same-figure chant; 4-bar skyline return; summit ×16 |
+
+Borrowed iv still never sounds. Beethoven notes are still the storm.
 
 ---
 
-## 5. Next ship list
+## 5. Next ship list (from the notes)
 
-Do **not** re-propose `phrasing` or `bossa_comp`. Ranked by first-listen damage, cost S–M, closed labels / renderer rules only.
+| # | Ship | Notes it changes |
+| --- | --- | --- |
+| 1 | **`hook_bars: 2 \| 4 \| 8`** | Glass/Zimmer skyline `ret4`; Adagio 8-bar return |
+| 2 | **Beethoven lyrical so Generate can emit Adagio-register notes** | Register 81 → ~62; 2/4 alberti vs tremolo |
+| 3 | **Air that vacates a beat / downbeat** (not a pickup-filled phrase end) | 16/16 lyrical downbeats |
+| 4 | **Ornament the returning skyline** (code + Guide `turn`); do not re-realize A′ | Chopin Guide ret4 0.25 |
+| 5 | **`notes_scope: singing_line \| none`** | Guide on prelude / Glass / Zimmer |
+| 6 | **Guide leap cap** | 29 st Laufey/Fox |
+| 7 | **Holds must not flatten phrases** (so Debussy/Bach *notes* walk the verified RNs) | I×8 planing; fifths after I–ii42 |
+| 8 | **Zimmer notes on ostinato** (or bind figure-keep to `pulsing_chords`) | Same-figure layer you can hear |
+| 9 | **Sound Laufey iv; optional D♭ tonic** | Language in the notes |
+| 10 | **`close` / hemiola** after #1 | Fade/stop; Glass 3:2 in the grid |
+| 11 | **Keyed live Guide/Line on Chopin + Laufey** | Fake picks are not Jev’s leaps |
 
-| # | Ship | Mode it fixes | Why now |
-| --- | --- | --- | --- |
-| 1 | **`hook_bars: 2 \| 4 \| 8`** (form expander + `themeSources`) | code | Glass `ret4` 0.06, Zimmer `ret4` 0, Pathétique 8-bar A. Highest leftover from the gap study. |
-| 2 | **Beethoven lyrical weight / argmax** (or “character first” already there — raise `lyrical_song` so it can win) | code | Entire dial is the wrong piece. |
-| 3 | **Phrase-end rest that is not immediately a pickup**, *or* allow a silent downbeat after `breathing` / `long_breathed` | code | #46 carved air and filled it. Occupancy did not move. |
-| 4 | **Holds must not erase verified phrases** | code | Debussy I×8, Chopin I-sits, Bach fifths. |
-| 5 | **Ornament ladder on `varied` / restatement** + Guide `turn` | code + guide | Op. 9/2 A′. Guide `ret4` collapse is the tell. |
-| 6 | **`notes_scope: singing_line \| none`** (planner policy is enough) | guide | Prelude / Glass / Zimmer cells. |
-| 7 | **Zimmer argmax → `melody_over_ostinato`** (or bind figure-keep to `pulsing_chords`) | code | #46 rule is dead on the mode. |
-| 8 | **Emit Laufey iv phrases; D♭ prior** | code | Groove closed; language and key not. |
-| 9 | **Guide leap cap** (code-side, like the existing proximity prior on line-sample) | guide | 29 st is not a vocal hook. |
-| 10 | **`close: cadence \| stop \| fade`** | code | After #1. |
-| 11 | **`pulse: … hemiola_3_2`** | code | Glass identity. After hook_bars. |
-| 12 | **Keyed live Guide/Line on Chopin + Laufey** | guide / line | This note’s fake picks are a ceiling only if Jev would pick the same figures. QA #5 is still open. |
-
-**Out, still.** Verse/chorus form family. Free-text pitches. New chord ids. Copyrighted MIDI. Mazurka `lilt` — after #1 and #3.
+**Out.** Re-proposing `phrasing` or `bossa_comp`. Verse/chorus forms. Free-text pitches. Copyrighted MIDI.
 
 ---
 
 ## 6. Scripts
 
 ```text
-# parsePlan every committed reference sketch
 npx --yes tsx scripts/validate-reference-plans.ts
-
-# Heuristic argmax + samples, code/guide/line realize, MIDI metrics (JSON only)
 npx --yes tsx scripts/compare-generated-vs-reference.ts --out /tmp/generated-vs-reference.json
-
-# If a key is present (this run: it was not)
 npx --yes tsx scripts/compare-generated-vs-reference.ts --live-jev --live-styles chopin,laufey
 ```
 
-Neither script writes MIDI. Public-domain encodings stay in [`docs/ref-midi/public/`](../ref-midi/public/). Living-artist rows stay JSON-only.
+No MIDI written. Public-domain encodings stay in [`docs/ref-midi/public/`](../ref-midi/public/). Living-artist rows stay JSON-only; their “Ref” column is that JSON rendered.
 
 ---
 
-## 7. What this note does not claim
+## 7. Honesty
 
-- It does not claim live Jev planned or sang. Guide/Line are fake closed picks through production realize functions.
-- It does not re-run the 192-piece FIDELITY sweep. n = 8 argmax + 24 samples + 8 reference-plan realizes + 4 Mutopia files.
-- MIDI skyline is blunt (both hands; no hand-set pickup). Chopin `ret4` 0.81 and Pathétique `ret8` 0.94 matching FIDELITY is why the files are trusted anyway.
-- Glass / Zimmer / Laufey / Fox bar RNs stay inferred. No commercial sheet, no prices, no copyrighted MIDI.
+- Guide/Line are fake closed picks through production realize functions. No live Jev.
+- n = 8 argmax + 24 samples + 8 reference-JSON realizes + 4 Mutopia files. Not the 192-piece FIDELITY sweep.
+- MIDI skyline is blunt (both hands). Chopin ret4 0.81 and Pathétique ret8 0.94 matching FIDELITY is why those files are trusted.
+- Glass / Zimmer / Laufey / Fox RNs stay inferred. No commercial sheet, no prices.
 
 Do not merge. Coder merges when Music pings.
