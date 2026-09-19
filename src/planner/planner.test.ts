@@ -2,7 +2,7 @@ import { Midi } from '@tonejs/midi'
 import { describe, expect, it } from 'vitest'
 import { handleJev } from '../../server/jevHandler'
 import { scoreToMidi } from '../midi/exportMidi'
-import { BAR_COUNT_VALUES, BAR_ROLE_IDS, CHARACTER_IDS, FORM_IDS, PEDAL_IDS, PHRASING_IDS, STYLE_IDS, TEMPO_IDS, parsePlan } from '../plan/schema'
+import { BAR_COUNT_VALUES, BAR_ROLE_IDS, CHARACTER_IDS, FORM_IDS, HOOK_BARS_IDS, PEDAL_IDS, PHRASING_IDS, STYLE_IDS, TEMPO_IDS, parsePlan } from '../plan/schema'
 import { formRoles, formSlots } from '../plan/forms'
 import { STYLE_PROFILES } from '../plan/styles'
 import { keyInfo, resolveChord } from '../render/harmony'
@@ -72,14 +72,16 @@ describe('JevPlanner', () => {
     expect(seen[0].state).toMatchObject({ requested_style: { name: 'Philip Glass' } })
     expect(JSON.stringify(seen[0].state)).not.toContain('minimalism')
     // Request 2 fans out form + the other globals, conditioned on that character. Length is never asked.
-    expect(Object.keys(seen[1].questions)).toHaveLength(13)
+    expect(Object.keys(seen[1].questions)).toHaveLength(14)
     expect(Object.keys(seen[1].questions)).toContain('arrangement')
     expect(Object.keys(seen[1].questions)).toContain('opening')
     expect(Object.keys(seen[1].questions)).toContain('pedal')
     expect(Object.keys(seen[1].questions)).toContain('phrasing')
+    expect(Object.keys(seen[1].questions)).toContain('hookBars')
     expect(Object.keys(seen[1].questions.tempo.criteria as object)).toEqual(TEMPO_IDS)
     expect(Object.keys(seen[1].questions.pedal.criteria as object)).toEqual(PEDAL_IDS)
     expect(Object.keys(seen[1].questions.phrasing.criteria as object)).toEqual(PHRASING_IDS)
+    expect(Object.keys(seen[1].questions.hookBars.criteria as object)).toEqual(HOOK_BARS_IDS)
     expect(Object.keys(seen[1].questions)).not.toContain('barCount')
     expect(JSON.stringify(seen[1].state)).toContain('steady motoric pulse')
     // Phrase requests carry the book options and prior-slot contour context.
@@ -275,6 +277,18 @@ describe('HeuristicPlanner', () => {
     expect(plan.character).toBe('lyrical_song')
     expect(plan.meter).toBe('twelve_eight')
     expect(plan.phrasing).toBeDefined()
+    expect(plan.hookBars).toBe('4')
+  })
+
+  it('writes hookBars; Glass/Zimmer loops prefer 4 and Beethoven lyrical prefers 8', async () => {
+    expect(STYLE_PROFILES.beethoven.archetypes.lyrical_song?.priors.hookBars?.['8']).toBeGreaterThan(
+      STYLE_PROFILES.beethoven.archetypes.lyrical_song?.priors.hookBars?.['4'] ?? 0,
+    )
+    expect(STYLE_PROFILES.glass.priors.hookBars['4']).toBeGreaterThan(STYLE_PROFILES.glass.priors.hookBars['2'] ?? 0)
+    expect(STYLE_PROFILES.hans_zimmer.priors.hookBars['4']).toBeGreaterThan(STYLE_PROFILES.hans_zimmer.priors.hookBars['2'] ?? 0)
+    const planner = new HeuristicPlanner()
+    const { plan } = await planner.plan({ style: 'glass', bars: 16, pick: 'argmax', seed: 1, brief: true })
+    expect(plan.hookBars).toBe('4')
   })
 
   it('writes phrasing and favors bossa_comp on Laufey song argmax', async () => {

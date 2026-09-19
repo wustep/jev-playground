@@ -68,17 +68,22 @@ describe('phrasing helpers', () => {
 })
 
 describe('a breathing tune', () => {
-  it('leaves the last beat of a phrase-end bar without a melody attack, then picks up into the return', () => {
-    const score = renderPlan(songPlan(), 3)
+  it('leaves the last beat of a phrase-end bar silent — no pickup filling the air', () => {
+    const score = renderPlan(songPlan({ phrasing: 'breathing' }), 3)
     const beat = METER_INFO.four_four.beatTicks
     const phraseEnds = [3, 7, 11]
     for (const index of phraseEnds) {
       const voice = score.bars[index].treble[0]
-      const attacksOnLastBeat = voice.filter((n) => n.start >= score.meter.ticksPerBar - beat && n.dur >= beat)
-      expect(attacksOnLastBeat, `bar ${index + 1} should not hold through the last beat`).toHaveLength(0)
-      expect(lastOnset(index, score), `bar ${index + 1} should pick up into the next phrase`).toBeGreaterThanOrEqual(score.meter.ticksPerBar - beat)
+      const coveringLast = voice.filter((n) => n.start < score.meter.ticksPerBar && n.start + n.dur > score.meter.ticksPerBar - beat)
+      expect(coveringLast, `bar ${index + 1} last beat should be silent`).toHaveLength(0)
+      expect(lastOnset(index, score), `bar ${index + 1} should not pick up`).toBeLessThan(score.meter.ticksPerBar - beat)
     }
-    // The pickup steps toward the next bar's first pitch (the returning theme).
+  })
+
+  it('fills an upbeat phrase-end rest with a pickup into the return', () => {
+    const score = renderPlan(songPlan({ phrasing: 'upbeat' }), 3)
+    const beat = METER_INFO.four_four.beatTicks
+    expect(lastOnset(3, score)).toBeGreaterThanOrEqual(score.meter.ticksPerBar - beat)
     const pickup = score.bars[3].treble[0].at(-1)!
     const next = score.bars[4].treble[0][0]
     expect(Math.abs(midiOf(pickup.pitches.at(-1)!) - midiOf(next.pitches.at(-1)!))).toBeLessThanOrEqual(7)

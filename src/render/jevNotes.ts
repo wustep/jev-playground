@@ -679,6 +679,50 @@ function guideFigurePitches(
   return [p0, p1, p2, goal]
 }
 
+/**
+ * Copy a source singing line and lace it: keep pitch-class contour, snap
+ * strong beats to this bar's chord, and lean one weak slot a step aside.
+ * Used on theme-return bars so Guide ornaments A′ instead of writing a new tune.
+ */
+function ornamentSourcePitches(
+  source: Voice,
+  slots: { start: number; dur: number }[],
+  chord: ResolvedChord,
+  scale: string[],
+  fromMidi: number,
+): (string | null)[] {
+  const sourcePitches = source.map((note) => note.pitches[0]).filter((pitch): pitch is string => !!pitch)
+  if (sourcePitches.length === 0) return slots.map(() => null)
+  const out: (string | null)[] = slots.map((_, i) => sourcePitches[Math.min(i, sourcePitches.length - 1)] ?? null)
+  const weak = slots.findIndex((slot, i) => i > 0 && i < slots.length - 1 && slot.start % 4 !== 0)
+  if (weak > 0 && out[weak]) {
+    out[weak] = neighbourOf(out[weak]!, scale, midiOf(out[weak]!))
+  }
+  return out.map((pitch, i) => {
+    if (!pitch) return null
+    const slot = slots[i]
+    if (slot.start % 4 === 0 || slot.dur >= 4) return nearestChordTone(pitch, chord)
+    return spellPc(pitchClassOf(pitch), i === 0 ? fromMidi : midiOf(out[i - 1] ?? pitch), { lo: TREBLE_LO, hi: TREBLE_HI })
+  })
+}
+
+/**
+ * A rest slot must vacate a felt beat: clip any note that would hold through
+ * the beat containing the rest, so occupancy can mark that beat silent.
+ */
+function vacateRestBeat(notes: Voice, restStart: number, restDur: number, beatTicks: number): Voice {
+  const beatStart = Math.floor(restStart / beatTicks) * beatTicks
+  const silentFrom = Math.min(restStart, beatStart)
+  const silentTo = Math.max(restStart + restDur, beatStart + beatTicks)
+  return notes
+    .map((note) => {
+      if (note.start >= silentTo || note.start + note.dur <= silentFrom) return note
+      if (note.start < silentFrom) return { ...note, dur: silentFrom - note.start }
+      return { ...note, dur: 0 }
+    })
+    .filter((note) => note.dur > 0)
+}
+
 export function realizeJevGuideChoices(
   choices: JevGuideChoices,
   plan: CompositionPlan,
@@ -691,6 +735,8 @@ export function realizeJevGuideChoices(
     /** Prefer a long tone + a rest (lyrical characters / song-like roles). */
     lyrical?: boolean
     voiceLead?: boolean
+    /** Theme-return source melody — ornament this instead of writing a new figure. */
+    sourceNotes?: Voice
   } = {},
 ): NotePhrase {
   const parsed = parseJevGuideChoices(choices)
@@ -703,9 +749,10 @@ export function realizeJevGuideChoices(
   const chord = resolveChord(key, bar.chord)
   const chord2 = bar.chord2 ? resolveChord(key, bar.chord2) : undefined
   const lyrical = options.lyrical === true && !melodyAllowsLeap(bar.role)
+  const returning = (options.sourceNotes?.length ?? 0) > 0
   const rhythm = rhythmForGuideFigure(parsed.figure, plan.meter, {
     lyrical,
-    echoRhythm: parsed.figure === 'motif_echo' ? options.lastRhythm : undefined,
+    echoRhythm: parsed.figure === 'motif_echo' || returning ? options.lastRhythm : undefined,
   })
   const spec = PHRASE_RHYTHMS[rhythm]
   if (spec.meter !== plan.meter) {
@@ -717,7 +764,10 @@ export function realizeJevGuideChoices(
   const goalMidiTarget = lead ? fromMidi : DEFAULT_TREBLE_MIDI
   const primaryScale = scaleAt(key, plan.palette, chord, chord2, 0, meter.splitTick)
   const goalPitch = spellPc(goalPitchClass(chord, parsed.goal), goalMidiTarget, { lo: TREBLE_LO, hi: TREBLE_HI })
-  let pitches = guideFigurePitches(parsed.figure, goalPitch, fromMidi, primaryScale, chord, options.lastNotes)
+  const slots = spec.ticks.map((dur, i) => ({ start: starts[i], dur }))
+  let pitches = returning
+    ? ornamentSourcePitches(options.sourceNotes!, slots, chord, primaryScale, fromMidi)
+    : guideFigurePitches(parsed.figure, goalPitch, fromMidi, primaryScale, chord, options.lastNotes)
 
   const restAt = lyrical ? guideRestSlot(spec.ticks, meter.beatTicks, meter.ticksPerBar) : null
   if (restAt != null) pitches = pitches.map((pitch, i) => (i === restAt ? null : pitch))
@@ -746,14 +796,14 @@ export function realizeJevGuideChoices(
       break
     }
   }
-  if (lastSounding >= 0) {
+  if (lastSounding >= 0 && !returning) {
     const start = starts[lastSounding]
     const harmony = chord2 && start >= meter.splitTick ? chord2 : chord
     const aim = lastSounding > 0 && spelled[lastSounding - 1] ? midiOf(spelled[lastSounding - 1]!) : fromMidi
     spelled[lastSounding] = spellPc(goalPitchClass(harmony, parsed.goal), aim, { lo: TREBLE_LO, hi: TREBLE_HI })
   }
 
-  const notes: Voice = []
+  let notes: Voice = []
   const degrees: MelodyDegreeId[] = []
   spelled.forEach((pitch, i) => {
     const start = starts[i]
@@ -768,6 +818,9 @@ export function realizeJevGuideChoices(
     notes.push(parseScoreNote({ start, dur, pitches: [pitch], velocity }, `notes[${i}]`, meter.ticksPerBar))
     degrees.push(degreeIdForPitch(pitch, key.tonic, key.minor))
   })
+  if (restAt != null) {
+    notes = vacateRestBeat(notes, starts[restAt], spec.ticks[restAt], meter.beatTicks)
+  }
   if (notes.length === 0) throw new JevNotesError('Jev notes produced only rests')
   const treble = parseScoreVoice(notes, meter.ticksPerBar)
   return {

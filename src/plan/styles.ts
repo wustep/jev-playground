@@ -24,6 +24,7 @@ import type {
   OpeningId,
   PedalId,
   PhrasingId,
+  HookBarsId,
   CharacterId,
   ChordId,
   ContourId,
@@ -57,6 +58,7 @@ export interface StylePriors {
   opening: Weights<OpeningId>
   pedal: Weights<PedalId>
   phrasing: Weights<PhrasingId>
+  hookBars: Weights<HookBarsId>
 }
 
 export interface Archetype {
@@ -128,6 +130,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       opening: { straight_in: 80, pickup: 15, vamp_intro: 5 },
       pedal: { dry: 70, half: 25, full: 5 },
       phrasing: { on_the_beat: 70, breathing: 20, upbeat: 10 },
+      hookBars: { '2': 45, '4': 40, '8': 15 },
     },
     archetypes: {
       // Preludes in unbroken figuration (WTC I/1, I/2).
@@ -184,6 +187,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamicShape: { terraced: 40, waves: 30, steady: 30 },
           contour: { arch: 28, fall: 22, leap_fall: 18, wave: 16, rise: 10, dip: 6 },
           phrasing: { breathing: 70, long_breathed: 20, upbeat: 10 },
+          hookBars: { '4': 55, '8': 30, '2': 15 },
         },
       },
       // Gigues, minuets, correntes.
@@ -284,6 +288,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       opening: { straight_in: 55, pickup: 30, vamp_intro: 15 },
       pedal: { half: 40, dry: 35, full: 25 },
       phrasing: { on_the_beat: 45, breathing: 30, long_breathed: 15, upbeat: 10 },
+      hookBars: { '4': 40, '8': 35, '2': 25 },
     },
     archetypes: {
       // Pathétique / Tempest / Appassionata allegros.
@@ -313,6 +318,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamicShape: { arch: 35, waves: 25, build_then_drop: 25, crescendo: 15 },
           contour: { arch: 30, fall: 20, wave: 18, rise: 16, leap_fall: 10, dip: 6 },
           phrasing: { breathing: 70, long_breathed: 20, upbeat: 10 },
+          hookBars: { '8': 80, '4': 20 },
         },
       },
       // Op. 27/2, first movement.
@@ -443,6 +449,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       opening: { pickup: 45, vamp_intro: 30, straight_in: 25 },
       pedal: { full: 55, half: 35, dry: 10 },
       phrasing: { breathing: 30, upbeat: 28, long_breathed: 22, on_the_beat: 20 },
+      hookBars: { '4': 70, '8': 20, '2': 10 },
     },
     archetypes: {
       // Nocturnes: singing cantabile over rolling left-hand figuration.
@@ -458,6 +465,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamicShape: { arch: 40, waves: 30, crescendo: 15, late_surge: 15 },
           contour: { arch: 32, fall: 20, wave: 20, leap_fall: 12, rise: 10, dip: 6 },
           phrasing: { upbeat: 50, breathing: 30, long_breathed: 20 },
+          hookBars: { '4': 80, '8': 15, '2': 5 },
         },
       },
       // Mazurkas and waltzes.
@@ -606,6 +614,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       opening: { vamp_intro: 50, straight_in: 35, pickup: 15 },
       pedal: { full: 70, half: 25, dry: 5 },
       phrasing: { long_breathed: 40, on_the_beat: 30, breathing: 20, upbeat: 10 },
+      hookBars: { '2': 45, '4': 40, '8': 15 },
     },
     archetypes: {
       dreamy_haze: {
@@ -759,6 +768,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       opening: { vamp_intro: 65, straight_in: 30, pickup: 5 },
       pedal: { half: 45, dry: 40, full: 15 },
       phrasing: { on_the_beat: 85, long_breathed: 15 },
+      hookBars: { '4': 80, '2': 15, '8': 5 },
     },
     archetypes: {
       hypnotic_pulse: {
@@ -769,6 +779,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           tempo: { moderato: 45, allegro: 40, andante: 15 },
           dynamicShape: { terraced: 35, steady: 35, waves: 15, build_then_drop: 15 },
           phrasing: { on_the_beat: 90, long_breathed: 10 },
+          hookBars: { '4': 90, '2': 10 },
         },
       },
       // Metamorphosis: a rocking accompaniment under a slow bare melody.
@@ -896,6 +907,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       opening: { vamp_intro: 70, straight_in: 25, pickup: 5 },
       pedal: { full: 50, half: 35, dry: 15 },
       phrasing: { long_breathed: 45, on_the_beat: 40, breathing: 15 },
+      hookBars: { '4': 75, '8': 15, '2': 10 },
     },
     archetypes: {
       // Layered ostinato that thickens without becoming a cell-process étude.
@@ -909,6 +921,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamicShape: { crescendo: 40, late_surge: 30, waves: 15, build_then_drop: 15 },
           contour: { static: 40, rise: 25, wave: 15, arch: 12, fall: 8 },
           phrasing: { long_breathed: 70, on_the_beat: 30 },
+          hookBars: { '4': 80, '8': 15, '2': 5 },
         },
       },
       // Warm major anthems.
@@ -1062,6 +1075,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       opening: { vamp_intro: 55, pickup: 25, straight_in: 20 },
       pedal: { half: 50, full: 30, dry: 20 },
       phrasing: { breathing: 50, upbeat: 30, long_breathed: 15, on_the_beat: 5 },
+      hookBars: { '4': 55, '2': 30, '8': 15 },
     },
     archetypes: {
       // Standards-shaped songs: a sung tune over piano accompaniment.
@@ -1196,6 +1210,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       opening: { vamp_intro: 45, straight_in: 35, pickup: 20 },
       pedal: { full: 50, half: 40, dry: 10 },
       phrasing: { long_breathed: 50, breathing: 30, on_the_beat: 20 },
+      hookBars: { '2': 55, '4': 35, '8': 10 },
     },
     archetypes: {
       dreamy_haze: {

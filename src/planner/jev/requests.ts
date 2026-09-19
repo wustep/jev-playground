@@ -77,8 +77,10 @@ import {
   ARRANGEMENTS,
   PEDALS,
   PHRASINGS,
+  HOOK_BARS,
   OPENINGS,
   defaultPhrasing,
+  defaultHookBars,
   PlanValidationError,
   parseBarPlan,
   parseGlobals,
@@ -212,6 +214,7 @@ function describeGlobals(globals: PlanGlobals): Json {
     opening: OPENINGS[globals.opening ?? 'straight_in'],
     ...(globals.pedal ? { sustain_pedal: PEDALS[globals.pedal] } : {}),
     phrasing: PHRASINGS[globals.phrasing ?? defaultPhrasing(globals.character)],
+    hook_bars: HOOK_BARS[globals.hookBars ?? defaultHookBars(globals.character, globals.form)],
   }
 }
 
@@ -252,6 +255,8 @@ const GLOBAL_INSTRUCTIONS: Record<Exclude<GlobalField, 'character'>, string> = {
   pedal: 'How much sustain pedal would a piece with the character in `piece_character` use, in the style of `requested_style.name`? Dry cuts notes at their written length; half lets chords overlap a little; full holds the pedal so sonorities ring through the bar.',
   phrasing:
     'How would the singing line treat phrase ends in a piece with the character in `piece_character`, in the style of `requested_style.name`? On the beat never rests; an upbeat leans in from an anacrusis; breathing lands early and rests; long-breathed leaves two beats of air. Independent of character — a stormy piece may still breathe.',
+  hookBars:
+    'How many bars of the opening idea should return in the singing line of a piece with the character in `piece_character`, in the style of `requested_style.name`? Two is a short cell; four is a phrase or loop cell; eight is a full slow-movement theme. The accompaniment may keep a shorter pattern.',
 }
 
 const choice = (instructions: string, criteria: Record<string, string>): ChoiceQuestion => ({

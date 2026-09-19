@@ -30,6 +30,7 @@ import {
   type PlanGlobals,
   type StyleId,
   type StyleMatchScore,
+  hookBarsValue,
 } from '../plan/schema'
 import { formSlots, themeSources, type PhraseSlot } from '../plan/forms'
 import { rootDegree } from '../render/harmony'
@@ -345,9 +346,10 @@ export class HeuristicPlanner implements Planner {
     const barCount: BarCount = input.bars
 
     // 3 ─ bars: the form gives the roles and says how to assemble the harmony
-    const slots = formSlots(globals.form as FormId, barCount)
+    const hook = hookBarsValue((globals as PlanGlobals).hookBars ?? '4')
+    const slots = formSlots(globals.form as FormId, barCount, hook)
     const roles = slots.flatMap((slot) => [...slot.roles])
-    const returns = themeSources(globals.form as FormId, barCount)
+    const returns = themeSources(globals.form as FormId, barCount, hook)
     const book = profile.harmony[isMinorKey(globals.key) ? 'minor' : 'major']
     let harmony = assembleHarmony(book, slots, profile.holds, sample, random)
     for (let attempt = 0; sample && attempt < 8 && hasPopLoop(harmony.chords); attempt++) {
@@ -433,6 +435,7 @@ const FIELD_WEIGHT: Record<GlobalField, number> = {
   opening: 0.5,
   pedal: 0.75,
   phrasing: 0.75,
+  hookBars: 0.75,
 }
 
 /** 0–1: how typical the plan's globals are for one of the style's kinds of piece. */

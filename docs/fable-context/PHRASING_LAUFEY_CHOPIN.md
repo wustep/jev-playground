@@ -1,7 +1,8 @@
 # Phrasing global, Chopin 12/8, Laufey bossa
 
 Shipped 2026-09-19 against `REFERENCE_PLAN_GAP.md` items 1–2, plus Zimmer
-same-figure layer (item 3). `hook_bars` is still out.
+same-figure layer (item 3). `hook_bars` shipped in a later pass — see
+`HOOK_BARS_GUIDE_REALIZE.md`.
 
 ## `phrasing` (new global)
 
@@ -11,8 +12,8 @@ Closed: `on_the_beat | upbeat | breathing | long_breathed`.
 | --- | --- |
 | `on_the_beat` | No phrase-end rest, no pickup (perpetual / storm / pulse) |
 | `upbeat` | One beat of air at the phrase end; pickup into the next downbeat |
-| `breathing` | Same rest + pickup; the sung default |
-| `long_breathed` | Two beats of air, then a sparse pickup |
+| `breathing` | Lands early and leaves the last beat empty (no pickup) |
+| `long_breathed` | Two beats of air, left empty |
 
 On `GLOBAL_FIELDS` / `GLOBAL_FIELD_IDS` after `pedal`. Jev `globals` picks it
 up automatically (same pattern as `arrangement` / `pedal`) — **Coder: recheck

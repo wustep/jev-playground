@@ -18,6 +18,7 @@ const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import
 import {
   GLOBAL_FIELD_IDS,
   parsePlan,
+  resolveHookBars,
   type BarCount,
   type BarRoleId,
   type CompositionPlan,
@@ -449,7 +450,7 @@ function sketchLineDegrees(contour: ContourId, role: BarRoleId, lyrical: boolean
 
 function fakeGuidePhrases(plan: CompositionPlan): NotePhrase[] {
   const lyrical = prefersLongAndRest(plan.character)
-  const returns = themeSources(plan.form, plan.bars.length as BarCount)
+  const returns = themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan))
   const phrases: NotePhrase[] = []
   let previousMidi: number | undefined
   let lastNotes: NotePhrase['notes'] | undefined
@@ -464,6 +465,7 @@ function fakeGuidePhrases(plan: CompositionPlan): NotePhrase[] {
       lastNotes,
       lastRhythm,
       lyrical,
+      sourceNotes: from?.notes,
     })
     phrases.push(phrase)
     previousMidi = lastSoundingMidi(phrase.notes) ?? previousMidi
@@ -475,7 +477,7 @@ function fakeGuidePhrases(plan: CompositionPlan): NotePhrase[] {
 
 function fakeLinePhrases(plan: CompositionPlan): NotePhrase[] {
   const lyrical = prefersLongAndRest(plan.character)
-  const returns = themeSources(plan.form, plan.bars.length as BarCount)
+  const returns = themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan))
   const phrases: NotePhrase[] = []
   let previousMidi: number | undefined
   for (let i = 0; i < plan.bars.length; i++) {
@@ -609,7 +611,7 @@ async function main() {
           chords: firstChords(plan),
           labelHits: hits,
           labelMatchCount: scoreLabelMatch(hits),
-          themeReturns: themeSources(plan.form, plan.bars.length as BarCount).filter((x) => x !== undefined).length,
+          themeReturns: themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan)).filter((x) => x !== undefined).length,
           realized: realizeModes(plan, seed),
         })
       }
