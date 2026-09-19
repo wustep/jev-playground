@@ -43,7 +43,7 @@ describe('themeSources: which bars bring back which', () => {
     expect(themeSources('period', 16, 8)).toEqual([
       undefined, undefined, undefined, undefined, 0, 1, 2, undefined, 0, 1, 2, 3, 0, 1, 2, undefined,
     ])
-    expect(themeSources('period', 16, 8).filter((source) => source !== undefined)).toHaveLength(7)
+    expect(themeSources('period', 16, 8).filter((source) => source !== undefined)).toHaveLength(10)
   })
 
   it('never repeats in a fantasia, and only ever looks back, never at or from a cadence', () => {
