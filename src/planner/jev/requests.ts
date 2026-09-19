@@ -37,7 +37,7 @@ import {
   parseBassSoFar,
   parseMelodySoFar,
   pitchQuestionId,
-  rhythmsFor,
+  rhythmCriteriaFor,
   type BassPatternId,
   type MelodyMemoryBar,
 } from '../../plan/notes.js'
@@ -73,6 +73,7 @@ import {
   type BarCount,
   type BarPlan,
   type BarRoleId,
+  type ArrangementId,
   type CharacterId,
   type ChordId,
   type CompositionPlan,
@@ -94,6 +95,7 @@ import {
   notesContinuityState,
   notesTask,
 } from './notesContinuity.js'
+import { prefersLongAndRest } from './notesPriors.js'
 import type { ChoiceQuestion, Json, NoulQuestion, Question, ScoreQuestion, SystemOneRequest } from './systemOne.js'
 
 export type JevOp =
@@ -140,6 +142,8 @@ export type JevOp =
       tempo: TempoId
       texture: TextureId
       palette: PaletteId
+      /** Optional so a Coder allowlist that only knows the original notes shape still validates. */
+      arrangement?: ArrangementId
       bar: BarPlan
       /** 0-based plan bar this request writes. Omitted = bar 1 (legacy). */
       barIndex?: number
@@ -422,16 +426,20 @@ function songQualityQuestion(): ScoreQuestion {
 function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): SystemOneRequest {
   const barIndex = op.barIndex ?? 0
   const barNumber = barIndex + 1
+  const lyrical = prefersLongAndRest(op.character)
   const memory = notesContinuityState({
     barIndex,
     bar: op.bar,
     nextChord: op.nextChord,
     melodySoFar: op.melodySoFar ?? [],
     bassSoFar: op.bassSoFar ?? [],
+    character: op.character,
+    texture: op.texture,
+    arrangement: op.arrangement,
   })
   const hint = memory.melody_motion
   const questions: Record<string, Question> = {
-    rhythm: choice(melodyRhythmInstructions(barNumber, hint), rhythmsFor(op.meter)),
+    rhythm: choice(melodyRhythmInstructions(barNumber, hint, lyrical), rhythmCriteriaFor(op.meter, lyrical)),
   }
   for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
     questions[pitchQuestionId(i)] = choice(melodyPitchInstructions(i + 1, hint), MELODY_DEGREES)
@@ -440,20 +448,24 @@ function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): Syste
   return {
     model,
     state: {
-      task: notesTask(barNumber, (op.melodySoFar?.length ?? 0) > 0),
+      task: notesTask(barNumber, (op.melodySoFar?.length ?? 0) > 0, lyrical),
       requested_style: styleState(op.style, op.brief),
       piece_character: CHARACTERS[op.character],
       piece: {
+        character: CHARACTERS[op.character],
         key: KEYS[op.key],
         meter: METERS[op.meter],
         tempo: TEMPOS[op.tempo],
         texture: TEXTURES[op.texture],
+        arrangement: ARRANGEMENTS[op.arrangement ?? 'lift_on_return'],
         melodic_palette: PALETTES[op.palette],
       },
       melody_so_far: memory.melody_so_far,
       last_sounding_degree: memory.last_sounding_degree,
       bass_so_far: memory.bass_so_far,
       this_bar: memory.this_bar,
+      melody_motion: memory.melody_motion,
+      ...(memory.motif_echo ? { motif_echo: memory.motif_echo } : {}),
       voices: {
         treble: `right-hand melody of bar ${barNumber}, continuing melody_so_far`,
         bass: `left-hand bass of bar ${barNumber}, continuing bass_so_far`,
@@ -576,6 +588,7 @@ export function parseOp(raw: unknown): JevOp {
       )
       const bassSoFar = parseBassSoFar(obj.bassSoFar, obj.bassSoFar === undefined ? undefined : priorLength)
       const nextChord = obj.nextChord === undefined ? undefined : parseOption(CHORDS, obj.nextChord, 'op.nextChord')
+      const arrangement = obj.arrangement === undefined ? undefined : parseOption(ARRANGEMENTS, obj.arrangement, 'op.arrangement')
       return {
         op: 'notes',
         style: parseStyle(obj.style),
@@ -591,6 +604,7 @@ export function parseOp(raw: unknown): JevOp {
         ...(melodySoFar && melodySoFar.length > 0 ? { melodySoFar } : {}),
         ...(bassSoFar && bassSoFar.length > 0 ? { bassSoFar } : {}),
         ...(nextChord ? { nextChord } : {}),
+        ...(arrangement ? { arrangement } : {}),
       }
     }
     default:

@@ -394,6 +394,8 @@ describe('/api/jev handler', () => {
     })).toThrow(/melodySoFar/)
     expect(() => parseOp({ ...notes, barIndex: 1, bassSoFar: ['not_a_pattern'] })).toThrow(/bassSoFar/)
     expect(() => parseOp({ ...notes, nextChord: 'H7' })).toThrow(/nextChord/)
+    expect(parseOp({ ...notes, arrangement: 'lift_on_return' })).toMatchObject({ arrangement: 'lift_on_return' })
+    expect(() => parseOp({ ...notes, arrangement: 'wall_of_sound' })).toThrow(/arrangement/)
     expect(() => parseOp({ ...notes, op: 'midi' })).toThrow(/notes/)
     expect(() => parseOp({ ...notes, palette: 'serial' })).toThrow()
   })

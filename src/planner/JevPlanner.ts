@@ -40,15 +40,24 @@ import {
   BASS_PATTERN_QUESTION_ID,
   MELODY_DEGREES,
   PHRASE_NOTE_COUNT,
+  lastSoundingDegree,
   melodyMemoryFrom,
   parseBassPattern,
   parseJevNoteChoices,
   pitchQuestionId,
   rhythmsFor,
   type BassPatternId,
+  type MelodyDegreeId,
   type MelodyMemoryBar,
 } from '../plan/notes'
-import { realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
+import { lastSoundingMidi, realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
+import {
+  degreesNearlyIdentical,
+  nudgeMelodyDegrees,
+  prefersLongAndRest,
+  withDegreeProximity,
+  withLyricalRhythmBias,
+} from './jev/notesPriors'
 import { formRoles, formSlots, themeSources } from '../plan/forms'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
@@ -277,9 +286,11 @@ export class JevPlanner implements Planner {
    * a 4-slot RH phrase plus a bass pattern for every plan bar that is new
    * material; theme-return bars reuse the source rhythm, degrees and bass
    * pattern, re-spelled on the later chord. Each notes request carries prior
-   * closed choices so later bars can continue the line. Code validates the
-   * closed schema; illegal RH falls back to renderPlan, illegal bass keeps
-   * that bar's renderPlan left hand.
+   * closed choices so later bars can continue the line. After the picks, code
+   * voice-leads register (degrees stay the plan) and, when sampling, lightly
+   * blends Jev's probabilities toward nearby degrees / lyrical long+rest
+   * rhythms. Illegal RH falls back to renderPlan, illegal bass keeps that
+   * bar's renderPlan left hand.
    */
   async writeNotes(
     plan: CompositionPlan,
@@ -294,12 +305,24 @@ export class JevPlanner implements Planner {
     const rhythmTable = rhythmsFor(plan.meter)
     const melodySoFar: MelodyMemoryBar[] = []
     const bassSoFar: BassPatternId[] = []
+    const lyrical = prefersLongAndRest(plan.character)
+    let previousMidi: number | undefined
+    let previousBassMidi: number | undefined
+    let lastNewDegrees: MelodyDegreeId[] | undefined
+    let lastBarWasNew = false
 
-    const pickChoices = (answers: Record<string, Answer>) => {
-      const rhythm = parseOption(rhythmTable, pickFrom(choiceAnswer(answers, 'rhythm').probabilities, input.pick, random), 'jev.rhythm')
-      const degrees = Array.from({ length: PHRASE_NOTE_COUNT }, (_, i) =>
-        parseOption(MELODY_DEGREES, pickFrom(choiceAnswer(answers, pitchQuestionId(i)).probabilities, input.pick, random), `jev.${pitchQuestionId(i)}`),
-      )
+    const pickChoices = (answers: Record<string, Answer>, previousDegree: MelodyDegreeId | null) => {
+      const rhythmGiven = choiceAnswer(answers, 'rhythm').probabilities
+      const rhythmUsed = input.pick === 'sample' && lyrical ? withLyricalRhythmBias(rhythmGiven) : rhythmGiven
+      const rhythm = parseOption(rhythmTable, pickFrom(rhythmUsed, input.pick, random), 'jev.rhythm')
+      let previous = previousDegree
+      const degrees = Array.from({ length: PHRASE_NOTE_COUNT }, (_, i) => {
+        const given = choiceAnswer(answers, pitchQuestionId(i)).probabilities
+        const used = input.pick === 'sample' ? withDegreeProximity(given, previous, { lyrical }) : given
+        const picked = parseOption(MELODY_DEGREES, pickFrom(used, input.pick, random), `jev.${pitchQuestionId(i)}`)
+        if (picked !== 'rest') previous = picked
+        return picked
+      })
       const bassPattern = parseBassPattern(
         pickFrom(choiceAnswer(answers, BASS_PATTERN_QUESTION_ID).probabilities, input.pick, random),
         `jev.${BASS_PATTERN_QUESTION_ID}`,
@@ -310,20 +333,29 @@ export class JevPlanner implements Planner {
     const remember = (phrase: NotePhrase, bassPattern?: BassPatternId) => {
       melodySoFar.push(...melodyMemoryFrom([phrase]))
       bassSoFar.push(bassPattern ?? phrase.bass?.pattern ?? 'root_hold')
+      previousMidi = lastSoundingMidi(phrase.notes) ?? previousMidi
+      previousBassMidi = lastSoundingMidi(phrase.bass?.notes ?? []) ?? previousBassMidi
     }
+
+    const realize = (choices: { rhythm: NotePhrase['rhythm']; degrees: MelodyDegreeId[]; bassPattern?: BassPatternId }, barIndex: number) =>
+      realizeJevNoteChoices(choices, plan, {
+        barIndex,
+        lastSoundingMidi: previousMidi,
+        lastBassMidi: previousBassMidi,
+      })
 
     for (let i = 0; i < plan.bars.length; i++) {
       const source = returns[i]
       const from = source !== undefined ? phrases[source] : undefined
       if (from) {
         const bassPattern = from.bass?.pattern
-        const phrase = realizeJevNoteChoices(
+        const phrase = realize(
           { rhythm: from.rhythm, degrees: from.degrees, ...(bassPattern ? { bassPattern } : {}) },
-          plan,
-          { barIndex: i },
+          i,
         )
         phrases.push(phrase)
         remember(phrase, bassPattern)
+        lastBarWasNew = false
         continue
       }
       const bar = plan.bars[i]
@@ -343,13 +375,19 @@ export class JevPlanner implements Planner {
         melodySoFar: [...melodySoFar],
         bassSoFar: [...bassSoFar],
         ...(next ? { nextChord: next.chord } : {}),
+        ...(plan.arrangement ? { arrangement: plan.arrangement } : {}),
       }
       const exchange = await this.exchange(`notes bar ${i + 1}`, op, options?.signal)
       exchanges.push(exchange)
-      const choices = pickChoices(exchange.response.answers)
-      const phrase = realizeJevNoteChoices(choices, plan, { barIndex: i })
+      let choices = pickChoices(exchange.response.answers, lastSoundingDegree(melodySoFar.at(-1)?.degrees ?? []))
+      if (lastBarWasNew && lastNewDegrees && degreesNearlyIdentical(lastNewDegrees, choices.degrees)) {
+        choices = { ...choices, degrees: nudgeMelodyDegrees(choices.degrees) }
+      }
+      const phrase = realize(choices, i)
       phrases.push(phrase)
       remember(phrase, choices.bassPattern)
+      lastNewDegrees = choices.degrees
+      lastBarWasNew = true
     }
     return { phrases, exchanges }
   }

@@ -51,6 +51,8 @@ describe('multi-bar melody continuity helpers', () => {
     expect(state.last_sounding_degree).toContain('Tonic')
     expect(state.this_bar).toMatchObject({ bar_number: 3, next_chord: expect.stringContaining('I —') })
     expect(state.melody_motion).toBe('stepwise_echo')
+    expect(state.motif_echo).toMatch(/melody_so_far/)
+    expect(state.piece_frame).toEqual({})
     expect(state.bass_so_far).toEqual([
       { bar: 1, pattern_id: 'root_fifth', pattern: expect.stringContaining('fifth') },
       { bar: 2, pattern_id: 'walk_down', pattern: expect.stringContaining('Walk down') },
@@ -72,12 +74,31 @@ describe('multi-bar melody continuity helpers', () => {
     expect(climax.melody_so_far).toEqual([])
     expect(climax.last_sounding_degree).toBeNull()
     expect(climax.melody_motion).toBe('contrast_ok')
+    expect(climax.motif_echo).toBeNull()
+  })
+
+  it('carries character, texture and arrangement on the piece frame', () => {
+    const state = notesContinuityState({
+      barIndex: 0,
+      bar: { chord: 'I', role: 'statement', contour: 'arch' },
+      melodySoFar: [],
+      character: 'lyrical_song',
+      texture: 'rolling_nocturne',
+      arrangement: 'lift_on_return',
+    })
+    expect(state.piece_frame).toMatchObject({
+      character: expect.stringContaining('singing'),
+      texture: expect.stringContaining('broken chords'),
+      arrangement: expect.stringContaining('comes back'),
+    })
   })
 
   it('wording on bar 1 mentions empty prior; later bars continue melody_so_far', () => {
     expect(notesTask(1, false)).toMatch(/melody_so_far` is empty/)
     expect(notesTask(4, true)).toMatch(/Continue the right-hand melody from `melody_so_far`/)
     expect(notesTask(4, true)).toMatch(/stepwise motion/)
+    expect(notesTask(4, true)).toMatch(/avoid random leaps/i)
+    expect(notesTask(2, true, true)).toMatch(/long tone and a rest/)
   })
 
   it('parses melodySoFar / bassSoFar against closed enums and prior length', () => {
