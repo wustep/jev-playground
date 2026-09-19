@@ -12,6 +12,7 @@
  *
  * Fake Notes:guide sketches are heuristic proposals (figure + goal), not live Jev.
  */
+import { fileURLToPath } from 'node:url'
 import { STYLE_IDS, type BarCount, type BarRoleId, type ContourId, type StyleId } from '../src/plan/schema'
 import { MELODY_FIGURE_IDS, MELODY_GOAL_IDS, type MelodyFigureId, type MelodyGoalId } from '../src/plan/notes'
 import { HeuristicPlanner } from '../src/planner/HeuristicPlanner'
@@ -123,7 +124,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exit(1)
-})
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exit(1)
+  })
+}
