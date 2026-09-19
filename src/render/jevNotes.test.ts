@@ -11,8 +11,11 @@ import {
   applyNotePhrases,
   bassSlotsFor,
   notePhrasesCoverPlan,
+  overlayMelodyVoice,
   parseScoreNote,
   parseScoreVoice,
+  peelSkyline,
+  pitchClassForDegree,
   lastSoundingMidi,
   realizeBassPattern,
   realizeJevNoteChoices,
@@ -21,6 +24,7 @@ import {
   spellDegreeNear,
   type NotePhrase,
 } from './jevNotes'
+import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { midiOf } from './pitch'
 import { renderPlan, timeline } from './renderPlan'
 import { METER_INFO, type Voice } from './score'
@@ -129,21 +133,21 @@ describe('realize + overlay', () => {
     expect(both.bass?.notes.length).toBeGreaterThan(0)
     const withBass = applyNotePhrase(code, both)
     expect(withBass.bars[body].treble[0]).toEqual(both.notes)
-    expect(withBass.bars[body].bass[0]).toEqual(both.bass!.notes)
-    expect(withBass.bars[body].bass[0]).not.toEqual(code.bars[body].bass[0])
+    expect(withBass.bars[body].bass).toEqual(code.bars[body].bass)
   })
 
-  it('drops leftover inner voices so Jev stems are not fighting renderPlan textures', async () => {
+  it('keeps renderPlan inner RH voices and the full left-hand texture', async () => {
     const plan = await samplePlan('four_four')
     const phrase = closedPhrase(plan, 0)
     const code = renderPlan(plan, 3)
     const body = phrase.barIndex + (code.introBars ?? 0)
     const inner: Voice = Array.from({ length: 16 }, (_, i) => ({ start: i, dur: 1, pitches: ['G4'], velocity: 64 }))
+    const bassInner: Voice = inner.map((note) => ({ ...note, pitches: ['C3'] }))
     const crowded: typeof code = {
       ...code,
       bars: code.bars.map((bar, i) =>
         i === body
-          ? { ...bar, treble: [bar.treble[0] ?? [], inner], bass: [bar.bass[0] ?? [], inner.map((note) => ({ ...note, pitches: ['C3'] }))] }
+          ? { ...bar, treble: [bar.treble[0] ?? [], inner], bass: [bar.bass[0] ?? [], bassInner] }
           : bar,
       ),
     }
@@ -151,10 +155,62 @@ describe('realize + overlay', () => {
     expect(crowded.bars[body].bass.length).toBeGreaterThan(1)
 
     const overlaid = applyNotePhrase(crowded, phrase)
-    expect(overlaid.bars[body].treble).toHaveLength(1)
     expect(overlaid.bars[body].treble[0]).toEqual(phrase.notes)
-    expect(overlaid.bars[body].bass).toHaveLength(1)
-    expect(overlaid.bars[body].bass[0]).toEqual(phrase.bass!.notes)
+    expect(overlaid.bars[body].treble.slice(1)).toEqual([inner])
+    expect(overlaid.bars[body].bass).toEqual(crowded.bars[body].bass)
+    expect(overlaid.bars[body].bass).not.toEqual([phrase.bass!.notes])
+  })
+
+  it('keeps a chorale alto under the Jev soprano', () => {
+    const plan: CompositionPlan = { ...cMajorPlan(), style: 'bach', character: 'solemn_hymn', texture: 'chorale' }
+    const phrase = realizeJevNoteChoices(
+      { rhythm: 'four_even', degrees: ['tonic', 'mediant', 'dominant', 'tonic_high'] },
+      plan,
+    )
+    const code = renderPlan(plan, 11)
+    const overlaid = applyNotePhrase(code, phrase)
+    const body = phrase.barIndex + (code.introBars ?? 0)
+    expect(code.bars[body].treble.length).toBeGreaterThan(1)
+    expect(overlaid.bars[body].treble[0]).toEqual(phrase.notes)
+    expect(overlaid.bars[body].treble[1]).toEqual(code.bars[body].treble[1])
+    expect(overlaid.bars[body].bass).toEqual(code.bars[body].bass)
+  })
+
+  it('keeps an Alberti left hand under the Jev tune', () => {
+    const plan: CompositionPlan = { ...cMajorPlan(), texture: 'alberti_melody' }
+    const phrase = realizeJevNoteChoices(
+      { rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic'] },
+      plan,
+    )
+    const code = renderPlan(plan, 3)
+    const overlaid = applyNotePhrase(code, phrase)
+    const body = phrase.barIndex + (code.introBars ?? 0)
+    const attacks = (voices: Voice[]) => voices.reduce((sum, voice) => sum + voice.length, 0)
+    expect(overlaid.bars[body].treble[0]).toEqual(phrase.notes)
+    expect(overlaid.bars[body].treble.slice(1)).toEqual(code.bars[body].treble.slice(1))
+    expect(overlaid.bars[body].bass).toEqual(code.bars[body].bass)
+    expect(attacks(code.bars[body].bass)).toBeGreaterThanOrEqual(4)
+    expect(attacks([...overlaid.bars[body].treble, ...overlaid.bars[body].bass])).toBe(
+      phrase.notes.length + attacks(code.bars[body].treble.slice(1)) + attacks(code.bars[body].bass),
+    )
+  })
+
+  it('peels a chordal skyline so inner RH tones stay under the Jev tune', () => {
+    const singing: Voice = [
+      { start: 0, dur: 8, pitches: ['E4', 'G4', 'C5'], velocity: 70 },
+      { start: 8, dur: 8, pitches: ['D4', 'G4', 'B4'], velocity: 70 },
+    ]
+    const jev: Voice = [
+      { start: 0, dur: 8, pitches: ['E5'], velocity: 80 },
+      { start: 8, dur: 8, pitches: ['G5'], velocity: 80 },
+    ]
+    expect(peelSkyline(singing)).toEqual([
+      { start: 0, dur: 8, pitches: ['E4', 'G4'], velocity: 70 },
+      { start: 8, dur: 8, pitches: ['D4', 'G4'], velocity: 70 },
+    ])
+    const overlaid = overlayMelodyVoice([singing], jev)
+    expect(overlaid[0]).toEqual(jev)
+    expect(overlaid[1]).toEqual(peelSkyline(singing))
   })
 
   it('overlays the right-hand line on every plan bar, not just bar 1', async () => {
@@ -170,8 +226,8 @@ describe('realize + overlay', () => {
     for (let i = 0; i < plan.bars.length; i++) {
       const index = i + intro
       expect(overlaid.bars[index].treble[0], `bar ${i + 1}`).toEqual(phrases[i].notes)
-      expect(overlaid.bars[index].bass[0], `bar ${i + 1} bass`).toEqual(phrases[i].bass!.notes)
-      expect(overlaid.bars[index].bass[0], `bar ${i + 1} bass changed`).not.toEqual(code.bars[index].bass[0])
+      expect(overlaid.bars[index].treble.slice(1), `bar ${i + 1} inner`).toEqual(code.bars[index].treble.slice(1))
+      expect(overlaid.bars[index].bass, `bar ${i + 1} bass`).toEqual(code.bars[index].bass)
     }
 
     const { score, used, notice } = renderWithOptionalJevNotes(plan, 3, phrases)
@@ -233,22 +289,18 @@ describe('realize + overlay', () => {
     expect(empty).toEqual({ score: code, used: 'code', notice: null })
   })
 
-  it('keeps renderPlan bass when one bar’s left hand is illegal', async () => {
+  it('never overlays a closed bass pattern — renderPlan keeps the left hand', async () => {
     const plan = await samplePlan('four_four')
-    const good = plan.bars.map((_, i) => closedPhrase(plan, i))
-    const mixed = good.map((phrase, i) =>
-      i === 2
-        ? { ...phrase, bass: { pattern: 'root_fifth' as const, notes: [{ start: 0, dur: 5, pitches: ['C3'], velocity: 64 }] } }
-        : phrase,
-    )
+    const phrases = plan.bars.map((_, i) => closedPhrase(plan, i))
     const code = renderPlan(plan, 7)
-    const result = renderWithOptionalJevNotes(plan, 7, mixed)
+    const result = renderWithOptionalJevNotes(plan, 7, phrases)
     expect(result.used).toBe('jev')
-    expect(result.notice).toMatch(/bass failed/)
+    expect(result.notice).toBeNull()
     const intro = result.score.introBars ?? 0
-    expect(result.score.bars[2 + intro].treble[0]).toEqual(mixed[2].notes)
-    expect(result.score.bars[2 + intro].bass).toEqual(code.bars[2 + intro].bass)
-    expect(result.score.bars[0 + intro].bass[0]).toEqual(good[0].bass!.notes)
+    for (let i = 0; i < phrases.length; i++) {
+      expect(result.score.bars[i + intro].treble[0]).toEqual(phrases[i].notes)
+      expect(result.score.bars[i + intro].bass).toEqual(code.bars[i + intro].bass)
+    }
   })
 
   it('still falls back when a voice-led phrase later becomes illegal', async () => {
@@ -313,6 +365,80 @@ describe('post-realize voice leading', () => {
       { lastSoundingMidi: last, voiceLead: true },
     )
     expect(Math.abs(midiOf(second.notes[0].pitches[0]) - last!)).toBeLessThanOrEqual(7)
+  })
+})
+
+describe('gapped palette degree mapping', () => {
+  const pentatonic = ['C', 'D', 'E', 'G', 'A']
+  const wholeTone = ['C', 'D', 'E', 'F#', 'G#', 'A#']
+  const minorPentatonic = ['C', 'Eb', 'F', 'G', 'Bb']
+  const majorBlues = ['C', 'D', 'Eb', 'E', 'G', 'A']
+  const minorBlues = ['C', 'Eb', 'F', 'Gb', 'G', 'Bb']
+
+  it('maps functional names onto C pentatonic instead of wrapping the index', () => {
+    expect(scaleFor(keyInfo('C_major'), 'pentatonic', resolveChord(keyInfo('C_major'), 'I'))).toEqual(pentatonic)
+    expect(pitchClassForDegree('tonic', pentatonic)).toBe('C')
+    expect(pitchClassForDegree('supertonic', pentatonic)).toBe('D')
+    expect(pitchClassForDegree('mediant', pentatonic)).toBe('E')
+    expect(pitchClassForDegree('subdominant', pentatonic)).toBe('E')
+    expect(pitchClassForDegree('dominant', pentatonic)).toBe('G')
+    expect(pitchClassForDegree('submediant', pentatonic)).toBe('A')
+    expect(pitchClassForDegree('leading', pentatonic)).toBe('A')
+    expect(pitchClassForDegree('tonic_high', pentatonic)).toBe('C')
+    expect(pitchClassForDegree('dominant_low', pentatonic)).toBe('G')
+    expect(pitchClassForDegree('rest', pentatonic)).toBeNull()
+    // The old wrap: scale[4] was A.
+    expect(pitchClassForDegree('dominant', pentatonic)).not.toBe('A')
+  })
+
+  it('maps functional names onto whole-tone and blues palettes', () => {
+    expect(pitchClassForDegree('tonic', wholeTone)).toBe('C')
+    expect(pitchClassForDegree('supertonic', wholeTone)).toBe('D')
+    expect(pitchClassForDegree('mediant', wholeTone)).toBe('E')
+    expect(pitchClassForDegree('subdominant', wholeTone)).toBe('F#')
+    expect(pitchClassForDegree('dominant', wholeTone)).toBe('G#')
+    expect(pitchClassForDegree('submediant', wholeTone)).toBe('A#')
+    expect(pitchClassForDegree('leading', wholeTone)).toBe('A#')
+
+    expect(pitchClassForDegree('tonic', majorBlues)).toBe('C')
+    expect(pitchClassForDegree('supertonic', majorBlues)).toBe('D')
+    expect(pitchClassForDegree('mediant', majorBlues)).toBe('E')
+    expect(pitchClassForDegree('subdominant', majorBlues)).toBe('E')
+    expect(pitchClassForDegree('dominant', majorBlues)).toBe('G')
+    expect(pitchClassForDegree('submediant', majorBlues)).toBe('A')
+    expect(pitchClassForDegree('leading', majorBlues)).toBe('A')
+
+    expect(pitchClassForDegree('supertonic', minorPentatonic, { minor: true })).toBe('Eb')
+    expect(pitchClassForDegree('mediant', minorPentatonic, { minor: true })).toBe('Eb')
+    expect(pitchClassForDegree('subdominant', minorPentatonic, { minor: true })).toBe('F')
+    expect(pitchClassForDegree('dominant', minorPentatonic, { minor: true })).toBe('G')
+    expect(pitchClassForDegree('submediant', minorPentatonic, { minor: true })).toBe('G')
+    expect(pitchClassForDegree('leading', minorPentatonic, { minor: true })).toBe('Bb')
+
+    expect(pitchClassForDegree('dominant', minorBlues, { minor: true })).toBe('G')
+    expect(pitchClassForDegree('leading', minorBlues, { minor: true })).toBe('Bb')
+    expect(pitchClassForDegree('subdominant', minorBlues, { minor: true })).toBe('F')
+  })
+
+  it('still indexes a 7-note (possibly bent) scale by degree', () => {
+    const diatonic = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
+    expect(pitchClassForDegree('dominant', diatonic)).toBe('G')
+    expect(pitchClassForDegree('subdominant', diatonic)).toBe('F')
+    expect(pitchClassForDegree('leading', diatonic)).toBe('B')
+    const bent = scaleFor(keyInfo('C_major'), 'diatonic', resolveChord(keyInfo('C_major'), 'V7_of_V'))
+    expect(bent).toContain('F#')
+    expect(pitchClassForDegree('subdominant', bent)).toBe('F#')
+  })
+
+  it('realizes a pentatonic dominant as G, not the wrapped A', () => {
+    const plan: CompositionPlan = { ...cMajorPlan(), palette: 'pentatonic' }
+    const phrase = realizeJevNoteChoices(
+      { rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic_high'] },
+      plan,
+      { voiceLead: false },
+    )
+    expect(phrase.notes.map((note) => note.pitches[0].replace(/\d/, ''))).toEqual(['C', 'G', 'E', 'C'])
+    expect(midiOf(phrase.notes[3].pitches[0]) - midiOf(phrase.notes[0].pitches[0])).toBe(12)
   })
 })
 
@@ -441,9 +567,10 @@ describe('Jev notes op', () => {
     expect(used).toBe('jev')
     expect(notice).toBeNull()
     const intro = score.introBars ?? 0
+    const code = renderPlan(plan, 1)
     for (let i = 0; i < phrases.length; i++) {
       expect(score.bars[i + intro].treble[0]).toEqual(phrases[i].notes)
-      expect(score.bars[i + intro].bass[0]).toEqual(phrases[i].bass!.notes)
+      expect(score.bars[i + intro].bass).toEqual(code.bars[i + intro].bass)
     }
     const firstNotes = exchanges[0].op
     if (firstNotes.op === 'notes') {

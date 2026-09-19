@@ -1,14 +1,17 @@
-// Debug-only overlay: Jev's closed-schema RH melody + LH bass on top of renderPlan.
+// Debug-only overlay: Jev's closed-schema RH melody on top of renderPlan.
 //
-// The default Generate path is unchanged (labels → renderPlan). When this
-// module is asked to apply phrases it validates every tick and pitch against
-// the enums / spelled-pitch grammar; illegal RH throws so the caller can fall
-// back to the code renderer. Illegal bass on one bar keeps that bar's
-// renderPlan left hand and records a notice.
+// The default Generate path is unchanged (labels → renderPlan). Notes:jev is
+// the showcase: Jev picks the singing line; the arranged accompaniment stays.
+// When this module is asked to apply phrases it validates every tick and pitch
+// against the enums / spelled-pitch grammar; illegal RH throws so the caller
+// can fall back to the code renderer.
 //
-// One NotePhrase is one plan bar. Callers overlay every targeted bar; the
-// Debug Notes:jev path writes both staves (theme-return bars reuse the
-// source bar's rhythm, degrees and bass pattern, re-spelled on the later chord).
+// One NotePhrase is one plan bar. Callers overlay every targeted bar: only the
+// top melody voice (treble[0], or the skyline of a chordal singing line) is
+// swapped. Remaining RH inner voices and the full LH texture stay with
+// renderPlan. A closed bass_pattern may still be realized for the debug trace;
+// it is not written onto the score. Theme-return bars reuse the source bar's
+// rhythm and degrees, re-spelled on the later chord.
 //
 // Voice leading is post-realize, in code: `degrees` stay Jev's closed picks
 // (the plan). `notes` is the spelled line after successive sounding pitches
@@ -22,7 +25,6 @@ import {
   PHRASE_NOTE_COUNT,
   PHRASE_RHYTHMS,
   isNoteTick,
-  parseBassPattern,
   parseJevNoteChoices,
   parseNoteTick,
   parseSpelledPitch,
@@ -66,6 +68,97 @@ const DEGREE_STEPS: Record<Exclude<MelodyDegreeId, 'rest'>, { degree: number; oc
   tonic_high: { degree: 0, octave: 1 },
   dominant_low: { degree: 4, octave: -1 },
   mediant_high: { degree: 2, octave: 1 },
+}
+
+/** Semitones above the tonic for functional names 1–7 (major / natural minor). */
+export const FUNCTION_SEMITONES = {
+  major: [0, 2, 4, 5, 7, 9, 11],
+  minor: [0, 2, 3, 5, 7, 8, 10],
+} as const
+
+export interface SpellDegreeOptions {
+  /** Natural-minor functions (b3 / b6 / b7). Ignored on 7-note scales. */
+  minor?: boolean
+}
+
+function pcChroma(pc: string): number {
+  return midiOf(`${pc}4`) % 12
+}
+
+function circularDistance(a: number, b: number): number {
+  const raw = Math.abs(a - b) % 12
+  return Math.min(raw, 12 - raw)
+}
+
+/**
+ * Pitch class for a closed degree name on `scale`.
+ *
+ * Degree names are functional (tonic = 1, dominant = 5), not indexes into
+ * whatever palette we were handed. Indexing a 5-note pentatonic used to wrap
+ * “dominant” onto the last rung (C pentatonic → A). That is the Q7 bug.
+ *
+ * Mapping:
+ * - 7-note (possibly chord-bent) scales: `scale[degree]` — a bent fourth
+ *   stays the bent fourth.
+ * - Gapped palettes (pentatonic / whole-tone / blues, length < 7): take the
+ *   intended diatonic pitch class from the key and snap to the nearest
+ *   palette tone (circular chroma). Ties prefer a non-tonic tone so
+ *   “leading” does not collapse onto tonic when both are 1 semitone away,
+ *   then the raised neighbor (clockwise from the intended class). If the
+ *   nearest tone is tonic and the degree is not, the next-nearest wins
+ *   when it is at most one semitone farther.
+ *
+ * C major pentatonic [C D E G A]: tonic C, supertonic D, mediant E,
+ * subdominant E (F→E), dominant G, submediant A, leading A (B prefers A
+ * over tonic C).
+ *
+ * C whole-tone [C D E F# G# A#]: tonic C, supertonic D, mediant E,
+ * subdominant F# (F ties E/F# → raised), dominant G#, submediant A#,
+ * leading A#.
+ *
+ * C minor pentatonic [C Eb F G Bb], minor functions: tonic C, supertonic Eb
+ * (D→Eb), mediant Eb, subdominant F, dominant G, submediant G (Ab→G),
+ * leading Bb.
+ *
+ * C major blues [C D Eb E G A]: tonic C, supertonic D, mediant E,
+ * subdominant E, dominant G, submediant A, leading A.
+ */
+export function pitchClassForDegree(
+  degree: MelodyDegreeId,
+  scale: string[],
+  options: SpellDegreeOptions = {},
+): string | null {
+  if (degree === 'rest') return null
+  if (scale.length === 0) throw new JevNotesError('notes: scale is empty')
+  const spec = DEGREE_STEPS[degree]
+  if (scale.length >= 7) {
+    return scale[((spec.degree % scale.length) + scale.length) % scale.length]
+  }
+  const tonicChroma = pcChroma(scale[0])
+  const steps = options.minor ? FUNCTION_SEMITONES.minor : FUNCTION_SEMITONES.major
+  const intended = (tonicChroma + steps[spec.degree]) % 12
+  const allowTonic = spec.degree === 0
+  const ranked = scale
+    .map((pc) => {
+      const chroma = pcChroma(pc)
+      return {
+        pc,
+        chroma,
+        dist: circularDistance(chroma, intended),
+        isTonic: chroma === tonicChroma,
+      }
+    })
+    .sort((a, b) => {
+      if (a.dist !== b.dist) return a.dist - b.dist
+      if (!allowTonic && a.isTonic !== b.isTonic) return a.isTonic ? 1 : -1
+      const aRaise = (a.chroma - intended + 12) % 12
+      const bRaise = (b.chroma - intended + 12) % 12
+      return aRaise - bRaise
+    })
+  const best = ranked[0]
+  const next = ranked[1]
+  if (!allowTonic && best.isTonic && next && next.dist <= best.dist + 1) return next.pc
+  return best.pc
 }
 
 export interface BassPhrase {
@@ -161,11 +254,16 @@ export function assertVoiceFillsBar(notes: Voice, ticksPerBar: number, path: str
   if (covered > ticksPerBar) throw new PlanValidationError(`${path}: durations do not fit the bar`)
 }
 
-export function spellDegree(degree: MelodyDegreeId, scale: string[], targetMidi: number): string | null {
+export function spellDegree(
+  degree: MelodyDegreeId,
+  scale: string[],
+  targetMidi: number,
+  options: SpellDegreeOptions = {},
+): string | null {
   if (degree === 'rest') return null
-  if (scale.length === 0) throw new JevNotesError('notes: scale is empty')
+  const pc = pitchClassForDegree(degree, scale, options)
+  if (!pc) return null
   const spec = DEGREE_STEPS[degree]
-  const pc = scale[((spec.degree % scale.length) + scale.length) % scale.length]
   const rungs = ladder([pc], TREBLE_LO, TREBLE_HI)
   if (rungs.length === 0) throw new JevNotesError(`notes: no ${pc} in the treble range`)
   return rungs[nearestIndex(rungs, targetMidi + spec.octave * 12)]
@@ -176,11 +274,14 @@ export function spellDegree(degree: MelodyDegreeId, scale: string[], targetMidi:
  * sit nearest `targetMidi`. Used after Jev has picked degrees, to voice-lead
  * register only.
  */
-export function spellDegreeNear(degree: MelodyDegreeId, scale: string[], targetMidi: number): string | null {
-  if (degree === 'rest') return null
-  if (scale.length === 0) throw new JevNotesError('notes: scale is empty')
-  const spec = DEGREE_STEPS[degree]
-  const pc = scale[((spec.degree % scale.length) + scale.length) % scale.length]
+export function spellDegreeNear(
+  degree: MelodyDegreeId,
+  scale: string[],
+  targetMidi: number,
+  options: SpellDegreeOptions = {},
+): string | null {
+  const pc = pitchClassForDegree(degree, scale, options)
+  if (!pc) return null
   const rungs = ladder([pc], TREBLE_LO, TREBLE_HI)
   if (rungs.length === 0) throw new JevNotesError(`notes: no ${pc} in the treble range`)
   return rungs[nearestIndex(rungs, targetMidi)]
@@ -381,7 +482,8 @@ export function realizeJevNoteChoices(
       throw new PlanValidationError(`notes: rhythm slot ${i + 1} has illegal duration ${dur}`)
     }
     const scale = scaleAt(key, plan.palette, chord, chord2, start, meter.splitTick)
-    const pitch = lead ? spellDegreeNear(degree, scale, target) : spellDegree(degree, scale, DEFAULT_TREBLE_MIDI)
+    const spell = { minor: key.minor }
+    const pitch = lead ? spellDegreeNear(degree, scale, target, spell) : spellDegree(degree, scale, DEFAULT_TREBLE_MIDI, spell)
     if (!pitch) return
     notes.push(parseScoreNote({ start, dur, pitches: [pitch], velocity }, `notes[${i}]`, meter.ticksPerBar))
     target = midiOf(pitch)
@@ -407,11 +509,34 @@ function isFiniteTick(value: number): boolean {
   return Number.isInteger(value) && value > 0
 }
 
-function overlayStaff(replacement: Voice, sample?: number): Voice[] {
-  const shaped = sample == null ? replacement : replacement.map((note) => ({ ...note, velocity: note.velocity || sample }))
-  // Jev's line replaces the staff. Leftover inner voices were written against
-  // the code melody and fight stems / beams on the same staff.
-  return [shaped]
+function shapeVoice(replacement: Voice, sample?: number): Voice {
+  return sample == null ? replacement : replacement.map((note) => ({ ...note, velocity: note.velocity || sample }))
+}
+
+/**
+ * Lower pitches of a chordal singing line after the skyline (top note) is
+ * lifted off. Empty when the voice is already monophonic.
+ */
+export function peelSkyline(voice: Voice): Voice {
+  const leftover: Voice = []
+  for (const note of voice) {
+    if (note.pitches.length <= 1) continue
+    leftover.push({ ...note, pitches: note.pitches.slice(0, -1) })
+  }
+  return leftover
+}
+
+/**
+ * Swap only the singing line. Keep remaining RH inner voices; if the top
+ * voice was a chordal skyline, keep its inner pitches as the inner voice.
+ * Score contract: at most two voices per staff.
+ */
+export function overlayMelodyVoice(staff: Voice[], replacement: Voice, sample?: number): Voice[] {
+  const melody = shapeVoice(replacement, sample)
+  if (staff.length === 0) return [melody]
+  const leftover = peelSkyline(staff[0])
+  const inners = leftover.length > 0 ? [leftover, ...staff.slice(1)] : staff.slice(1)
+  return inners.length > 0 ? [melody, inners[0]] : [melody]
 }
 
 export function applyBassPhrase(score: Score, barIndex: number, bass: BassPhrase): Score {
@@ -421,7 +546,8 @@ export function applyBassPhrase(score: Score, barIndex: number, bass: BassPhrase
   const voice = parseScoreVoice(bass.notes, score.meter.ticksPerBar, { lo: BASS_LO, hi: BASS_HI })
   assertVoiceFillsBar(voice, score.meter.ticksPerBar, 'notes.bass')
   const sample = bar.bass[0]?.[0]?.velocity
-  const nextBass = overlayStaff(voice, sample)
+  // Kept for tests / future use. Notes:jev Q1 leaves the LH on renderPlan.
+  const nextBass = [shapeVoice(voice, sample)]
   return {
     ...score,
     bars: score.bars.map((entry, i) => (i === index ? { ...entry, bass: nextBass } : entry)),
@@ -434,22 +560,14 @@ export function applyNotePhrase(score: Score, phrase: NotePhrase): Score {
   if (!bar) throw new JevNotesError(`Jev notes: no score bar for plan bar ${phrase.barIndex + 1}`)
   const voice = parseScoreVoice(phrase.notes, score.meter.ticksPerBar)
   const sample = bar.treble[0]?.[0]?.velocity
-  const treble = overlayStaff(voice, sample)
-  let next: Score = {
+  const treble = overlayMelodyVoice(bar.treble, voice, sample)
+  return {
     ...score,
     bars: score.bars.map((entry, i) => (i === index ? { ...entry, treble } : entry)),
   }
-  if (phrase.bass) {
-    try {
-      next = applyBassPhrase(next, phrase.barIndex, phrase.bass)
-    } catch {
-      // Keep renderPlan bass on this bar.
-    }
-  }
-  return next
 }
 
-/** Replace the RH staff (and bass staff when present) on every targeted plan bar. Intro framing stays put. */
+/** Overlay Jev's singing line on every targeted plan bar. Intro framing and LH stay put. */
 export function applyNotePhrases(score: Score, phrases: readonly NotePhrase[]): Score {
   return phrases.reduce((next, phrase) => applyNotePhrase(next, phrase), score)
 }
@@ -469,27 +587,10 @@ export function renderWithOptionalJevNotes(
         plan.meter,
       )
       const realized = realizeJevNoteChoices(choices, plan, { barIndex: phrase.barIndex, velocity: phrase.notes[0]?.velocity })
-      let bass = realized.bass
-      if (phrase.bass) {
-        try {
-          const stored = parseScoreVoice(phrase.bass.notes, code.meter.ticksPerBar, { lo: BASS_LO, hi: BASS_HI })
-          assertVoiceFillsBar(stored, code.meter.ticksPerBar, 'notes.bass')
-          bass = { pattern: parseBassPattern(phrase.bass.pattern), notes: stored }
-        } catch {
-          bass = undefined
-        }
-      }
-      return { ...realized, notes: parseScoreVoice(phrase.notes, code.meter.ticksPerBar), ...(bass ? { bass } : { bass: undefined }) }
+      return { ...realized, notes: parseScoreVoice(phrase.notes, code.meter.ticksPerBar), bass: undefined }
     })
     const score = applyNotePhrases(code, overlays)
-    const skipped = overlays
-      .filter((phrase, i) => list[i].bass && !phrase.bass)
-      .map((phrase) => phrase.barIndex + 1)
-    const notice =
-      skipped.length === 0
-        ? null
-        : `Jev bass failed on bar${skipped.length === 1 ? '' : 's'} ${skipped.join(', ')}. Keeping the code renderer’s left hand on ${skipped.length === 1 ? 'that bar' : 'those bars'}.`
-    return { score, used: 'jev', notice }
+    return { score, used: 'jev', notice: null }
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause)
     return { score: code, used: 'code', notice: `Jev notes failed (${reason}). Using the code renderer’s notes instead.` }

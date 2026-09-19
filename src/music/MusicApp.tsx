@@ -169,7 +169,7 @@ export default function MusicApp() {
         } else {
           if (mountedRef.current) {
             setPendingAsksJev(true)
-            setPlanStatus('Jev is writing the melody and bass…')
+            setPlanStatus('Jev is writing the melody over the accompaniment…')
           }
           try {
             const written = await writer.writeNotes(result.plan, input, { signal: abort.signal })
@@ -403,8 +403,8 @@ export default function MusicApp() {
 
   // ── THE SEAM: plan JSON → notes ───────────────────────────────────────────
   // Default: labels → renderPlan. Debug + Notes:Jev overlays a validated
-  // RH melody and LH bass on every plan bar; illegal RH falls back to
-  // renderPlan, illegal bass keeps that bar's code left hand.
+  // singing line on every plan bar; renderPlan keeps inner RH voices and
+  // the full left-hand texture. Illegal RH falls back to renderPlan.
   // A stale one-bar cache is not applied — the notes pass must cover the piece.
   const applyJevNotes = debug && jevNotes && !editedPlan && notePhrasesCoverPlan(generated?.notePhrases, plan?.bars.length ?? 0)
   const score = useMemo(
@@ -435,7 +435,7 @@ export default function MusicApp() {
     abortRef.current = abort
     if (mountedRef.current) {
       setPendingAsksJev(true)
-      setPlanStatus('Jev is writing the melody and bass…')
+      setPlanStatus('Jev is writing the melody over the accompaniment…')
     }
     void writer
       .writeNotes(generated.plan, generated.input, { signal: abort.signal })
@@ -714,12 +714,12 @@ export default function MusicApp() {
             Seed
             <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
           </label>
-          <label title="Experimental: after the plan, Jev picks a closed-schema right-hand melody and left-hand bass for every plan bar, continuing from earlier choices. Off by default; illegal RH falls back to renderPlan, illegal bass keeps that bar’s code left hand.">
+          <label title="Experimental: after the plan, Jev writes a closed-schema singing line over the arranged accompaniment (inner RH voices and the full left hand stay with renderPlan). Off by default; illegal RH falls back to renderPlan.">
             Notes
             <select value={jevNotes ? 'jev' : 'code'} onChange={(event) => setNotesMode(event.target.value === 'jev')}>
               <option value="code">code (renderPlan)</option>
               <option value="jev" disabled={!jev?.planner}>
-                Jev writes notes{jev?.planner ? '' : ' (no key)'}
+                Jev writes the tune{jev?.planner ? '' : ' (no key)'}
               </option>
             </select>
           </label>
