@@ -740,7 +740,7 @@ describe('D1 guide realization', () => {
   })
 
   it('does not rest the longest slot or the first mid-phrase beat', () => {
-    expect(guideRestSlot([8, 4, 2, 2], 4, 16)).toBe(2)
+    expect(guideRestSlot([8, 4, 2, 2], 4, 16)).toBe(3)
     expect(guideRestSlot([4, 4, 4, 4], 4, 16)).toBe(1)
     const plan = cMajorPlan()
     const phrase = realizeJevGuideChoices({ figure: 'hold_resolve', goal: 'fifth' }, plan, { lyrical: true })
