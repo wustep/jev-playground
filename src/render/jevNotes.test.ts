@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BASS_PATTERN_IDS, MELODY_DEGREE_IDS, NOTE_TICK_VALUES, PHRASE_NOTE_COUNT, PHRASE_RHYTHMS, parseJevNoteChoices, parseNoteTick, type MelodyDegreeId } from '../plan/notes'
+import { BASS_PATTERN_IDS, FIGURE_QUESTION_ID, GOAL_QUESTION_ID, MELODY_DEGREE_IDS, MELODY_FIGURE_IDS, MELODY_GOAL_IDS, NOTE_TICK_VALUES, PHRASE_NOTE_COUNT, PHRASE_RHYTHMS, guideRestSlot, parseJevNoteChoices, parseNoteTick, type MelodyDegreeId } from '../plan/notes'
 import { METER_IDS, PlanValidationError, type BarCount, type BarRoleId, type CompositionPlan } from '../plan/schema'
 import { HeuristicPlanner } from '../planner/HeuristicPlanner'
 import { JevPlanner, type JevTransport } from '../planner/JevPlanner'
@@ -18,10 +18,13 @@ import {
   pitchClassForDegree,
   lastSoundingMidi,
   realizeBassPattern,
+  realizeJevGuideChoices,
   realizeJevNoteChoices,
   renderWithOptionalJevNotes,
   spellDegree,
   spellDegreeNear,
+  chordHasSeventh,
+  goalPitchClass,
   type NotePhrase,
 } from './jevNotes'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
@@ -615,5 +618,154 @@ describe('Jev notes op', () => {
     expect(JSON.stringify(later.questions.pitch_1.instructions)).toMatch(/random leap/)
     expect(later.state).toMatchObject({ motif_echo: expect.stringContaining('melody_so_far') })
     expect(later.questions).toHaveProperty('bass_pattern')
+  })
+
+  it('asks figure + goal in guide mode and drops pitch_1..4', () => {
+    const guide = buildRequest({ ...notesOp, mode: 'guide' }, 'jev-latest')
+    expect(Object.keys(guide.questions)).toEqual([FIGURE_QUESTION_ID, GOAL_QUESTION_ID])
+    expect(Object.keys(guide.questions.figure.criteria as object)).toEqual(MELODY_FIGURE_IDS)
+    expect(Object.keys(guide.questions.goal.criteria as object)).toEqual(MELODY_GOAL_IDS)
+    expect(guide.questions).not.toHaveProperty('pitch_1')
+    expect(guide.questions).not.toHaveProperty('rhythm')
+    expect(guide.questions).not.toHaveProperty('bass_pattern')
+    expect(JSON.stringify(guide.state)).toMatch(/figure and a goal|figures and goals|Guide the opening/)
+    expect(guide.state).toMatchObject({ notes_mode: expect.stringContaining('guides the tune') })
+
+    const later = buildRequest({
+      ...notesOp,
+      mode: 'guide',
+      barIndex: 2,
+      melodySoFar: [
+        { figure: 'step_to_goal', goal: 'fifth' },
+        { figure: 'motif_echo', goal: 'root' },
+      ],
+    }, 'jev-latest')
+    expect((later.state as { melody_so_far: unknown[] }).melody_so_far).toHaveLength(2)
+    expect(JSON.stringify(later.state)).toContain('step_to_goal')
+    expect(JSON.stringify(later.state)).not.toContain('pitch_1')
+    expect(JSON.stringify(later.questions.figure.instructions)).toContain('melody_so_far')
+  })
+
+  it('turns a fake Jev guide distribution into a valid overlay', async () => {
+    const plan = await samplePlan('four_four')
+    const transport: JevTransport = async (op) => {
+      const request = buildRequest(op, 'jev-latest')
+      const answers: Record<string, Answer> = {}
+      for (const [id, question] of Object.entries(request.questions)) {
+        if (question.type !== 'choice') continue
+        const options = Object.keys(question.criteria)
+        const favourite = id === 'figure' ? 'step_to_goal' : id === 'goal' ? 'fifth' : options[0]
+        const pick = options.includes(favourite) ? favourite : options[0]
+        answers[id] = {
+          type: 'choice',
+          choice: pick,
+          confidence: 0.8,
+          probabilities: Object.fromEntries(options.map((option) => [option, option === pick ? 0.8 : 0.2 / (options.length - 1)])),
+        }
+      }
+      const response: SystemOneResponse = { model: 'jev-1.13.0', answers, usage: { input_tokens: 40, output_tokens: 0 } }
+      return response
+    }
+    const { phrases, exchanges } = await new JevPlanner(transport).writeNotes(plan, { pick: 'argmax', seed: 1, brief: true }, { mode: 'guide' })
+    expect(exchanges.every((exchange) => exchange.op.op === 'notes' && exchange.op.mode === 'guide')).toBe(true)
+    expect(phrases).toHaveLength(plan.bars.length)
+    expect(phrases.every((phrase) => phrase.figure && phrase.goal && phrase.mode === 'guide')).toBe(true)
+    const returns = themeSources(plan.form, plan.bars.length as BarCount)
+    expect(exchanges).toHaveLength(returns.filter((source) => source === undefined).length)
+    for (let i = 0; i < plan.bars.length; i++) {
+      const source = returns[i]
+      if (source === undefined) continue
+      expect(phrases[i].figure).toBe(phrases[source].figure)
+      expect(phrases[i].goal).toBe(phrases[source].goal)
+    }
+    const { score, used, notice } = renderWithOptionalJevNotes(plan, 1, phrases)
+    expect(used).toBe('jev')
+    expect(notice).toBeNull()
+    const intro = score.introBars ?? 0
+    const code = renderPlan(plan, 1)
+    for (let i = 0; i < phrases.length; i++) {
+      expect(score.bars[i + intro].treble[0]).toEqual(phrases[i].notes)
+      expect(score.bars[i + intro].bass).toEqual(code.bars[i + intro].bass)
+      expect(score.bars[i + intro].treble.slice(1)).toEqual(code.bars[i + intro].treble.slice(1))
+    }
+    const later = exchanges.find((exchange) => exchange.op.op === 'notes' && (exchange.op.barIndex ?? 0) > 0)
+    if (later && later.op.op === 'notes') {
+      expect(later.op.melodySoFar?.length).toBe(later.op.barIndex)
+      expect(JSON.stringify(later.request.state)).toContain('figure_id')
+    }
+  })
+})
+
+describe('D1 guide realization', () => {
+  it('lands the last sounding slot on the chosen chord-tone goal', () => {
+    const plan = cMajorPlan()
+    const fifth = realizeJevGuideChoices({ figure: 'step_to_goal', goal: 'fifth' }, plan, { lyrical: false })
+    expect(fifth.goal).toBe('fifth')
+    expect(fifth.figure).toBe('step_to_goal')
+    expect(fifth.notes.length).toBeGreaterThan(0)
+    expect(fifth.notes.at(-1)!.pitches[0].replace(/\d+$/, '')).toBe('G')
+    const root = realizeJevGuideChoices({ figure: 'hold_resolve', goal: 'root' }, plan, { lyrical: false })
+    expect(root.notes.at(-1)!.pitches[0].replace(/\d+$/, '')).toBe('C')
+    const third = realizeJevGuideChoices({ figure: 'arpeggio_up', goal: 'third' }, plan, { lyrical: false })
+    expect(third.notes.at(-1)!.pitches[0].replace(/\d+$/, '')).toBe('E')
+  })
+
+  it('uses a real seventh on V7 and snaps seventh to the fifth on a triad', () => {
+    const plan = cMajorPlan()
+    const tonic = resolveChord(keyInfo('C_major'), 'I')
+    const dominant = resolveChord(keyInfo('C_major'), 'V7')
+    expect(chordHasSeventh(tonic)).toBe(false)
+    expect(chordHasSeventh(dominant)).toBe(true)
+    expect(goalPitchClass(tonic, 'seventh')).toBe('G')
+    expect(goalPitchClass(dominant, 'seventh')).toBe('F')
+    const onI = realizeJevGuideChoices({ figure: 'step_to_goal', goal: 'seventh' }, plan, { lyrical: false })
+    expect(onI.notes.at(-1)!.pitches[0].replace(/\d+$/, '')).toBe('G')
+    const v7Plan: CompositionPlan = { ...plan, bars: [{ chord: 'V7', role: 'statement', contour: 'fall' }, plan.bars[1]] }
+    const onV7 = realizeJevGuideChoices({ figure: 'step_to_goal', goal: 'seventh' }, v7Plan, { lyrical: false })
+    expect(onV7.notes.at(-1)!.pitches[0].replace(/\d+$/, '')).toBe('F')
+  })
+
+  it('keeps renderPlan accompaniment under a guide overlay', () => {
+    const plan: CompositionPlan = { ...cMajorPlan(), texture: 'alberti_melody' }
+    const phrase = realizeJevGuideChoices({ figure: 'arpeggio_down', goal: 'root' }, plan, { lyrical: false })
+    const code = renderPlan(plan, 3)
+    const overlaid = applyNotePhrase(code, phrase)
+    const body = phrase.barIndex + (code.introBars ?? 0)
+    expect(overlaid.bars[body].treble[0]).toEqual(phrase.notes)
+    expect(overlaid.bars[body].treble.slice(1)).toEqual(code.bars[body].treble.slice(1))
+    expect(overlaid.bars[body].bass).toEqual(code.bars[body].bass)
+    const { score, used } = renderWithOptionalJevNotes(plan, 3, [phrase])
+    expect(used).toBe('jev')
+    expect(score.bars[body].bass).toEqual(code.bars[body].bass)
+  })
+
+  it('does not rest the longest slot or the first mid-phrase beat', () => {
+    expect(guideRestSlot([8, 4, 2, 2], 4, 16)).toBe(3)
+    expect(guideRestSlot([4, 4, 4, 4], 4, 16)).toBe(1)
+    const plan = cMajorPlan()
+    const phrase = realizeJevGuideChoices({ figure: 'hold_resolve', goal: 'fifth' }, plan, { lyrical: true })
+    const ticks = PHRASE_RHYTHMS[phrase.rhythm].ticks
+    const onsets: number[] = []
+    let at = 0
+    for (const dur of ticks) {
+      onsets.push(at)
+      at += dur
+    }
+    const restIndexes = ticks.map((_, i) => i).filter((i) => !phrase.notes.some((note) => note.start === onsets[i]))
+    expect(restIndexes).not.toContain(ticks.findIndex((tick) => tick === Math.max(...ticks)))
+    const mid = onsets.findIndex((start) => start >= 8 && start % 4 === 0)
+    expect(restIndexes).not.toContain(mid)
+    expect(phrase.notes.some((note) => note.dur === Math.max(...ticks))).toBe(true)
+  })
+
+  it('prefers chord tones on strong beats', () => {
+    const plan = cMajorPlan()
+    const phrase = realizeJevGuideChoices({ figure: 'step_to_goal', goal: 'fifth' }, plan, { lyrical: false })
+    const chord = resolveChord(keyInfo('C_major'), 'I')
+    const chromas = new Set(chord.pcs.map((pc) => midiOf(`${pc}4`) % 12))
+    for (const note of phrase.notes) {
+      if (note.start % 4 !== 0) continue
+      expect(chromas.has(midiOf(note.pitches[0]) % 12), `strong tick ${note.start}`).toBe(true)
+    }
   })
 })

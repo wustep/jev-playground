@@ -36,6 +36,15 @@ describe('opening bar-count contract', () => {
     expect(renderPlan(songPlan(), 2).introBars).toBe(0)
   })
 
+  it('keeps the 4/8 vs 16/32/64 vamp length so a 64-bar plan still adds two extra score bars', () => {
+    expect(introBarCount('vamp_intro', 4)).toBe(1)
+    expect(introBarCount('vamp_intro', 8)).toBe(1)
+    expect(introBarCount('vamp_intro', 16)).toBe(2)
+    expect(introBarCount('vamp_intro', 32)).toBe(2)
+    expect(introBarCount('vamp_intro', 64)).toBe(2)
+    expect(introBarCount('pickup', 64)).toBe(1)
+  })
+
   it('prepends extra Score.bars for a vamp or pickup without rewriting the plan', () => {
     const vamp = renderPlan(songPlan({ opening: 'vamp_intro' }), 2)
     const pickup = renderPlan(songPlan({ opening: 'pickup' }), 2)

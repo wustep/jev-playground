@@ -32,14 +32,27 @@ import { bookFor, phraseCriteria, PHRASE_ENDS, slotContourQuestionId } from '../
 import {
   BASS_PATTERNS,
   BASS_PATTERN_QUESTION_ID,
+  FIGURE_QUESTION_ID,
+  GOAL_QUESTION_ID,
   MELODY_DEGREES,
+  MELODY_FIGURES,
+  MELODY_GOALS,
+  NOTES_WRITE_MODES,
   PHRASE_NOTE_COUNT,
   parseBassSoFar,
+  parseGuideSoFar,
+  parseMelodyFigure,
+  parseMelodyGoal,
   parseMelodySoFar,
+  parseNotesWriteMode,
   pitchQuestionId,
   rhythmCriteriaFor,
   type BassPatternId,
+  type GuideMemoryBar,
+  type MelodyFigureId,
+  type MelodyGoalId,
   type MelodyMemoryBar,
+  type NotesWriteMode,
 } from '../../plan/notes.js'
 import {
   BAR_COUNT_VALUES,
@@ -90,9 +103,13 @@ import {
 import { STYLE_PROFILES } from '../../plan/styles.js'
 import {
   bassPatternInstructions,
+  melodyFigureInstructions,
+  melodyGoalInstructions,
   melodyPitchInstructions,
   melodyRhythmInstructions,
   notesContinuityState,
+  notesGuideContinuityState,
+  notesGuideTask,
   notesTask,
 } from './notesContinuity.js'
 import { prefersLongAndRest } from './notesPriors.js'
@@ -128,9 +145,10 @@ export type JevOp =
     }
   | { op: 'score'; plan: CompositionPlan; styles: StyleId[] }
   /**
-   * Debug-only: one bar of closed-schema RH + bass. Callers repeat per new
-   * plan bar. Optional memory fields stay on this op so Coder’s allowlist
-   * does not need a new verb — parse them against the existing note enums.
+   * Debug-only: one bar of closed-schema RH. Callers repeat per new plan bar.
+   * Optional `mode` / `figure` / `goal` stay on this op so Coder’s allowlist
+   * does not need a new verb. Omitted `mode` = `line` (rhythm + pitch_1..4).
+   * `guide` asks figure + goal only — no parallel degrees.
    */
   | {
       op: 'notes'
@@ -147,9 +165,21 @@ export type JevOp =
       bar: BarPlan
       /** 0-based plan bar this request writes. Omitted = bar 1 (legacy). */
       barIndex?: number
-      /** Prior bars’ closed RH choices (rhythm id + four degree ids). */
-      melodySoFar?: MelodyMemoryBar[]
-      /** Prior bars’ closed bass pattern ids. */
+      /**
+       * `guide` = D1 figure+goal. `line` (or omitted) = today’s 4-slot
+       * rhythm+degrees. Parse against NOTES_WRITE_MODES when present.
+       */
+      mode?: NotesWriteMode
+      /** Closed figure id. Optional; guide mode asks this as a question. */
+      figure?: MelodyFigureId
+      /** Closed chord-tone goal. Optional; guide mode asks this as a question. */
+      goal?: MelodyGoalId
+      /**
+       * Prior bars’ closed picks. Line: rhythm + four degree ids.
+       * Guide: figure + goal ids.
+       */
+      melodySoFar?: MelodyMemoryBar[] | GuideMemoryBar[]
+      /** Prior bars’ closed bass pattern ids. Line mode only; unused on the score. */
       bassSoFar?: BassPatternId[]
       /** Next plan bar’s chord, when known. */
       nextChord?: ChordId
@@ -427,28 +457,50 @@ function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): Syste
   const barIndex = op.barIndex ?? 0
   const barNumber = barIndex + 1
   const lyrical = prefersLongAndRest(op.character)
-  const memory = notesContinuityState({
-    barIndex,
-    bar: op.bar,
-    nextChord: op.nextChord,
-    melodySoFar: op.melodySoFar ?? [],
-    bassSoFar: op.bassSoFar ?? [],
-    character: op.character,
-    texture: op.texture,
-    arrangement: op.arrangement,
-  })
+  const guide = op.mode === 'guide'
+  const memory = guide
+    ? notesGuideContinuityState({
+        barIndex,
+        bar: op.bar,
+        nextChord: op.nextChord,
+        melodySoFar: (op.melodySoFar ?? []) as GuideMemoryBar[],
+        character: op.character,
+        texture: op.texture,
+        arrangement: op.arrangement,
+      })
+    : notesContinuityState({
+        barIndex,
+        bar: op.bar,
+        nextChord: op.nextChord,
+        melodySoFar: (op.melodySoFar ?? []) as MelodyMemoryBar[],
+        bassSoFar: op.bassSoFar ?? [],
+        character: op.character,
+        texture: op.texture,
+        arrangement: op.arrangement,
+      })
   const hint = memory.melody_motion
-  const questions: Record<string, Question> = {
-    rhythm: choice(melodyRhythmInstructions(barNumber, hint, lyrical), rhythmCriteriaFor(op.meter, lyrical)),
-  }
-  for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
-    questions[pitchQuestionId(i)] = choice(melodyPitchInstructions(i + 1, hint), MELODY_DEGREES)
-  }
-  questions[BASS_PATTERN_QUESTION_ID] = choice(bassPatternInstructions(barNumber), BASS_PATTERNS)
+  const questions: Record<string, Question> = guide
+    ? {
+        [FIGURE_QUESTION_ID]: choice(melodyFigureInstructions(barNumber, hint), MELODY_FIGURES),
+        [GOAL_QUESTION_ID]: choice(melodyGoalInstructions(barNumber), MELODY_GOALS),
+      }
+    : (() => {
+        const line: Record<string, Question> = {
+          rhythm: choice(melodyRhythmInstructions(barNumber, hint, lyrical), rhythmCriteriaFor(op.meter, lyrical)),
+        }
+        for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
+          line[pitchQuestionId(i)] = choice(melodyPitchInstructions(i + 1, hint), MELODY_DEGREES)
+        }
+        line[BASS_PATTERN_QUESTION_ID] = choice(bassPatternInstructions(barNumber), BASS_PATTERNS)
+        return line
+      })()
   return {
     model,
     state: {
-      task: notesTask(barNumber, (op.melodySoFar?.length ?? 0) > 0, lyrical),
+      task: guide
+        ? notesGuideTask(barNumber, (op.melodySoFar?.length ?? 0) > 0, lyrical)
+        : notesTask(barNumber, (op.melodySoFar?.length ?? 0) > 0, lyrical),
+      notes_mode: guide ? NOTES_WRITE_MODES.guide : NOTES_WRITE_MODES.line,
       requested_style: styleState(op.style, op.brief),
       piece_character: CHARACTERS[op.character],
       piece: {
@@ -462,13 +514,15 @@ function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): Syste
       },
       melody_so_far: memory.melody_so_far,
       last_sounding_degree: memory.last_sounding_degree,
-      bass_so_far: memory.bass_so_far,
+      ...(guide ? {} : { bass_so_far: memory.bass_so_far }),
       this_bar: memory.this_bar,
       melody_motion: memory.melody_motion,
       ...(memory.motif_echo ? { motif_echo: memory.motif_echo } : {}),
       voices: {
-        treble: `right-hand melody of bar ${barNumber}, continuing melody_so_far`,
-        bass: `left-hand bass of bar ${barNumber}, continuing bass_so_far`,
+        treble: guide
+          ? `right-hand singing line of bar ${barNumber}, guided by figure + goal, continuing melody_so_far`
+          : `right-hand melody of bar ${barNumber}, continuing melody_so_far`,
+        ...(guide ? {} : { bass: `left-hand bass of bar ${barNumber}, continuing bass_so_far` }),
       },
     },
     questions,
@@ -518,7 +572,9 @@ export function parseOp(raw: unknown): JevOp {
       return { op: 'globals', style: parseStyle(obj.style), brief: obj.brief === true, character: parseOption(CHARACTERS, obj.character, 'op.character') }
     case 'bar': {
       const roles = Array.isArray(obj.roles) ? obj.roles : []
-      if (![4, 8, 16, 32].includes(roles.length)) throw new PlanValidationError('op.roles: expected 4, 8, 16 or 32 roles')
+      if (!(BAR_COUNT_VALUES as readonly number[]).includes(roles.length)) {
+        throw new PlanValidationError(`op.roles: expected ${BAR_COUNT_VALUES.join(', ')} roles`)
+      }
       const chords = Array.isArray(obj.chords) ? obj.chords : []
       const index = obj.index
       if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= roles.length) {
@@ -542,7 +598,7 @@ export function parseOp(raw: unknown): JevOp {
       const globals = parseGlobals(obj.globals, 'op.globals')
       const barCount = obj.barCount
       if (typeof barCount !== 'number' || !(BAR_COUNT_VALUES as readonly number[]).includes(barCount)) {
-        throw new PlanValidationError('op.barCount: expected 4, 8, 16 or 32')
+        throw new PlanValidationError(`op.barCount: expected ${BAR_COUNT_VALUES.join(', ')}`)
       }
       const slots = formSlots(globals.form, barCount as BarCount)
       const slotIndex = obj.slotIndex
@@ -581,11 +637,13 @@ export function parseOp(raw: unknown): JevOp {
       // original notes shape still validates. When present, check them
       // against the closed note enums and (if barIndex is set) the prior count.
       const priorLength = typeof barIndex === 'number' ? barIndex : 0
-      const melodySoFar = parseMelodySoFar(
-        obj.melodySoFar,
-        meter,
-        obj.melodySoFar === undefined ? undefined : priorLength,
-      )
+      const mode = obj.mode === undefined ? undefined : parseNotesWriteMode(obj.mode, 'op.mode')
+      const figure = obj.figure === undefined ? undefined : parseMelodyFigure(obj.figure, 'op.figure')
+      const goal = obj.goal === undefined ? undefined : parseMelodyGoal(obj.goal, 'op.goal')
+      const melodySoFar =
+        mode === 'guide'
+          ? parseGuideSoFar(obj.melodySoFar, obj.melodySoFar === undefined ? undefined : priorLength)
+          : parseMelodySoFar(obj.melodySoFar, meter, obj.melodySoFar === undefined ? undefined : priorLength)
       const bassSoFar = parseBassSoFar(obj.bassSoFar, obj.bassSoFar === undefined ? undefined : priorLength)
       const nextChord = obj.nextChord === undefined ? undefined : parseOption(CHORDS, obj.nextChord, 'op.nextChord')
       const arrangement = obj.arrangement === undefined ? undefined : parseOption(ARRANGEMENTS, obj.arrangement, 'op.arrangement')
@@ -601,6 +659,9 @@ export function parseOp(raw: unknown): JevOp {
         palette: parseOption(PALETTES, obj.palette, 'op.palette'),
         bar: parseBarPlan(obj.bar, 'op.bar'),
         ...(barIndex !== undefined ? { barIndex } : {}),
+        ...(mode ? { mode } : {}),
+        ...(figure ? { figure } : {}),
+        ...(goal ? { goal } : {}),
         ...(melodySoFar && melodySoFar.length > 0 ? { melodySoFar } : {}),
         ...(bassSoFar && bassSoFar.length > 0 ? { bassSoFar } : {}),
         ...(nextChord ? { nextChord } : {}),

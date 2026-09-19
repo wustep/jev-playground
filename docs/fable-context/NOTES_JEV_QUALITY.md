@@ -22,6 +22,16 @@ No new op. No free-text pitches.
 
 7. **Gapped-palette degrees.** Degree names are functional (tonic = 1, dominant = 5), not indexes into the palette scale. On a 7-note (possibly chord-bent) scale we still read `scale[degree]`. On pentatonic / whole-tone / blues we take the intended diatonic pitch class and snap to the nearest palette tone. Documented examples (C major pentatonic): tonic C, dominant G — not the old wrap onto A. See `pitchClassForDegree` in `src/render/jevNotes.ts`.
 
-## What is still hard
+## D1 — Jev guides the tune (three Debug modes)
 
-**Parallel Choices.** `pitch_1..4` (and rhythm vs pitches vs bass) still run in one POST and cannot see each other. Voice leading can only move register, not pick a better degree. Priors can only tilt a sample. A bar whose four marginals are tonic / leading / tonic_high / dominant_low will still be that tune, just in a closer octave. Theme returns help; new-material bars can still jump in *scale-degree* space. The honest fix is sequential questions or a closed motif/contour Choice — both cost latency or schema. This cut stays on-thesis: labels in, code spells.
+Debug Notes is now three modes. Default Generate is unchanged (labels → `renderPlan`).
+
+1. **Code writes the tune** — today’s `renderPlan` only.
+2. **Jev guides the tune** — NEW. Jev picks a closed **figure** and a chord-relative **goal**; code writes the singing line. Accompaniment stays (Q1). `melody_so_far` carries prior figures/goals. No `pitch_1..4`.
+3. **Jev writes the line** — today’s closed 4-slot rhythm+degrees path, kept for A/B.
+
+URL: `notes=code|guide|line`. `notes=jev` is a legacy alias for `line`. Modes 2–3 stay Debug + live Jev.
+
+Guide realization (cheap Q2/Q3): do not rest the longest slot or the first mid-phrase beat; strong beats prefer chord tones. Lyrical characters / song-like roles get a long-tone rhythm and a rest on a short weak slot.
+
+**Parallel Choices** on the line path are unchanged. Guide drops the four parallel degrees: figure + goal can see each other only through later-bar state, which is the honest D1 cut.

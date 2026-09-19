@@ -85,6 +85,7 @@ describe('readyPlanStatus / restoredPlanStatus', () => {
   it('uses quiet ready/restored copy with no generate seconds', () => {
     expect(readyPlanStatus(16)).toBe('Ready — 16 bars')
     expect(readyPlanStatus(32)).toBe('Ready — 32 bars')
+    expect(readyPlanStatus(64)).toBe('Ready — 64 bars')
     expect(restoredPlanStatus(16)).toBe('Restored plan · 16 bars')
     expect(restoredPlanStatus(8)).toBe('Restored plan · 8 bars')
     expect(readyPlanStatus(16)).not.toContain('Generated')

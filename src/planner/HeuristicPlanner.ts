@@ -46,7 +46,7 @@ const unsent = (label: string, op: JevOp): Exchange => ({ label, op, request: bu
 /** Replay a finished plan as the sequence of ops JevPlanner would have issued. */
 export function shadowExchanges(plan: CompositionPlan, brief: boolean): Exchange[] {
   const { version: _version, style, bars, ...globals } = plan
-  const barCount = bars.length as 4 | 8 | 16 | 32
+  const barCount = bars.length as BarCount
   const slotCount = barCount / 4
   return [
     unsent('character', { op: 'concept', style, brief }),

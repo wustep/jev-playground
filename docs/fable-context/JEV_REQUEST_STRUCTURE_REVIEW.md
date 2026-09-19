@@ -19,7 +19,7 @@ Fable, 2026-09-18. Read of `wustep/jev-playground` on `main` (`2f187c0`, PR #31 
 | Phrase-level theme return | yes (PR #30) | no | `themeSources(form, bars)` in code. Jev still *asked* for returning-bar contours; answers discarded (`JevPlanner` lines 204–212). |
 | Breath + pickup | yes | **no** | `phrasingOf(character)` in the renderer. `lyrical_song` / `solemn_hymn` / `dance_lilt` / `warm_groove` / `restless_searching` breathe; `meditative_stillness` / `dreamy_haze` take a long rest; perpetual / stormy / pulse / heroic / playful do not. |
 | Arrangement follows the form | yes | **yes** | `arrangement` is a `globals` Choice. Code expands to per-bar density 0–3. |
-| Intro / pickup / vamp | yes | **yes** | `opening` is a `globals` Choice. Extra `Score.bars`; `plan.bars` stays 4/8/16/32. |
+| Intro / pickup / vamp | yes | **yes** | `opening` is a `globals` Choice. Extra `Score.bars`; `plan.bars` stays 4/8/16/32/64. |
 | One summit, ornament ladder, 1+1+2 hook, Laufey groove | no | — | Still renderer / book work. Only a Jev label if code cannot derive it. |
 
 README’s request table is stale: it still says “`form` + 8 global Choices + bar count.” Live `globals` asks **11** Choices (`form`, `key`, `meter`, `texture`, `palette`, `tempo`, `dynamics`, `dynamicShape`, `defaultInstrument`, `arrangement`, `opening`). Bar count is never asked (the UI passes it in). Debug payloads are the live spec: `?debug=1` prints the exact `POST /v1/systemone` bodies.

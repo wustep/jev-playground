@@ -1,5 +1,6 @@
 import type { StyleId } from '../plan/schema'
 import type { Exchange, PlanInput, PlanResult, ScoreResult } from '../planner'
+import type { NotesMode } from './notesMode'
 import type { NotePhrase } from '../render/jevNotes'
 
 export interface Generated extends PlanResult {
@@ -14,6 +15,8 @@ export interface Generated extends PlanResult {
    */
   notePhrases?: NotePhrase[]
   noteExchanges?: Exchange[]
+  /** Which Debug notes path produced `notePhrases`. Legacy cache without this is `line`. */
+  noteMode?: Extract<NotesMode, 'guide' | 'line'>
 }
 
 const STORAGE_KEY = 'jev-playground:music-style-cache:v1'

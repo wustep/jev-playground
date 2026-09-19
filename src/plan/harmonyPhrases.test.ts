@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FORM_IDS, KEY_IDS, STYLE_IDS } from './schema'
+import { BAR_COUNT_VALUES, FORM_IDS, KEY_IDS, STYLE_IDS } from './schema'
 import { formSlots } from './forms'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, withPhraseNovelty } from './harmonyPhrases'
 
@@ -9,7 +9,7 @@ describe('harmony phrase catalog', () => {
       for (const key of [KEY_IDS[0], 'A_minor', 'C_major'] as const) {
         const book = bookFor(style, key)
         for (const form of FORM_IDS) {
-          for (const bars of [4, 8, 16, 32] as const) {
+          for (const bars of BAR_COUNT_VALUES) {
             for (const slot of formSlots(form, bars)) {
               const options = phraseOptions(book, slot)
               expect(options.length, `${style} ${form} ${bars}`).toBeGreaterThan(0)

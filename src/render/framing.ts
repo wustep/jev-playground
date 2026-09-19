@@ -1,9 +1,9 @@
 // Intro and ending bars. The planner picks a closed `opening`; the renderer
-// prepends extra Score.bars that are not plan.bars, so the UI's 4/8/16/32
+// prepends extra Score.bars that are not plan.bars, so the UI's 4/8/16/32/64
 // contract stays intact. A 16-bar plan may therefore engrave 17 or 18 bars.
 //
 //   straight_in  no extra bars
-//   vamp_intro   1 bar (4/8) or 2 bars (16/32) of the first chord's
+//   vamp_intro   1 bar (4/8) or 2 bars (16/32/64) of the first chord's
 //                accompaniment, tune silent
 //   pickup       1 extra bar: rest, then a short anacrusis into bar 1
 //
