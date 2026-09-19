@@ -4,6 +4,16 @@ Fable, 2026-09-19, branch `cursor/reference-plan-gap-8be8`, on `main` after #43.
 
 **Thesis.** Closed labels; code writes notes. Propose enums and renderer rules, not free MIDI. Living-artist sections are published analysis or the musician’s own teaching — never a transcription, and no copyrighted MIDI in the repo.
 
+**Artifacts (why they are here).** Reverse-labelled plans are committed as JSON so the sketches can be loaded, not only read. Public-domain MIDI for the four older dials is committed so the named Mutopia encodings are in-repo. Living artists stay JSON-only.
+
+| Kind | Path | Who |
+| --- | --- | --- |
+| Plan JSON (all eight styles) | [`docs/fable-context/reference-plans/`](reference-plans/) | every reference below |
+| Mutopia / PD MIDI | [`docs/ref-midi/public/`](../ref-midi/public/) | Bach, Beethoven, Chopin, Debussy only |
+| MIDI licence + source URLs | [`docs/ref-midi/public/README.md`](../ref-midi/public/README.md) | same four dials |
+
+Validate: `npx tsx scripts/validate-reference-plans.ts` (`parsePlan` on every `plan`).
+
 **Short version.** The stub already *aims* at the right piece-type for six of eight dials (Bach prelude, Chopin nocturne, Debussy haze, Glass loop, Zimmer build, Fox mixture). What still blocks “sounds like a real song / that composer” is mostly **above the bar** (phrase contour, breath that is not tied to character, ornamented return, same-figure layering) and a handful of **audible dialects the enums cannot name** (12/8 nocturne lilt, 3:2, bossa/partido-alto, mazurka accent, inversion-as-variation). Harmony books are no longer the hole — except Laufey’s borrowed iv, which is still a `surprise` rather than a progression.
 
 This note updates, not copies, `FIDELITY_FINDINGS.md`, `QA_PASS_AND_IMPROVEMENTS.md`, and the Notes:jev diagnosis (`NOTES_JEV_QUALITY.md` — there is no `NOTES_JEV_DIAGNOSIS.md` on `main`).
@@ -16,7 +26,7 @@ This note updates, not copies, `FIDELITY_FINDINGS.md`, `QA_PASS_AND_IMPROVEMENTS
 
 | Grade | Means |
 | --- | --- |
-| *Score* | Public-domain score encoding (Mutopia LilyPond / MIDI). Analysed locally only; `*.mid` stays gitignored under `docs/ref-midi/`. |
+| *Score* | Public-domain Mutopia LilyPond / MIDI. The eight named encodings live in [`docs/ref-midi/public/`](../ref-midi/public/) (not gitignored). `docs/ref-midi/local/` and any other `docs/ref-midi/**/*.mid` stay ignored. |
 | *Analysis* | Freely readable published analysis, liner note, or the musician’s own lesson. URL per claim. |
 | *Inferred* | Stylistic suggestion, not a transcription. Used only when a living-artist score is in copyright. |
 
@@ -29,7 +39,7 @@ This note updates, not copies, `FIDELITY_FINDINGS.md`, `QA_PASS_AND_IMPROVEMENTS
 
 No live Jev in this environment (`GET /api/jev` is not required for this note). Guide sketches are fake: `sketchGuideBar(role, contour)` in the dump script.
 
-**Housekeeping from `FIDELITY_FINDINGS`.** Do not trust `docs/ref-midi/bach_invention_01.mid` or `chopin_nocturne.mid` (wrong pieces). Use Mutopia encodings in `docs/ref-midi/local/` if they are already on disk. `zimmer_time.mid` is a 24-note sketch and was not used.
+**Housekeeping from `FIDELITY_FINDINGS`.** Do not trust leftover `docs/ref-midi/bach_invention_01.mid` or `chopin_nocturne.mid` if they appear locally (wrong pieces). Use the Mutopia files in [`docs/ref-midi/public/`](../ref-midi/public/). `zimmer_time.mid` is a 24-note sketch and was not used — Zimmer stays JSON-only.
 
 ---
 
@@ -62,12 +72,12 @@ Each style: reference → proposed plan → stub comparison → MISSING, ranked 
 
 **References**
 
-| Piece | Why this dial | Evidence |
-| --- | --- | --- |
-| WTC I Prelude in C, BWV 846 | The prelude archetype: one broken-chord figure, inversions, then pedals | *Score* (Mutopia). `STYLE_NOTES`: I – ii4/2 – V6/5 – I … dominant pedal 24–31, tonic pedal 32–35. Figure 1-2-3-4-5-3-4-5 twice a bar. |
-| Invention 1, BWV 772 | The two-voice invention archetype | *Score* (Mutopia). 4/4; 41 % of bars carry two harmonies (`STYLE_NOTES` table). Subject + sequence + cadence. |
+| Piece | Why this dial | Evidence | MIDI | Plan JSON |
+| --- | --- | --- | --- | --- |
+| WTC I Prelude in C, BWV 846 | The prelude archetype: one broken-chord figure, inversions, then pedals | *Score* (Mutopia). `STYLE_NOTES`: I – ii4/2 – V6/5 – I … dominant pedal 24–31, tonic pedal 32–35. Figure 1-2-3-4-5-3-4-5 twice a bar. | [`bach-bwv846-wtk1-prelude1.mid`](../ref-midi/public/bach-bwv846-wtk1-prelude1.mid) | [`bach-bwv846-prelude.json`](reference-plans/bach-bwv846-prelude.json) |
+| Invention 1, BWV 772 | The two-voice invention archetype | *Score* (Mutopia). 4/4; 41 % of bars carry two harmonies (`STYLE_NOTES` table). Subject + sequence + cadence. | [`bach-bwv772-invention-01.mid`](../ref-midi/public/bach-bwv772-invention-01.mid) | [`bach-bwv772-invention-01.json`](reference-plans/bach-bwv772-invention-01.json) |
 
-**Proposed plan — BWV 846 (first 8 sounding bars)**
+**Proposed plan — BWV 846 (first 8 sounding bars).** Canonical file: [`reference-plans/bach-bwv846-prelude.json`](reference-plans/bach-bwv846-prelude.json). Excerpt:
 
 ```json
 {
@@ -101,7 +111,7 @@ Each style: reference → proposed plan → stub comparison → MISSING, ranked 
 
 `phrasing` is proposed (not on the schema). The prelude has no singing line; contour `static` is the honest label for “the figure does not climb.”
 
-**Invention 1 sketch.** `playful_wit` / `spinning_out` / `C_major` / `four_four` / `two_voice_counterpoint` / `chromatic_approach` / `allegro` / `terraced` / `constant` / `straight_in` / `dry`. Bars want `chord2` on sequence steps (~2 in 5). Contours `pendulum` / `leap_fall`. Proposed phrasing: `on_the_beat`.
+**Invention 1 sketch.** Canonical file: [`reference-plans/bach-bwv772-invention-01.json`](reference-plans/bach-bwv772-invention-01.json). `playful_wit` / `spinning_out` / `C_major` / `four_four` / `two_voice_counterpoint` / `chromatic_approach` / `allegro` / `terraced` / `constant` / `straight_in` / `dry`. Bars want `chord2` on sequence steps (~2 in 5). Contours `pendulum` / `leap_fall`. Proposed phrasing: `on_the_beat`.
 
 **Heuristic vs reference**
 
@@ -129,12 +139,12 @@ Bach is the **least blocked** dial. Argmax already sounds like “a prelude.” 
 
 **References**
 
-| Piece | Why this dial | Evidence |
-| --- | --- | --- |
-| Sonata Op. 13 *Pathétique*, II Adagio cantabile | The singing slow movement: 8-bar theme, return an octave higher, denser LH | *Score* + *Analysis* <https://tonic-chord.com/beethoven-piano-sonata-no-8-in-c-minor-pathetique-analysis/>. FIDELITY: ret8 = 1.00; LH 2.5 → 8 onsets; melody MIDI 62 → 73. 2/4, A♭ major. |
-| Sonata Op. 27/2 *Moonlight*, I | The stillness archetype (C♯ minor already in the book) | *Score* / DCML. Bars 1–5: i – i4/2 – bII6 – V7 – i. Triplet ostinato — we approximate on the sixteenth grid. |
+| Piece | Why this dial | Evidence | MIDI | Plan JSON |
+| --- | --- | --- | --- | --- |
+| Sonata Op. 13 *Pathétique*, II Adagio cantabile | The singing slow movement: 8-bar theme, return an octave higher, denser LH | *Score* + *Analysis* <https://tonic-chord.com/beethoven-piano-sonata-no-8-in-c-minor-pathetique-analysis/>. FIDELITY: ret8 = 1.00; LH 2.5 → 8 onsets; melody MIDI 62 → 73. 2/4, A♭ major. | [`beethoven-op13-pathetique-2.mid`](../ref-midi/public/beethoven-op13-pathetique-2.mid) | [`beethoven-op13-pathetique-ii.json`](reference-plans/beethoven-op13-pathetique-ii.json) |
+| Sonata Op. 27/2 *Moonlight*, I | The stillness archetype (C♯ minor already in the book) | *Score* / DCML. Bars 1–5: i – i4/2 – bII6 – V7 – i. Triplet ostinato — we approximate on the sixteenth grid. | [`beethoven-op27-2-moonlight-1.mid`](../ref-midi/public/beethoven-op27-2-moonlight-1.mid) | [`beethoven-op27-2-moonlight-i.json`](reference-plans/beethoven-op27-2-moonlight-i.json) |
 
-**Proposed plan — Pathétique II (first 8)**
+**Proposed plan — Pathétique II (first 8).** Canonical file: [`reference-plans/beethoven-op13-pathetique-ii.json`](reference-plans/beethoven-op13-pathetique-ii.json). Excerpt:
 
 ```json
 {
@@ -167,7 +177,7 @@ Bach is the **least blocked** dial. Argmax already sounds like “a prelude.” 
 
 The 16-bar reference is that 8-bar period **again**, +8va, arrangement level 3. Our 16-bar `period` layout is A A′ B A″ — close, but the B slot is new material the Adagio does not have until later.
 
-**Moonlight I sketch.** `meditative_stillness` / `period` or `spinning_out` / `Cs_minor` / `four_four` / `rolling_nocturne` / `diatonic` / `adagio` / `pp` / `steady` / `constant` / `straight_in` / `full`. First phrase already in the book: `i, i42, bII6, V7`. Proposed phrasing: `long_breathed`. **MISSING:** triplet grid (3:1 inside 4/4).
+**Moonlight I sketch.** Canonical file: [`reference-plans/beethoven-op27-2-moonlight-i.json`](reference-plans/beethoven-op27-2-moonlight-i.json). `meditative_stillness` / `period` / `Cs_minor` / `four_four` / `rolling_nocturne` / `diatonic` / `adagio` / `pp` / `steady` / `constant` / `straight_in` / `full`. First phrase already in the book: `i, i42, bII6, V7`. Proposed phrasing: `long_breathed`. **MISSING:** triplet grid (3:1 inside 4/4).
 
 **Heuristic vs reference**
 
@@ -196,12 +206,12 @@ The stub’s **mode is still the C-minor storm** — the same peak Jev used to h
 
 **References**
 
-| Piece | Why this dial | Evidence |
-| --- | --- | --- |
-| Nocturne Op. 9/2 | The model song-without-words: A A′ B A″, ornamented returns, pickup, unchanging LH | *Score* (Mutopia) + *Analysis* <https://en.wikipedia.org/wiki/Nocturnes,_Op._9_(Chopin)>, <https://paperlesspianoteacher.com/blog/chopin-nocturne-op-9-no-2-analysis>. 12/8, E♭, 34 bars; highest note late (bar 30). FIDELITY: returning run 4, ret4 0.81, pickup of an eighth. |
-| Prelude Op. 28/4 | Slow prelude / stillness; two-harmony bars | *Score*. E minor; FIDELITY / STYLE_NOTES: 27 % split bars, 3-bar holds. |
+| Piece | Why this dial | Evidence | MIDI | Plan JSON |
+| --- | --- | --- | --- | --- |
+| Nocturne Op. 9/2 | The model song-without-words: A A′ B A″, ornamented returns, pickup, unchanging LH | *Score* (Mutopia) + *Analysis* <https://en.wikipedia.org/wiki/Nocturnes,_Op._9_(Chopin)>, <https://paperlesspianoteacher.com/blog/chopin-nocturne-op-9-no-2-analysis>. 12/8, E♭, 34 bars; highest note late (bar 30). FIDELITY: returning run 4, ret4 0.81, pickup of an eighth. | [`chopin-op9-2-nocturne.mid`](../ref-midi/public/chopin-op9-2-nocturne.mid) | [`chopin-op9-2-nocturne.json`](reference-plans/chopin-op9-2-nocturne.json) |
+| Prelude Op. 28/4 | Slow prelude / stillness; two-harmony bars | *Score*. E minor; FIDELITY / STYLE_NOTES: 27 % split bars, 3-bar holds. | [`chopin-op28-4-prelude.mid`](../ref-midi/public/chopin-op28-4-prelude.mid) | [`chopin-op28-4-prelude.json`](reference-plans/chopin-op28-4-prelude.json) |
 
-**Proposed plan — Op. 9/2 (first 8 in 4-bar units)**
+**Proposed plan — Op. 9/2 (first 8 in 4-bar units).** Canonical file: [`reference-plans/chopin-op9-2-nocturne.json`](reference-plans/chopin-op9-2-nocturne.json). Excerpt:
 
 ```json
 {
@@ -234,7 +244,7 @@ The stub’s **mode is still the C-minor storm** — the same peak Jev used to h
 
 Arrangement is **constant** for the first 16 (FIDELITY: the LH pattern never breaks; an étude is a bar-quantised *melody*, not a changing accompaniment). `lift_on_return` is what the stub prefers (60 %) — right for a ballade, wrong for this nocturne.
 
-**Op. 28/4 sketch.** `meditative_stillness` / `period` / `E_minor` / `four_four` / `rolling_nocturne` or `chordal_melody` / `chromatic_approach` / `largo` / `pp` / `steady` / `constant` / `pickup` / `full`. Harmony leans i, iv, V with inner chromatic descent — **MISSING:** inner-voice line as a plan field.
+**Op. 28/4 sketch.** Canonical file: [`reference-plans/chopin-op28-4-prelude.json`](reference-plans/chopin-op28-4-prelude.json). `meditative_stillness` / `period` / `E_minor` / `four_four` / `rolling_nocturne` / `chromatic_approach` / `largo` / `pp` / `steady` / `constant` / `pickup` / `full`. Harmony leans i, iv, V with inner chromatic descent — **MISSING:** inner-voice line as a plan field.
 
 **Heuristic vs reference**
 
@@ -263,12 +273,12 @@ Arrangement is **constant** for the first 16 (FIDELITY: the LH pattern never bre
 
 **References**
 
-| Piece | Why this dial | Evidence |
-| --- | --- | --- |
-| Arabesque 1 | Parallel first-inversion tiles, compound flow | *Score* (Mutopia). STYLE_NOTES: IV6–iii6–ii6–I6; unresolved V9; bars duplicated (6–7 = 8–9). 4/4 with flowing 16ths; 9/8 is the compound-triple cousin in priors. |
-| Clair de lune | Arch, I6 opening, ii9 pedal, fade, no V–I | *Score*. STYLE_NOTES: I6 (no root in the bass), four bars of ii9, close I – iii – bIII6 – I, *ppp morendo*. FIDELITY: downbeats 13 / 69 / 19 % attacked / tied / silent; LH 1 → 4.8. |
+| Piece | Why this dial | Evidence | MIDI | Plan JSON |
+| --- | --- | --- | --- | --- |
+| Arabesque 1 | Parallel first-inversion tiles, compound flow | *Score* (Mutopia). STYLE_NOTES: IV6–iii6–ii6–I6; unresolved V9; bars duplicated (6–7 = 8–9). 4/4 with flowing 16ths; 9/8 is the compound-triple cousin in priors. | [`debussy-l66-arabesque-1.mid`](../ref-midi/public/debussy-l66-arabesque-1.mid) | [`debussy-l66-arabesque-1.json`](reference-plans/debussy-l66-arabesque-1.json) |
+| Clair de lune | Arch, I6 opening, ii9 pedal, fade, no V–I | *Score*. STYLE_NOTES: I6 (no root in the bass), four bars of ii9, close I – iii – bIII6 – I, *ppp morendo*. FIDELITY: downbeats 13 / 69 / 19 % attacked / tied / silent; LH 1 → 4.8. | [`debussy-l75-clair-de-lune.mid`](../ref-midi/public/debussy-l75-clair-de-lune.mid) | [`debussy-l75-clair-de-lune.json`](reference-plans/debussy-l75-clair-de-lune.json) |
 
-**Proposed plan — Arabesque 1 (first 8)**
+**Proposed plan — Arabesque 1 (first 8).** Canonical file: [`reference-plans/debussy-l66-arabesque-1.json`](reference-plans/debussy-l66-arabesque-1.json). Excerpt:
 
 ```json
 {
@@ -299,7 +309,7 @@ Arrangement is **constant** for the first 16 (FIDELITY: the LH pattern never bre
 }
 ```
 
-**Clair de lune sketch.** `dreamy_haze` / `arch_return` / `Db_major` / `nine_eight` / `wash_arpeggio` or `chordal_melody` / `pentatonic` / `andante` / `pp` / `arch` / `lift_on_return` / `straight_in` / `full`. Proposed phrasing: `long_breathed`. Harmony: I6, I6, vi, V43 then a `pedal` slot of ii9×4. Close: I, iii, bIII6, I — already a verified phrase.
+**Clair de lune sketch.** Canonical file: [`reference-plans/debussy-l75-clair-de-lune.json`](reference-plans/debussy-l75-clair-de-lune.json). `dreamy_haze` / `arch_return` / `Db_major` / `nine_eight` / `wash_arpeggio` / `pentatonic` / `andante` / `pp` / `arch` / `lift_on_return` / `straight_in` / `full`. Proposed phrasing: `long_breathed`. Opening I6 is in the committed 8 bars; the later ii9×4 pedal and I – iii – bIII6 – I close stay in `_stretch`.
 
 **Heuristic vs reference**
 
@@ -326,14 +336,14 @@ The **book has the Arabesque phrase** (`open: IV6, iii6, ii6, I6`) and the Clair
 
 ### 2.5 Philip Glass
 
-**References** (scores in copyright; no MIDI in repo)
+**References** (scores in copyright; JSON only, no MIDI)
 
-| Piece | Why this dial | Evidence |
-| --- | --- | --- |
-| *Glassworks*: “Opening” | The keyboard-accessible loop: three 4-bar groups × 4, 3:2, F minor | *Analysis* <https://en.wikipedia.org/wiki/Glassworks_(composition)>; Wu thesis <https://digital.library.unt.edu/ark:/67531/metadc10975/>. ABC:&#124;&#124;ABC; triplet eighths over duple eighths over whole-note bass. Hooktheory user tab: F minor / E♭ areas — *inferred* chords, not a score. |
-| *Metamorphosis Two* | Quiet oscillation → fast four-note arpeggios → quiet | *Analysis* <https://www.parlancechamberconcerts.org/individual-program-notes/phillip-glass-(born-1937)/metamorphosis-ii>. Exact chords **not** encoded (`STYLE_NOTES`: not verifiable without scores). |
+| Piece | Why this dial | Evidence | MIDI | Plan JSON |
+| --- | --- | --- | --- | --- |
+| *Glassworks*: “Opening” | The keyboard-accessible loop: three 4-bar groups × 4, 3:2, F minor | *Analysis* <https://en.wikipedia.org/wiki/Glassworks_(composition)>; Wu thesis <https://digital.library.unt.edu/ark:/67531/metadc10975/>. ABC:&#124;&#124;ABC; triplet eighths over duple eighths over whole-note bass. Hooktheory user tab: F minor / E♭ areas — *inferred* chords, not a score. | **none** (in copyright) | [`glass-glassworks-opening.json`](reference-plans/glass-glassworks-opening.json) |
+| *Metamorphosis Two* | Quiet oscillation → fast four-note arpeggios → quiet | *Analysis* <https://www.parlancechamberconcerts.org/individual-program-notes/phillip-glass-(born-1937)/metamorphosis-ii>. Exact chords **not** encoded (`STYLE_NOTES`: not verifiable without scores). | **none** | [`glass-metamorphosis-two.json`](reference-plans/glass-metamorphosis-two.json) |
 
-**Proposed plan — Opening (one 12-bar ABC, then the form repeats it)**
+**Proposed plan — Opening (8-bar stand-in for one ABC cell).** Canonical file: [`reference-plans/glass-glassworks-opening.json`](reference-plans/glass-glassworks-opening.json). Excerpt:
 
 ```json
 {
@@ -366,7 +376,7 @@ The **book has the Arabesque phrase** (`open: IV6, iii6, ii6, I6`) and the Clair
 
 Chords are **inferred** from published loop descriptions and Hooktheory’s crowd tab (F minor, E♭/A♭ areas), not from a score. The book’s verified Tirol / Étude 17 cycle `i–bVI–bIII–V` is the honest closed stand-in. Wu describes three small loops plus a link — that is `additive_loop` plus a `surprise` breaker, which the stub already does.
 
-**Metamorphosis Two sketch.** `meditative_stillness` / `arch_return` or `additive_loop` / (key *inferred*, not claimed) / `four_four` / `melody_over_ostinato` → a faster cell in the middle → quiet. `peak_then_bare` or `terraced_blocks`. Do not invent the ostinato’s pitches.
+**Metamorphosis Two sketch.** Canonical file: [`reference-plans/glass-metamorphosis-two.json`](reference-plans/glass-metamorphosis-two.json). `meditative_stillness` / `arch_return` / (key *not claimed*; JSON uses A minor only so `parsePlan` has a key) / `four_four` / `melody_over_ostinato` → a faster cell in the middle → quiet. `peak_then_bare`. Harmony is a book-legal stand-in. Do not invent the ostinato’s pitches.
 
 **Heuristic vs reference**
 
@@ -391,14 +401,14 @@ Chords are **inferred** from published loop descriptions and Hooktheory’s crow
 
 ### 2.6 Hans Zimmer
 
-**References** (scores in copyright; no MIDI in repo)
+**References** (scores in copyright; JSON only, no MIDI)
 
-| Piece | Why this dial | Evidence |
-| --- | --- | --- |
-| “Time” (*Inception*) | Same 4-chord block × ~13, layers accumulate, peak ~70–77 %, yank back to bare piano | *Analysis* (Lehman 2016) <https://franklehman.com/wp-content/uploads/2021/01/2016-Manufacturing-the-Epic-Score-Music-Epic-Film-Routledge-1.pdf>. FIDELITY already quotes this. Exact RN **not** taken from a score. |
-| “Cornfield Chase” (*Interstellar*) | 4-bar F–G–Am–G loop; melody is one repeated interval; theme → pulse → drive → B×3 → high layer → fade | *Analysis* (Berklee scoring paper, FIDELITY URL). |
+| Piece | Why this dial | Evidence | MIDI | Plan JSON |
+| --- | --- | --- | --- | --- |
+| “Time” (*Inception*) | Same 4-chord block × ~13, layers accumulate, peak ~70–77 %, yank back to bare piano | *Analysis* (Lehman 2016) <https://franklehman.com/wp-content/uploads/2021/01/2016-Manufacturing-the-Epic-Score-Music-Epic-Film-Routledge-1.pdf>. FIDELITY already quotes this. Exact RN **not** taken from a score. | **none** (in copyright) | [`zimmer-time.json`](reference-plans/zimmer-time.json) |
+| “Cornfield Chase” (*Interstellar*) | 4-bar F–G–Am–G loop; melody is one repeated interval; theme → pulse → drive → B×3 → high layer → fade | *Analysis* (Berklee scoring paper, FIDELITY URL). | **none** | [`zimmer-cornfield-chase.json`](reference-plans/zimmer-cornfield-chase.json) |
 
-**Proposed plan — “Time” as a 16-bar piano reduction (*inferred* harmony)**
+**Proposed plan — “Time” as a 16-bar piano reduction (*inferred* harmony).** Canonical file: [`reference-plans/zimmer-time.json`](reference-plans/zimmer-time.json). The committed file repeats the 4-bar cell; excerpt is one pass:
 
 ```json
 {
@@ -427,7 +437,7 @@ Chords are **inferred** from published loop descriptions and Hooktheory’s crow
 
 The four-bar cell repeats; arrangement levels 0 → 3 → 0. We **do not** write i–bVI–bIII–bVII (banned pop loop). The legal stand-in already in the book is **i–bVI–bVII–V** (STYLE_NOTES / brief). Lehman’s point is the *process* (same tonal block, new layer), not a specific RN we should invent. Key is *inferred* (common piano reductions sit in A minor); not claimed from a score.
 
-**Cornfield Chase sketch.** `heroic_bright` or `hypnotic_pulse` / `layered_build` / F major *inferred* / `four_four` / `melody_over_ostinato` / `late_surge` / `peak_then_bare`. Loop F–G–Am–G is I–V–vi–V, legal (not the banned I–V–vi–IV). Melody = one interval: contour `static` / `pendulum`.
+**Cornfield Chase sketch.** Canonical file: [`reference-plans/zimmer-cornfield-chase.json`](reference-plans/zimmer-cornfield-chase.json). `heroic_bright` / `layered_build` / F major *inferred* / `four_four` / `melody_over_ostinato` / `late_surge` / `peak_then_bare`. Loop F–G–Am–G is I–V–vi–V, legal (not the banned I–V–vi–IV). Melody = one interval: contour `static` / `pendulum`.
 
 **Heuristic vs reference**
 
@@ -452,14 +462,14 @@ The four-bar cell repeats; arrangement levels 0 → 3 → 0. We **do not** write
 
 ### 2.7 Laufey
 
-**References** (scores in copyright; no MIDI in repo)
+**References** (scores in copyright; JSON only, no MIDI)
 
-| Piece | Why this dial | Evidence |
-| --- | --- | --- |
-| “From the Start” | Song-shaped jazz-pop piano: bossa, D♭, ii–V–I colour, intro | *Analysis* (not a score): Hooktheory <https://www.hooktheory.com/theorytab/view/laufey/from-the-start> (D♭, 4/4); Song Exploder interview (her own words: written after listening to bossa nova records) <https://songexploder.net/wp-content/uploads/2023/09/Song-Exploder-Laufey-Transcript.pdf>. Crowd / lesson sources describe E♭m9–A♭13–D♭maj7 as the hook (ii9–V13–Imaj7). **Not** read from commercial sheet; no price or edition claimed. |
-| Harmonic signature across songs | Borrowed minor iv | *Analysis* <https://katiekeyboard.substack.com/p/laufey-and-lieder-harmonic-structure>: I–I7–vi7–iv6 and kin. This is **her language**, not a claim that “From the Start” itself uses iv. FIDELITY already noted our major book has `iv` only under `surprises`. |
+| Piece | Why this dial | Evidence | MIDI | Plan JSON |
+| --- | --- | --- | --- | --- |
+| “From the Start” | Song-shaped jazz-pop piano: bossa, D♭, ii–V–I colour, intro | *Analysis* (not a score): Hooktheory <https://www.hooktheory.com/theorytab/view/laufey/from-the-start> (D♭, 4/4); Song Exploder interview (her own words: written after listening to bossa nova records) <https://songexploder.net/wp-content/uploads/2023/09/Song-Exploder-Laufey-Transcript.pdf>. Crowd / lesson sources describe E♭m9–A♭13–D♭maj7 as the hook (ii9–V13–Imaj7). **Not** read from commercial sheet; no price or edition claimed. | **none** (in copyright) | [`laufey-from-the-start.json`](reference-plans/laufey-from-the-start.json) |
+| Harmonic signature across songs | Borrowed minor iv | *Analysis* <https://katiekeyboard.substack.com/p/laufey-and-lieder-harmonic-structure>: I–I7–vi7–iv6 and kin. This is **her language**, not a claim that “From the Start” itself uses iv. FIDELITY already noted our major book has `iv` only under `surprises`. | **none** | [`laufey-borrowed-iv-language.json`](reference-plans/laufey-borrowed-iv-language.json) |
 
-**Proposed plan — “From the Start” piano reduction (*inferred*)**
+**Proposed plan — “From the Start” piano reduction (*inferred*).** Canonical file: [`reference-plans/laufey-from-the-start.json`](reference-plans/laufey-from-the-start.json). Excerpt:
 
 ```json
 {
@@ -492,7 +502,7 @@ The four-bar cell repeats; arrangement levels 0 → 3 → 0. We **do not** write
 
 `V13` and `ii9` exist. Tempo: published analyses disagree on a single bpm (Hooktheory ~82 in FIDELITY; other listings call it a “quick bossa”). We label **andante** and do not pick a metronome number. Groove is the hole, not the RN.
 
-A second, language-level sketch (not “From the Start”): `lyrical_song` / `period` / major / `chordal_melody` with a phrase `I, V7_of_IV, vi7, iv6` — the katiekeyboard family. That progression is **still not a head/phrase in `laufey.harmony.major`**.
+A second, language-level sketch (not “From the Start”): [`reference-plans/laufey-borrowed-iv-language.json`](reference-plans/laufey-borrowed-iv-language.json). `lyrical_song` / `period` / D♭ / `chordal_melody` with `I, V7_of_IV, vi7, iv6` — the katiekeyboard family. That progression is **still not a head/phrase in `laufey.harmony.major`**.
 
 **Heuristic vs reference**
 
@@ -522,14 +532,14 @@ Honesty: we did not hear a keyed Notes:guide pass (QA #5). A fake guide sketch o
 
 **References** (shop scores exist; contents not seen — `STYLE_NOTES`)
 
-| Piece / lesson | Why this dial | Evidence |
-| --- | --- | --- |
-| *City in the Sky* (his lesson) | Modal mixture as the hook | *Own words* (Flypaper / Soundfly): A♭maj7 (bVI from C minor) against Fmaj7 (IV from C major), then Cmaj7(♯5) with F6, close vi – V – ♯ivø7 – biii – ii. |
-| Displacement lesson | 5+5+6, 7+5+4, 4+3+5+4 over F–9 / C–9 | *Own words*, same syllabus. Encoded as `displaced_arpeggio`. |
+| Piece / lesson | Why this dial | Evidence | MIDI | Plan JSON |
+| --- | --- | --- | --- | --- |
+| *City in the Sky* (his lesson) | Modal mixture as the hook | *Own words* (Flypaper / Soundfly): A♭maj7 (bVI from C minor) against Fmaj7 (IV from C major), then Cmaj7(♯5) with F6, close vi – V – ♯ivø7 – biii – ii. | **none** (shop scores unseen; no MIDI) | [`fox-city-in-the-sky.json`](reference-plans/fox-city-in-the-sky.json) |
+| Displacement lesson | 5+5+6, 7+5+4, 4+3+5+4 over F–9 / C–9 | *Own words*, same syllabus. Encoded as `displaced_arpeggio`. | **none** | [`fox-displacement-lesson.json`](reference-plans/fox-displacement-lesson.json) |
 
 No published form analysis of the miniatures beyond AABA / loops in that syllabus. Unverified: “felt piano,” gospel (already struck from the brief).
 
-**Proposed plan — *City in the Sky* lesson reduction**
+**Proposed plan — *City in the Sky* lesson reduction.** Canonical file: [`reference-plans/fox-city-in-the-sky.json`](reference-plans/fox-city-in-the-sky.json). Excerpt:
 
 ```json
 {
@@ -562,7 +572,7 @@ No published form analysis of the miniatures beyond AABA / loops in that syllabu
 
 Tag would continue biii7 – ii – Imaj7s11 / I6_9 (finals already in the book).
 
-**Displacement sketch.** Same harmony family on `i9` / `iv9`; texture `displaced_arpeggio`; character `flowing_perpetual` or `dreamy_haze`. Groupings are in the texture prose, not a plan field.
+**Displacement sketch.** Canonical file: [`reference-plans/fox-displacement-lesson.json`](reference-plans/fox-displacement-lesson.json). Same harmony family on `i9` / `iv9`; texture `displaced_arpeggio`; character `dreamy_haze`. Groupings are in the texture prose, not a plan field.
 
 **Heuristic vs reference**
 
@@ -670,15 +680,19 @@ QA #5 still stands: this environment did not hear live Guide.
 
 ---
 
-## 6. Dumping heuristic plans (local)
+## 6. Local scripts
 
 ```text
+# HeuristicPlanner samples (JSON only; no MIDI)
 npx --yes tsx scripts/dump-heuristic-plans.ts
 npx --yes tsx scripts/dump-heuristic-plans.ts --styles chopin,laufey --bars 16 --seeds 1,7,19 --pick sample --guide-sketch
 npx --yes tsx scripts/dump-heuristic-plans.ts --pick argmax --out /tmp/plans.json
+
+# parsePlan every committed reference sketch
+npx --yes tsx scripts/validate-reference-plans.ts
 ```
 
-Needs `npm install`. Writes JSON only. Does not touch `docs/ref-midi/` or emit `*.mid`.
+Needs `npm install`. Neither script writes MIDI. Public-domain encodings already in [`docs/ref-midi/public/`](../ref-midi/public/) are fetched from Mutopia, not generated.
 
 ---
 

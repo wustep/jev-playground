@@ -1,0 +1,73 @@
+{
+  "id": "fox-displacement-lesson",
+  "piece": "Elijah Fox, displacement lesson (5+5+6 / 7+5+4)",
+  "whyHere": "Uneven accent groupings over minor-ninth vamps \u2014 encoded as displaced_arpeggio.",
+  "evidence": "own_words",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. His syllabus regroups continuous sixteenths over F\u20139 and C\u20139. Groupings live in texture prose, not a plan field.",
+  "_stretch": [
+    "proposed phrasing: on_the_beat",
+    "accent-grouping sub-label: 5+5+6 | 7+5+4 | 4+3+5+4"
+  ],
+  "plan": {
+    "version": 1,
+    "style": "elijah_fox",
+    "character": "dreamy_haze",
+    "form": "vamp_and_tag",
+    "key": "C_major",
+    "meter": "four_four",
+    "texture": "displaced_arpeggio",
+    "palette": "pentatonic",
+    "tempo": "andante",
+    "dynamics": "p",
+    "dynamicShape": "waves",
+    "defaultInstrument": "grand_piano",
+    "arrangement": "build",
+    "opening": "vamp_intro",
+    "pedal": "full",
+    "bars": [
+      {
+        "chord": "i9",
+        "role": "statement",
+        "contour": "wave"
+      },
+      {
+        "chord": "i9",
+        "role": "restatement",
+        "contour": "wave"
+      },
+      {
+        "chord": "iv9",
+        "role": "development",
+        "contour": "arch"
+      },
+      {
+        "chord": "iv9",
+        "role": "restatement",
+        "contour": "wave"
+      },
+      {
+        "chord": "i9",
+        "role": "development",
+        "contour": "rise"
+      },
+      {
+        "chord": "iv9",
+        "role": "contrast",
+        "contour": "arch"
+      },
+      {
+        "chord": "i9",
+        "role": "dissolve",
+        "contour": "fall"
+      },
+      {
+        "chord": "i_add9",
+        "role": "cadence",
+        "contour": "static"
+      }
+    ]
+  }
+}

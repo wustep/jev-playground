@@ -1,0 +1,74 @@
+{
+  "id": "beethoven-op27-2-moonlight-i",
+  "piece": "Beethoven, Sonata Op. 27/2 Moonlight, I",
+  "whyHere": "The stillness archetype already in the book (C-sharp minor, Neapolitan sixth).",
+  "evidence": "score",
+  "midi": "docs/ref-midi/public/beethoven-op27-2-moonlight-1.mid",
+  "midiSource": "https://www.mutopiaproject.org/ftp/BeethovenLv/O27/moonlight/moonlight-mids.zip",
+  "midiLicense": "CC BY-SA 2.5 (Mutopia-2007/02/11-276); this file is movement 1 only",
+  "notes": "Bars 1\u20135 follow the verified phrase i \u2013 i42 \u2013 bII6 \u2013 V7 \u2013 i (STYLE_NOTES / DCML). Triplet ostinato is approximated on the sixteenth grid.",
+  "_stretch": [
+    "proposed phrasing: long_breathed",
+    "triplet subdivision (3:1 inside 4/4) \u2014 no pulse label",
+    "stretch: 12/8 at adagio is a closer pulse with the wrong meter name"
+  ],
+  "plan": {
+    "version": 1,
+    "style": "beethoven",
+    "character": "meditative_stillness",
+    "form": "period",
+    "key": "Cs_minor",
+    "meter": "four_four",
+    "texture": "rolling_nocturne",
+    "palette": "diatonic",
+    "tempo": "adagio",
+    "dynamics": "pp",
+    "dynamicShape": "steady",
+    "defaultInstrument": "grand_piano",
+    "arrangement": "constant",
+    "opening": "straight_in",
+    "pedal": "full",
+    "bars": [
+      {
+        "chord": "i",
+        "role": "statement",
+        "contour": "static"
+      },
+      {
+        "chord": "i42",
+        "role": "development",
+        "contour": "static"
+      },
+      {
+        "chord": "bII6",
+        "role": "development",
+        "contour": "dip"
+      },
+      {
+        "chord": "V7",
+        "role": "half_cadence",
+        "contour": "fall"
+      },
+      {
+        "chord": "i",
+        "role": "restatement",
+        "contour": "static"
+      },
+      {
+        "chord": "i42",
+        "role": "development",
+        "contour": "static"
+      },
+      {
+        "chord": "bII6",
+        "role": "climax",
+        "contour": "arch"
+      },
+      {
+        "chord": "i",
+        "role": "cadence",
+        "contour": "fall"
+      }
+    ]
+  }
+}

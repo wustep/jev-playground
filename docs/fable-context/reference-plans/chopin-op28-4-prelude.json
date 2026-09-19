@@ -1,0 +1,75 @@
+{
+  "id": "chopin-op28-4-prelude",
+  "piece": "Chopin, Prelude Op. 28/4",
+  "whyHere": "Slow prelude / stillness; two-harmony bars and a chromatic inner descent.",
+  "evidence": "score",
+  "midi": "docs/ref-midi/public/chopin-op28-4-prelude.mid",
+  "midiSource": "https://www.mutopiaproject.org/ftp/ChopinFF/O28/Chop-28-4/Chop-28-4.mid",
+  "midiLicense": "Public Domain (Mutopia-2016/10/28-468)",
+  "notes": "Holds on i with colour changes; inner chromatic line is not a plan field. STYLE_NOTES: 27% split bars, 3-bar holds.",
+  "_stretch": [
+    "proposed phrasing: long_breathed",
+    "inner chromatic voice as a plan field",
+    "chordal_melody slides by half-steps but is Fox/Debussy-coded"
+  ],
+  "plan": {
+    "version": 1,
+    "style": "chopin",
+    "character": "meditative_stillness",
+    "form": "period",
+    "key": "E_minor",
+    "meter": "four_four",
+    "texture": "rolling_nocturne",
+    "palette": "chromatic_approach",
+    "tempo": "largo",
+    "dynamics": "pp",
+    "dynamicShape": "steady",
+    "defaultInstrument": "grand_piano",
+    "arrangement": "constant",
+    "opening": "pickup",
+    "pedal": "full",
+    "bars": [
+      {
+        "chord": "i",
+        "role": "statement",
+        "contour": "fall"
+      },
+      {
+        "chord": "i",
+        "role": "development",
+        "contour": "static"
+      },
+      {
+        "chord": "iv",
+        "role": "development",
+        "contour": "fall"
+      },
+      {
+        "chord": "V",
+        "role": "half_cadence",
+        "contour": "dip"
+      },
+      {
+        "chord": "i",
+        "role": "restatement",
+        "contour": "fall"
+      },
+      {
+        "chord": "iv6",
+        "role": "development",
+        "contour": "static"
+      },
+      {
+        "chord": "i64",
+        "role": "climax",
+        "contour": "arch",
+        "chord2": "V7"
+      },
+      {
+        "chord": "i",
+        "role": "cadence",
+        "contour": "fall"
+      }
+    ]
+  }
+}

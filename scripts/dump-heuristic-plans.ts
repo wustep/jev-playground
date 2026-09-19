@@ -3,6 +3,8 @@
  * Local-friendly dump of HeuristicPlanner CompositionPlan JSON.
  *
  * Prints (or writes) closed-label plans only. Never writes MIDI.
+ * Public-domain Mutopia encodings (older dials only) live in
+ * docs/ref-midi/public/; living-artist sketches are JSON-only.
  *
  *   npx --yes tsx scripts/dump-heuristic-plans.ts
  *   npx --yes tsx scripts/dump-heuristic-plans.ts --styles bach,chopin --bars 16 --seeds 1,7,19 --pick sample

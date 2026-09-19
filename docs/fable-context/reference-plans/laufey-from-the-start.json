@@ -1,0 +1,79 @@
+{
+  "id": "laufey-from-the-start",
+  "piece": "Laufey, From the Start \u2014 piano-reduction sketch",
+  "whyHere": "Song-shaped jazz-pop piano: bossa feel, D-flat, ii\u2013V\u2013I colour, intro.",
+  "evidence": "inferred",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. Not read from commercial sheet. Hooktheory + Song Exploder (her own words: bossa nova records) + lesson sources describing Ebm9\u2013Ab13\u2013Dbmaj7 as ii9\u2013V13\u2013Imaj7. This song is not claimed to use borrowed iv.",
+  "_stretch": [
+    "proposed phrasing: breathing",
+    "bossa_comp texture (bass 1 + 2-and, partido-alto shells)",
+    "feel: bossa / swing eighths",
+    "ii9 / V13 belong in heads, not only as available chords"
+  ],
+  "plan": {
+    "version": 1,
+    "style": "laufey",
+    "character": "warm_groove",
+    "form": "period",
+    "key": "Db_major",
+    "meter": "four_four",
+    "texture": "lush_voicings",
+    "palette": "diatonic",
+    "tempo": "andante",
+    "dynamics": "mp",
+    "dynamicShape": "arch",
+    "defaultInstrument": "grand_piano",
+    "arrangement": "lift_on_return",
+    "opening": "vamp_intro",
+    "pedal": "half",
+    "bars": [
+      {
+        "chord": "ii9",
+        "role": "statement",
+        "contour": "arch",
+        "chord2": "V13"
+      },
+      {
+        "chord": "Imaj7",
+        "role": "restatement",
+        "contour": "fall"
+      },
+      {
+        "chord": "ii9",
+        "role": "development",
+        "contour": "wave",
+        "chord2": "V13"
+      },
+      {
+        "chord": "Imaj7",
+        "role": "half_cadence",
+        "contour": "dip"
+      },
+      {
+        "chord": "ii9",
+        "role": "restatement",
+        "contour": "arch",
+        "chord2": "V13"
+      },
+      {
+        "chord": "Imaj7",
+        "role": "development",
+        "contour": "fall"
+      },
+      {
+        "chord": "ii9",
+        "role": "climax",
+        "contour": "arch",
+        "chord2": "V13"
+      },
+      {
+        "chord": "Imaj7",
+        "role": "cadence",
+        "contour": "fall"
+      }
+    ]
+  }
+}
