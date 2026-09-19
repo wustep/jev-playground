@@ -16,6 +16,12 @@ Fable, 2026-09-19. Follow-up to PR #38 (melody memory + closed bass). Stephen: n
 
 No new op. No free-text pitches.
 
+## Follow-up (Q1 + Q7)
+
+6. **Melody overlay only.** Notes:jev swaps `treble[0]` (or the skyline of a chordal singing line) and leaves renderPlan’s remaining RH inner voices and the full LH texture in place. A closed `bass_pattern` is still asked and realized for the debug trace; it is not written onto the score.
+
+7. **Gapped-palette degrees.** Degree names are functional (tonic = 1, dominant = 5), not indexes into the palette scale. On a 7-note (possibly chord-bent) scale we still read `scale[degree]`. On pentatonic / whole-tone / blues we take the intended diatonic pitch class and snap to the nearest palette tone. Documented examples (C major pentatonic): tonic C, dominant G — not the old wrap onto A. See `pitchClassForDegree` in `src/render/jevNotes.ts`.
+
 ## What is still hard
 
 **Parallel Choices.** `pitch_1..4` (and rhythm vs pitches vs bass) still run in one POST and cannot see each other. Voice leading can only move register, not pick a better degree. Priors can only tilt a sample. A bar whose four marginals are tonic / leading / tonic_high / dominant_low will still be that tune, just in a closer octave. Theme returns help; new-material bars can still jump in *scale-degree* space. The honest fix is sequential questions or a closed motif/contour Choice — both cost latency or schema. This cut stays on-thesis: labels in, code spells.

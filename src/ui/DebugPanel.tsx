@@ -107,7 +107,7 @@ export function DebugPanel({ plan, score, input, trace, exchanges, matchExchange
               <tr><th>requests</th><td>{live ? trace.requests : `0 sent (${exchanges.length} would be)`} · {Math.round(trace.latencyMs)} ms{trace.inputTokens ? ` · ${trace.inputTokens} input tokens` : ''}</td></tr>
               <tr><th>policy</th><td><code>{input.pick}</code> · seed <code>{input.seed}</code> · bars <code>{String(input.bars)}</code> · style brief <code>{input.brief ? 'on' : 'off'}</code></td></tr>
               <tr><th>render</th><td>{score.keySignature} · {score.meter.num}/{score.meter.den} · ♩={score.bpm} · pedal {score.pedal}</td></tr>
-              <tr><th>notes</th><td>{notes === 'jev' ? 'Jev melody + bass (closed degrees as the plan; register is voice-led in code)' : 'code renderer (renderPlan)'}</td></tr>
+              <tr><th>notes</th><td>{notes === 'jev' ? 'Jev singing line over renderPlan accompaniment (inner RH + full LH stay; closed degrees as the plan; register is voice-led in code)' : 'code renderer (renderPlan)'}</td></tr>
               {edited && <tr><th>note</th><td>Plan JSON was edited by hand — confidences hidden, payloads rebuilt for the edited plan.</td></tr>}
               {notice && <tr><th>notice</th><td>{notice}</td></tr>}
             </tbody>

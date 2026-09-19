@@ -1,4 +1,4 @@
-// Closed enums for the Debug-only “Jev writes notes” experiment.
+// Closed enums for the Debug-only “Jev writes the tune” experiment.
 //
 // Jev never sees free-form MIDI. It picks a bar-filling rhythm (four slots)
 // and four scale degrees; code turns those labels into Score notes. Illegal
