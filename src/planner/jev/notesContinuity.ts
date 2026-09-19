@@ -8,24 +8,29 @@ import {
   MELODY_DEGREES,
   PHRASE_RHYTHMS,
   lastSoundingDegree,
+  melodyAllowsLeap,
   type BassPatternId,
   type MelodyDegreeId,
   type MelodyMemoryBar,
 } from '../../plan/notes.js'
 import {
+  ARRANGEMENTS,
   BAR_ROLES,
+  CHARACTERS,
   CHORDS,
   CONTOURS,
+  TEXTURES,
+  type ArrangementId,
   type BarPlan,
   type BarRoleId,
+  type CharacterId,
   type ChordId,
+  type TextureId,
 } from '../../plan/schema.js'
 import type { Json } from './systemOne.js'
 
-const CONTRAST_ROLES: ReadonlySet<BarRoleId> = new Set<BarRoleId>(['contrast', 'climax', 'surprise'])
-
 export function melodyMotionHint(role: BarRoleId): 'stepwise_echo' | 'contrast_ok' {
-  return CONTRAST_ROLES.has(role) ? 'contrast_ok' : 'stepwise_echo'
+  return melodyAllowsLeap(role) ? 'contrast_ok' : 'stepwise_echo'
 }
 
 export function describeDegree(degree: MelodyDegreeId): string {
@@ -64,6 +69,9 @@ export interface NotesContinuityInput {
   nextChord?: ChordId
   melodySoFar: readonly MelodyMemoryBar[]
   bassSoFar?: readonly BassPatternId[]
+  character?: CharacterId
+  texture?: TextureId
+  arrangement?: ArrangementId
 }
 
 export interface NotesContinuityState {
@@ -73,11 +81,14 @@ export interface NotesContinuityState {
   bass_so_far: Json[]
   this_bar: Json
   melody_motion: 'stepwise_echo' | 'contrast_ok'
+  piece_frame: Json
+  motif_echo: string | null
 }
 
 export function notesContinuityState(input: NotesContinuityInput): NotesContinuityState {
   const last = lastSoundingDegree(input.melodySoFar.at(-1)?.degrees ?? [])
   const hint = melodyMotionHint(input.bar.role)
+  const hasPrior = input.melodySoFar.length > 0
   return {
     melody_so_far: describeMelodySoFar(input.melodySoFar),
     last_sounding_degree: last ? describeDegree(last) : null,
@@ -92,32 +103,46 @@ export function notesContinuityState(input: NotesContinuityInput): NotesContinui
       melodic_shape: CONTOURS[input.bar.contour],
     },
     melody_motion: hint,
+    piece_frame: {
+      ...(input.character ? { character: CHARACTERS[input.character] } : {}),
+      ...(input.texture ? { texture: TEXTURES[input.texture] } : {}),
+      ...(input.arrangement ? { arrangement: ARRANGEMENTS[input.arrangement] } : {}),
+    },
+    motif_echo: hasPrior
+      ? 'Echo the rhythm id and degree-shape already written in melody_so_far unless this_bar.role is contrast, climax, or surprise.'
+      : null,
   }
 }
 
-export function notesTask(barNumber: number, hasPrior: boolean): string {
+export function notesTask(barNumber: number, hasPrior: boolean, lyrical = false): string {
   const continueFrom = hasPrior
-    ? 'Continue the right-hand melody from `melody_so_far` and the left-hand bass from `bass_so_far`.'
-    : 'Write the opening right-hand melody and left-hand bass; `melody_so_far` is empty.'
-  return `${continueFrom} This is bar ${barNumber} of a short keyboard piece. Prefer stepwise motion from \`last_sounding_degree\` and a motivic echo of the earlier rhythm / degree shape unless \`this_bar.role\` is contrast, climax, or surprise. Software will place your choices on a sixteenth-note grid; pick only from the options given — never invent pitches or durations.`
+    ? 'Continue the right-hand melody from `melody_so_far` and the left-hand bass from `bass_so_far`. Echo the motif — the earlier rhythm and degree shape — unless `this_bar.role` is contrast, climax, or surprise.'
+    : 'Write the opening right-hand melody and left-hand bass; `melody_so_far` is empty. Plant a motif the later bars can echo.'
+  const air = lyrical
+    ? ' This character is lyrical or song-like: prefer a long tone and a rest so the line can breathe; do not fill every slot with even attacks.'
+    : ''
+  return `${continueFrom} This is bar ${barNumber} of a short keyboard piece. Use the style in \`requested_style\`, the character, texture and arrangement in \`piece\`, and the phrase role in \`this_bar\`. Prefer stepwise motion from \`last_sounding_degree\`; avoid random leaps.${air} Software will place your choices on a sixteenth-note grid; pick only from the options given — never invent pitches or durations.`
 }
 
-export function melodyRhythmInstructions(barNumber: number, hint: 'stepwise_echo' | 'contrast_ok'): string {
+export function melodyRhythmInstructions(barNumber: number, hint: 'stepwise_echo' | 'contrast_ok', lyrical = false): string {
   const motion =
     hint === 'contrast_ok'
       ? 'This bar’s role allows a new figure or a leap.'
       : 'Prefer a motivic echo of the rhythm already chosen in `melody_so_far` unless the line must cadence or rest.'
-  return `Which rhythm should the right-hand melody of bar ${barNumber} use so it continues the line in \`melody_so_far\`? Each option fills the bar with exactly four slots on the sixteenth-note grid. ${motion}`
+  const air = lyrical
+    ? ' This character is lyrical or song-like: prefer a rhythm with a long tone, and put a rest in another slot so the line can breathe. Avoid four even attacks.'
+    : ''
+  return `Which rhythm should the right-hand melody of bar ${barNumber} use so it continues the line in \`melody_so_far\`? Each option fills the bar with exactly four slots on the sixteenth-note grid. ${motion}${air}`
 }
 
 export function melodyPitchInstructions(slot: number, hint: 'stepwise_echo' | 'contrast_ok'): string {
   const motion =
     hint === 'contrast_ok'
       ? 'A leap is allowed because this bar’s role is contrast, climax, or surprise.'
-      : 'Prefer a step or repeated tone from `last_sounding_degree` (and the previous slot of this bar) unless the harmony forces a chord tone a third away.'
+      : 'Prefer a step or repeated tone from `last_sounding_degree` (and the previous slot of this bar) unless the harmony forces a chord tone a third away. Do not take a random leap. Echo the degree-shape in `melody_so_far` when this bar restates or answers the idea.'
   return `Which scale degree (or rest) should slot ${slot} of that four-note melody sing so the right-hand line continues from \`melody_so_far\`? Degrees are relative to the key in \`piece.key\`, coloured by the harmony in \`this_bar\`. ${motion}`
 }
 
 export function bassPatternInstructions(barNumber: number): string {
-  return `Which left-hand bass pattern should bar ${barNumber} use? Options are root, fifth, octave and walking figures that fill the bar. Continue \`bass_so_far\` unless \`this_bar.role\` is contrast, climax, or surprise, or the next chord asks for a new approach.`
+  return `Which left-hand bass pattern should bar ${barNumber} use? Options are a held bass, fifth/octave answers, walking figures, a broken Alberti pattern, or off-beat afterbeats. One pattern fills the whole bar. Continue \`bass_so_far\` unless \`this_bar.role\` is contrast, climax, or surprise, or the next chord asks for a new approach.`
 }

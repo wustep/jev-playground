@@ -5,7 +5,7 @@
 // tick values and unparseable pitches are rejected here so the renderer can
 // fall back to renderPlan.
 
-import { METERS, PlanValidationError, parseOption, type MeterId, type OptionTable } from './schema.js'
+import { METERS, PlanValidationError, parseOption, type BarRoleId, type MeterId, type OptionTable } from './schema.js'
 
 /** Tick lengths VexFlow can engrave (see src/sheet/notation.ts). */
 export const NOTE_TICKS = {
@@ -43,6 +43,36 @@ export const MELODY_DEGREES = {
 } as const
 export type MelodyDegreeId = keyof typeof MELODY_DEGREES
 export const MELODY_DEGREE_IDS = Object.keys(MELODY_DEGREES) as MelodyDegreeId[]
+
+/** Contrast / climax / surprise may leap; every other role wants stepwise motion. */
+export function melodyAllowsLeap(role: BarRoleId): boolean {
+  return role === 'contrast' || role === 'climax' || role === 'surprise'
+}
+
+const DEGREE_HEIGHT: Record<Exclude<MelodyDegreeId, 'rest'>, number> = {
+  dominant_low: -3,
+  tonic: 0,
+  supertonic: 1,
+  mediant: 2,
+  subdominant: 3,
+  dominant: 4,
+  submediant: 5,
+  leading: 6,
+  tonic_high: 7,
+  mediant_high: 9,
+}
+
+/** Scale-step height for proximity priors. `rest` has none. */
+export function degreeHeight(degree: MelodyDegreeId): number | null {
+  return degree === 'rest' ? null : DEGREE_HEIGHT[degree]
+}
+
+export function degreeDistance(a: MelodyDegreeId, b: MelodyDegreeId): number {
+  const left = degreeHeight(a)
+  const right = degreeHeight(b)
+  if (left == null || right == null) return 99
+  return Math.abs(left - right)
+}
 
 export interface PhraseRhythm {
   meter: MeterId
@@ -99,6 +129,39 @@ export function rhythmsFor(meter: MeterId): OptionTable<string> {
   )
 }
 
+/** True when one slot is at least half the bar — a long tone the line can sit on. */
+export function rhythmHasLongTone(rhythm: PhraseRhythmId): boolean {
+  const ticks = PHRASE_RHYTHMS[rhythm].ticks
+  const bar = ticks.reduce((sum, tick) => sum + tick, 0)
+  return Math.max(...ticks) >= bar / 2
+}
+
+export function rhythmIsEven(rhythm: PhraseRhythmId): boolean {
+  const ticks = PHRASE_RHYTHMS[rhythm].ticks
+  return ticks.every((tick) => tick === ticks[0])
+}
+
+/**
+ * Rhythm Choice criteria. Lyrical / song characters get an extra clause so
+ * Jev prefers a long tone and a rest instead of four even attacks.
+ */
+export function rhythmCriteriaFor(meter: MeterId, lyrical: boolean): OptionTable<string> {
+  const base = rhythmsFor(meter)
+  if (!lyrical) return base
+  return Object.fromEntries(
+    Object.entries(base).map(([id, label]) => {
+      const rhythm = id as PhraseRhythmId
+      if (rhythmHasLongTone(rhythm)) {
+        return [id, `${label}. Prefer this for a lyrical line: keep one slot long and make another a rest so the phrase can breathe.`]
+      }
+      if (rhythmIsEven(rhythm)) {
+        return [id, `${label}. Even attacks — only if at least one slot is a rest; a lyrical line should not fill every slot.`]
+      }
+      return [id, `${label}. A lyrical line still wants a rest or a long tone in one of the four slots.`]
+    }),
+  )
+}
+
 export const pitchQuestionId = (index: number) => `pitch_${index + 1}`
 
 export interface JevNoteChoices {
@@ -126,6 +189,8 @@ export const BASS_PATTERNS = {
   walk_down: 'Walk down the scale by step from the chord’s bass note, one note per beat',
   walk_up: 'Walk up the triad from the bass note (root, third, fifth, octave as the bar allows)',
   pedal: 'Repeat the chord’s bass note on every beat',
+  alberti: 'Broken-chord Alberti figure: bass, fifth, third, fifth, one tone per beat',
+  afterbeat: 'Rest on each beat, a chord tone on the afterbeat — an off-beat left hand',
 } as const
 export type BassPatternId = keyof typeof BASS_PATTERNS
 export const BASS_PATTERN_IDS = Object.keys(BASS_PATTERNS) as BassPatternId[]

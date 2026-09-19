@@ -9,6 +9,12 @@
 // One NotePhrase is one plan bar. Callers overlay every targeted bar; the
 // Debug Notes:jev path writes both staves (theme-return bars reuse the
 // source bar's rhythm, degrees and bass pattern, re-spelled on the later chord).
+//
+// Voice leading is post-realize, in code: `degrees` stay Jev's closed picks
+// (the plan). `notes` is the spelled line after successive sounding pitches
+// are snapped toward stepwise / small-leap motion, unless the bar's role is
+// contrast / climax / surprise. Debug: the notes exchange shows Jev's picks;
+// phrase.notes (and the score) are the realized spelling.
 
 import {
   BASS_PATTERNS,
@@ -21,12 +27,13 @@ import {
   parseNoteTick,
   parseSpelledPitch,
   startsFromRhythm,
+  melodyAllowsLeap,
   type BassPatternId,
   type JevNoteChoices,
   type MelodyDegreeId,
   type PhraseRhythmId,
 } from '../plan/notes.js'
-import { PlanValidationError, type CompositionPlan } from '../plan/schema.js'
+import { PlanValidationError, type BarRoleId, type CompositionPlan } from '../plan/schema.js'
 import { keyInfo, resolveChord, scaleFor, type KeyInfo, type ResolvedChord } from './harmony'
 import { midiOf, nearestIndex, ladder } from './pitch'
 import { renderPlan } from './renderPlan'
@@ -70,9 +77,19 @@ export interface NotePhrase {
   barIndex: number
   voice: 'treble'
   rhythm: PhraseRhythmId
+  /**
+   * Jev's closed degree picks (the plan), after optional variation nudge.
+   * Register / spelling lives on `notes`, not here.
+   */
   degrees: MelodyDegreeId[]
+  /** Realized RH: voice-led spelling of `degrees` on the sixteenth grid. */
   notes: Voice
   bass?: BassPhrase
+}
+
+/** Stepwise / small-leap register snap, unless the role is allowed to leap. */
+export function shouldVoiceLeadMelody(role: BarRoleId): boolean {
+  return !melodyAllowsLeap(role)
 }
 
 /** True when every plan bar has a phrase to overlay. A stale 1-bar cache is not enough. */
@@ -154,6 +171,29 @@ export function spellDegree(degree: MelodyDegreeId, scale: string[], targetMidi:
   return rungs[nearestIndex(rungs, targetMidi + spec.octave * 12)]
 }
 
+/**
+ * Same pitch class as `spellDegree`, but ignore the degree's octave hint and
+ * sit nearest `targetMidi`. Used after Jev has picked degrees, to voice-lead
+ * register only.
+ */
+export function spellDegreeNear(degree: MelodyDegreeId, scale: string[], targetMidi: number): string | null {
+  if (degree === 'rest') return null
+  if (scale.length === 0) throw new JevNotesError('notes: scale is empty')
+  const spec = DEGREE_STEPS[degree]
+  const pc = scale[((spec.degree % scale.length) + scale.length) % scale.length]
+  const rungs = ladder([pc], TREBLE_LO, TREBLE_HI)
+  if (rungs.length === 0) throw new JevNotesError(`notes: no ${pc} in the treble range`)
+  return rungs[nearestIndex(rungs, targetMidi)]
+}
+
+export function lastSoundingMidi(notes: Voice): number | undefined {
+  for (let i = notes.length - 1; i >= 0; i--) {
+    const pitch = notes[i]?.pitches[0]
+    if (pitch) return midiOf(pitch)
+  }
+  return undefined
+}
+
 function spellPc(pc: string, targetMidi: number, range: PitchRange): string {
   const rungs = ladder([pc], range.lo, range.hi)
   if (rungs.length === 0) throw new JevNotesError(`notes: no ${pc} in range ${range.lo}–${range.hi}`)
@@ -198,7 +238,7 @@ export function bassHalfTicks(meter: { ticksPerBar: number; splitTick: number })
   return [first, second]
 }
 
-type BassTone = 'bass' | 'fifth' | 'third' | 'octave' | { walk: number }
+type BassTone = 'bass' | 'fifth' | 'third' | 'octave' | 'rest' | { walk: number }
 
 export function bassSlotsFor(
   pattern: BassPatternId,
@@ -216,10 +256,25 @@ export function bassSlotsFor(
     const tones: BassTone[] = ['bass', 'third', 'fifth', 'octave']
     return beats.map((ticks, i) => ({ tone: tones[Math.min(i, tones.length - 1)], ticks }))
   }
+  if (pattern === 'alberti') {
+    const tones: BassTone[] = ['bass', 'fifth', 'third', 'fifth']
+    return beats.map((ticks, i) => ({ tone: tones[i % tones.length], ticks }))
+  }
+  if (pattern === 'afterbeat') {
+    const half = meter.beatTicks / 2
+    const offbeat: BassTone[] = ['bass', 'fifth', 'third', 'fifth']
+    if (isNoteTick(half) && beats.every((ticks) => isNoteTick(ticks - half))) {
+      return beats.flatMap((ticks, i) => [
+        { tone: 'rest' as const, ticks: half },
+        { tone: offbeat[i % offbeat.length], ticks: ticks - half },
+      ])
+    }
+    return [{ tone: 'rest', ticks: halves[0] }, { tone: 'fifth', ticks: halves[1] }]
+  }
   return beats.map((ticks, i) => ({ tone: { walk: -i }, ticks }))
 }
 
-function pcForTone(tone: BassTone, chord: ResolvedChord, scale: string[]): string {
+function pcForTone(tone: Exclude<BassTone, 'rest'>, chord: ResolvedChord, scale: string[]): string {
   if (tone === 'bass') return chord.bass
   if (tone === 'fifth') return chordFifth(chord)
   if (tone === 'third') return chordThird(chord)
@@ -230,7 +285,7 @@ function pcForTone(tone: BassTone, chord: ResolvedChord, scale: string[]): strin
 export function realizeBassPattern(
   pattern: BassPatternId,
   plan: CompositionPlan,
-  options: { barIndex?: number; velocity?: number } = {},
+  options: { barIndex?: number; velocity?: number; lastBassMidi?: number } = {},
 ): BassPhrase {
   const barIndex = options.barIndex ?? 0
   const velocity = options.velocity ?? DEFAULT_BASS_VELOCITY
@@ -250,10 +305,14 @@ export function realizeBassPattern(
   }
   const notes: Voice = []
   let start = 0
-  let target = DEFAULT_BASS_MIDI
+  let target = options.lastBassMidi ?? DEFAULT_BASS_MIDI
   slots.forEach((slot, i) => {
     if (!isNoteTick(slot.ticks)) {
       throw new PlanValidationError(`notes.bass: slot ${i + 1} has illegal duration ${slot.ticks}`)
+    }
+    if (slot.tone === 'rest') {
+      start += slot.ticks
+      return
     }
     const harmony = chord2 && start >= meter.splitTick ? chord2 : chord
     const scale = scaleAt(key, plan.palette, chord, chord2, start, meter.splitTick)
@@ -284,7 +343,14 @@ function scaleAt(
 export function realizeJevNoteChoices(
   choices: JevNoteChoices,
   plan: CompositionPlan,
-  options: { barIndex?: number; velocity?: number } = {},
+  options: {
+    barIndex?: number
+    velocity?: number
+    lastSoundingMidi?: number
+    lastBassMidi?: number
+    /** Default: snap register unless this bar's role is contrast / climax / surprise. */
+    voiceLead?: boolean
+  } = {},
 ): NotePhrase {
   const barIndex = options.barIndex ?? 0
   const velocity = options.velocity ?? DEFAULT_VELOCITY
@@ -305,7 +371,9 @@ export function realizeJevNoteChoices(
   const chord = resolveChord(key, bar.chord)
   const chord2 = bar.chord2 ? resolveChord(key, bar.chord2) : undefined
   const starts = startsFromRhythm(choices.rhythm)
+  const lead = options.voiceLead ?? shouldVoiceLeadMelody(bar.role)
   const notes: Voice = []
+  let target = options.lastSoundingMidi ?? DEFAULT_TREBLE_MIDI
   choices.degrees.forEach((degree, i) => {
     const start = starts[i]
     const dur = spec.ticks[i]
@@ -313,16 +381,21 @@ export function realizeJevNoteChoices(
       throw new PlanValidationError(`notes: rhythm slot ${i + 1} has illegal duration ${dur}`)
     }
     const scale = scaleAt(key, plan.palette, chord, chord2, start, meter.splitTick)
-    const pitch = spellDegree(degree, scale, DEFAULT_TREBLE_MIDI)
+    const pitch = lead ? spellDegreeNear(degree, scale, target) : spellDegree(degree, scale, DEFAULT_TREBLE_MIDI)
     if (!pitch) return
     notes.push(parseScoreNote({ start, dur, pitches: [pitch], velocity }, `notes[${i}]`, meter.ticksPerBar))
+    target = midiOf(pitch)
   })
   if (notes.length === 0) throw new JevNotesError('Jev notes produced only rests')
   const treble = parseScoreVoice(notes, meter.ticksPerBar)
   const phrase: NotePhrase = { barIndex, voice: 'treble', rhythm: choices.rhythm, degrees: choices.degrees, notes: treble }
   if (choices.bassPattern) {
     try {
-      phrase.bass = realizeBassPattern(choices.bassPattern, plan, { barIndex, velocity: options.velocity ? Math.max(1, options.velocity - 8) : DEFAULT_BASS_VELOCITY })
+      phrase.bass = realizeBassPattern(choices.bassPattern, plan, {
+        barIndex,
+        velocity: options.velocity ? Math.max(1, options.velocity - 8) : DEFAULT_BASS_VELOCITY,
+        lastBassMidi: options.lastBassMidi,
+      })
     } catch {
       // Illegal bass stays off the phrase; the caller keeps renderPlan's LH.
     }
