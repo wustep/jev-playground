@@ -34,6 +34,7 @@ export function degreeProximityBonus(degree: MelodyDegreeId, previous: MelodyDeg
   if (distance === 1) return 0.8
   if (distance === 2) return 0.45
   if (distance === 3) return 0.15
+  if (distance === 4) return 0.08
   return 0
 }
 

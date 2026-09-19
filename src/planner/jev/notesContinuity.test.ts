@@ -88,8 +88,8 @@ describe('multi-bar melody continuity helpers', () => {
     })
     expect(state.piece_frame).toMatchObject({
       character: expect.stringContaining('singing'),
-      texture: expect.stringContaining('nocturne'),
-      arrangement: expect.stringContaining('return'),
+      texture: expect.stringContaining('broken chords'),
+      arrangement: expect.stringContaining('comes back'),
     })
   })
 

@@ -23,6 +23,7 @@ describe('notes sample priors', () => {
   })
 
   it('boosts degrees near the previous sounding one without erasing a peaked Jev answer', () => {
+    expect(degreeProximityBonus('supertonic', 'tonic', false)).toBeGreaterThan(degreeProximityBonus('mediant_high', 'tonic', false))
     expect(degreeProximityBonus('dominant', 'tonic', false)).toBeGreaterThan(degreeProximityBonus('mediant_high', 'tonic', false))
     expect(degreeProximityBonus('rest', 'tonic', true)).toBeGreaterThan(degreeProximityBonus('rest', 'tonic', false))
 

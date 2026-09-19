@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BASS_PATTERN_IDS, MELODY_DEGREE_IDS, NOTE_TICK_VALUES, PHRASE_NOTE_COUNT, PHRASE_RHYTHMS, parseJevNoteChoices, parseNoteTick } from '../plan/notes'
+import { BASS_PATTERN_IDS, MELODY_DEGREE_IDS, NOTE_TICK_VALUES, PHRASE_NOTE_COUNT, PHRASE_RHYTHMS, parseJevNoteChoices, parseNoteTick, type MelodyDegreeId } from '../plan/notes'
 import { METER_IDS, PlanValidationError, type BarCount, type BarRoleId, type CompositionPlan } from '../plan/schema'
 import { HeuristicPlanner } from '../planner/HeuristicPlanner'
 import { JevPlanner, type JevTransport } from '../planner/JevPlanner'
@@ -246,7 +246,10 @@ describe('realize + overlay', () => {
 })
 
 describe('post-realize voice leading', () => {
-  const leaping = { rhythm: 'four_even' as const, degrees: ['tonic_high', 'dominant_low', 'tonic', 'mediant_high'] as const }
+  const leaping: { rhythm: 'four_even'; degrees: MelodyDegreeId[] } = {
+    rhythm: 'four_even',
+    degrees: ['tonic_high', 'dominant_low', 'tonic', 'mediant_high'],
+  }
 
   it('keeps Jev degrees and snaps register toward stepwise / small-leap motion', () => {
     const plan = cMajorPlan('statement')
