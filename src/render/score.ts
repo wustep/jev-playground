@@ -71,7 +71,7 @@ export interface Score {
   articulation: number
   /**
    * Framing bars prepended by the renderer (vamp or pickup). `plan.bars`
-   * stays 4/8/16/32; body bar *i* is `bars[introBars + i]`.
+   * stays 4/8/16/32/64; body bar *i* is `bars[introBars + i]`.
    */
   introBars: number
   /** Stretch the last bar on playback so the cadence is not cut off. */

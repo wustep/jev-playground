@@ -338,7 +338,7 @@ a one-bar version, which is why Glass/Zimmer feel a little more like pieces.
 *Ship.* `opening: straight_in | vamp_intro | pickup` and the renderer prepends
 0–2 bars (the first chord's accompaniment, tune silent) and lets the last bar
 ring with a rolled chord and a ritardando. The cost is not musical: bar counts
-are validated as 4/8/16/32 and the sheet, seek-by-bar, MIDI export and the
+are validated as 4/8/16/32/64 and the sheet, seek-by-bar, MIDI export and the
 prewarmed cache all index bars — the intro has to be extra `Score.bars` that are
 not `plan.bars`. Budget a day for the plumbing.
 

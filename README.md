@@ -101,7 +101,7 @@ interface CompositionPlan {
   arrangement?: ArrangementId // how density changes when material returns
   opening?: OpeningId         // straight_in | vamp_intro | pickup
   pedal?: PedalId             // dry | half | full — sustain for the piece
-  bars: BarPlan[]             // 4 | 8 | 16 | 32 × { chord: ChordId (107 key-relative labels, inversions included), role (11), contour (9) }
+  bars: BarPlan[]             // 4 | 8 | 16 | 32 | 64 × { chord: ChordId (107 key-relative labels, inversions included), role (11), contour (9) }
 }
 ```
 

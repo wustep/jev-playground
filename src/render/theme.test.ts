@@ -52,10 +52,11 @@ describe('themeSources: which bars bring back which', () => {
     }
   })
 
-  it('gives every form but the fantasia a returning phrase at sixteen bars', () => {
+  it('gives every form but the fantasia a returning phrase at sixteen and sixty-four bars', () => {
     for (const form of FORM_IDS) {
       if (form === 'free_fantasia') continue
       expect(themeSources(form, 16).filter((source) => source !== undefined).length, form).toBeGreaterThanOrEqual(3)
+      expect(themeSources(form, 64).filter((source) => source !== undefined).length, `${form} × 64`).toBeGreaterThanOrEqual(6)
     }
   })
 })
