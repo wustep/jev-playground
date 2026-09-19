@@ -1,0 +1,73 @@
+{
+  "id": "debussy-l66-arabesque-1",
+  "piece": "Debussy, Premi\u00e8re Arabesque, L. 66",
+  "whyHere": "Parallel first-inversion tiles and flowing figuration; bars said twice.",
+  "evidence": "score",
+  "midi": "docs/ref-midi/public/debussy-l66-arabesque-1.mid",
+  "midiSource": "https://www.mutopiaproject.org/ftp/DebussyC/L66/debussy_Arabesque_1/debussy_Arabesque_1.mid",
+  "midiLicense": "Public Domain (Mutopia-2011/10/25-1777)",
+  "notes": "Opening IV6\u2013iii6\u2013ii6\u2013I6 is a verified book phrase. Unresolved V9 at the first pause. 4/4 with flowing 16ths.",
+  "_stretch": [
+    "proposed phrasing: on_the_beat",
+    "holds must not flatten this planing phrase to I\u00d78 (stub argmax did)"
+  ],
+  "plan": {
+    "version": 1,
+    "style": "debussy",
+    "character": "flowing_perpetual",
+    "form": "mosaic_pairs",
+    "key": "E_major",
+    "meter": "four_four",
+    "texture": "wash_arpeggio",
+    "palette": "modal",
+    "tempo": "andante",
+    "dynamics": "p",
+    "dynamicShape": "waves",
+    "defaultInstrument": "grand_piano",
+    "arrangement": "constant",
+    "opening": "straight_in",
+    "pedal": "full",
+    "bars": [
+      {
+        "chord": "IV6",
+        "role": "statement",
+        "contour": "fall"
+      },
+      {
+        "chord": "iii6",
+        "role": "development",
+        "contour": "fall"
+      },
+      {
+        "chord": "ii6",
+        "role": "restatement",
+        "contour": "fall"
+      },
+      {
+        "chord": "I6",
+        "role": "echo",
+        "contour": "fall"
+      },
+      {
+        "chord": "IV6",
+        "role": "contrast",
+        "contour": "fall"
+      },
+      {
+        "chord": "iii6",
+        "role": "development",
+        "contour": "fall"
+      },
+      {
+        "chord": "ii6",
+        "role": "contrast",
+        "contour": "fall"
+      },
+      {
+        "chord": "V9",
+        "role": "half_cadence",
+        "contour": "arch"
+      }
+    ]
+  }
+}

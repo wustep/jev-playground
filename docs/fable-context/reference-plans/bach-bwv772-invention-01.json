@@ -1,0 +1,78 @@
+{
+  "id": "bach-bwv772-invention-01",
+  "piece": "Bach, Invention 1, BWV 772",
+  "whyHere": "The two-voice invention archetype: subject, sequence, cadence; many two-harmony bars.",
+  "evidence": "score",
+  "midi": "docs/ref-midi/public/bach-bwv772-invention-01.mid",
+  "midiSource": "https://www.mutopiaproject.org/ftp/BachJS/BWV772/bach-invention-01/bach-invention-01.mid",
+  "midiLicense": "CC BY-SA 3.0 (Mutopia-2008/06/15-40)",
+  "notes": "8-bar head-sequence-cadence sketch, not a bar-by-bar RN corpus. chord2 marks the invention's two-harmony habit; STYLE_NOTES measured 41% split bars.",
+  "_stretch": [
+    "proposed phrasing: on_the_beat",
+    "3/8 inventions have no meter (this piece is 4/4 \u2014 ok)",
+    "invertible counterpoint is more than pendulum + two_voice_counterpoint",
+    "travelling units at two chords a bar are still to do"
+  ],
+  "plan": {
+    "version": 1,
+    "style": "bach",
+    "character": "playful_wit",
+    "form": "spinning_out",
+    "key": "C_major",
+    "meter": "four_four",
+    "texture": "two_voice_counterpoint",
+    "palette": "chromatic_approach",
+    "tempo": "allegro",
+    "dynamics": "mf",
+    "dynamicShape": "terraced",
+    "defaultInstrument": "harpsichord",
+    "arrangement": "constant",
+    "opening": "straight_in",
+    "pedal": "dry",
+    "bars": [
+      {
+        "chord": "I",
+        "role": "statement",
+        "contour": "pendulum"
+      },
+      {
+        "chord": "V65",
+        "role": "development",
+        "contour": "leap_fall",
+        "chord2": "I"
+      },
+      {
+        "chord": "vi",
+        "role": "sequence",
+        "contour": "pendulum"
+      },
+      {
+        "chord": "ii65",
+        "role": "sequence",
+        "contour": "leap_fall",
+        "chord2": "V"
+      },
+      {
+        "chord": "I6",
+        "role": "development",
+        "contour": "pendulum"
+      },
+      {
+        "chord": "ii7",
+        "role": "sequence",
+        "contour": "rise",
+        "chord2": "V7"
+      },
+      {
+        "chord": "V7",
+        "role": "climax",
+        "contour": "arch"
+      },
+      {
+        "chord": "I",
+        "role": "cadence",
+        "contour": "fall"
+      }
+    ]
+  }
+}

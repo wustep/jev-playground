@@ -1,0 +1,74 @@
+{
+  "id": "laufey-borrowed-iv-language",
+  "piece": "Laufey harmonic language \u2014 borrowed minor iv (not From the Start)",
+  "whyHere": "Published analysis of her language (I\u2013I7\u2013vi7\u2013iv6 and kin). Our major book still has iv only under surprises.",
+  "evidence": "analysis",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. Not a transcription of one song. katiekeyboard: I\u2013I7\u2013vi7\u2013iv6 / I\u2013Imaj7\u2013IVmaj7\u2013iv. V7_of_IV stands in for I7 (tonic as dominant toward IV).",
+  "_stretch": [
+    "proposed phrasing: breathing",
+    "add these phrases to laufey.harmony.major, not only surprises",
+    "bossa_comp still the accompaniment hole"
+  ],
+  "plan": {
+    "version": 1,
+    "style": "laufey",
+    "character": "lyrical_song",
+    "form": "period",
+    "key": "Db_major",
+    "meter": "four_four",
+    "texture": "chordal_melody",
+    "palette": "chromatic_approach",
+    "tempo": "adagio",
+    "dynamics": "p",
+    "dynamicShape": "arch",
+    "defaultInstrument": "grand_piano",
+    "arrangement": "lift_on_return",
+    "opening": "vamp_intro",
+    "pedal": "half",
+    "bars": [
+      {
+        "chord": "I",
+        "role": "statement",
+        "contour": "arch"
+      },
+      {
+        "chord": "V7_of_IV",
+        "role": "development",
+        "contour": "wave"
+      },
+      {
+        "chord": "vi7",
+        "role": "development",
+        "contour": "fall"
+      },
+      {
+        "chord": "iv6",
+        "role": "half_cadence",
+        "contour": "dip"
+      },
+      {
+        "chord": "Imaj7",
+        "role": "restatement",
+        "contour": "arch"
+      },
+      {
+        "chord": "IVmaj7",
+        "role": "development",
+        "contour": "wave"
+      },
+      {
+        "chord": "iv",
+        "role": "climax",
+        "contour": "arch"
+      },
+      {
+        "chord": "I",
+        "role": "cadence",
+        "contour": "fall"
+      }
+    ]
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "id": "zimmer-time",
+  "piece": "Hans Zimmer, Time (Inception) \u2014 piano-reduction sketch",
+  "whyHere": "Same 4-chord block repeated, layers accumulate, peak then yank to bare piano (Lehman 2016).",
+  "evidence": "inferred",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. 16-bar sketch of the process, not a cue transcription. Legal film loop i\u2013bVI\u2013bVII\u2013V (not the banned i\u2013bVI\u2013bIII\u2013bVII). Key A minor is inferred from common piano reductions \u2014 not from a score.",
+  "_stretch": [
+    "proposed phrasing: long_breathed",
+    "same-figure layer add (arrangement label shipped; figure still changes)",
+    "hook_bars: 4 with an 8-bar chant",
+    "exact Time RN \u2014 not proposed"
+  ],
+  "plan": {
+    "version": 1,
+    "style": "hans_zimmer",
+    "character": "hypnotic_pulse",
+    "form": "layered_build",
+    "key": "A_minor",
+    "meter": "four_four",
+    "texture": "melody_over_ostinato",
+    "palette": "diatonic",
+    "tempo": "andante",
+    "dynamics": "p",
+    "dynamicShape": "late_surge",
+    "defaultInstrument": "grand_piano",
+    "arrangement": "peak_then_bare",
+    "opening": "vamp_intro",
+    "pedal": "full",
+    "bars": [
+      {
+        "chord": "i",
+        "role": "statement",
+        "contour": "static"
+      },
+      {
+        "chord": "bVI",
+        "role": "restatement",
+        "contour": "static"
+      },
+      {
+        "chord": "bVII",
+        "role": "development",
+        "contour": "static"
+      },
+      {
+        "chord": "V",
+        "role": "restatement",
+        "contour": "static"
+      },
+      {
+        "chord": "i",
+        "role": "restatement",
+        "contour": "static"
+      },
+      {
+        "chord": "bVI",
+        "role": "development",
+        "contour": "static"
+      },
+      {
+        "chord": "bVII",
+        "role": "development",
+        "contour": "rise"
+      },
+      {
+        "chord": "V",
+        "role": "development",
+        "contour": "static"
+      },
+      {
+        "chord": "i",
+        "role": "development",
+        "contour": "static"
+      },
+      {
+        "chord": "bVI",
+        "role": "sequence",
+        "contour": "static"
+      },
+      {
+        "chord": "bVII",
+        "role": "climax",
+        "contour": "rise"
+      },
+      {
+        "chord": "V",
+        "role": "climax",
+        "contour": "static"
+      },
+      {
+        "chord": "i",
+        "role": "dissolve",
+        "contour": "static"
+      },
+      {
+        "chord": "bVI",
+        "role": "echo",
+        "contour": "static"
+      },
+      {
+        "chord": "bVII",
+        "role": "dissolve",
+        "contour": "fall"
+      },
+      {
+        "chord": "i",
+        "role": "cadence",
+        "contour": "static"
+      }
+    ]
+  }
+}

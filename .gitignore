@@ -9,8 +9,10 @@ dist
 .env*
 !.env.example
 
-# Local MIDI for Fable analysis only — never ship
+# Local / commercial MIDI for analysis only — never ship
 docs/ref-midi/local/
 
-# Reference MIDI is analysed locally only; nothing under docs/ref-midi ships
+# Ignore MIDI under docs/ref-midi except the public-domain Mutopia set
 docs/ref-midi/**/*.mid
+!docs/ref-midi/public/
+!docs/ref-midi/public/**/*.mid
