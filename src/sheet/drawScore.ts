@@ -78,12 +78,18 @@ const STAFF_GAP = 96
 const SYSTEM_HEIGHT = 300
 /** Room under the bass staff for dynamics + role labels (SYSTEM_HEIGHT − top − gap). */
 const SYSTEM_BELOW = SYSTEM_HEIGHT - SYSTEM_TOP - STAFF_GAP
-/** Chord symbols sit this many pixels above the treble top line. */
+/**
+ * VexFlow `Stave.y` is not the top staff line: `spaceAboveStaffLn` (4) × 10px
+ * of headroom sits above line 0, and the five lines occupy the next 40px.
+ */
+const STAVE_HEADROOM = 40
+const STAFF_LINE_SPAN = 40
+/** Chord symbols sit this many pixels above the stave y (well above line 0). */
 export const CHORD_ABOVE_STAFF = 20
-/** Dynamics sit this many pixels below the bass top line (clear of the 5-line staff). */
-export const DYNAMIC_BELOW_BASS = 70
+/** Dynamics sit below the bass bottom line, not on the staff. */
+export const DYNAMIC_BELOW_BASS = STAVE_HEADROOM + STAFF_LINE_SPAN + 18
 /** Role text sits below the dynamic, still inside SYSTEM_BELOW. */
-export const ROLE_BELOW_BASS = 126
+export const ROLE_BELOW_BASS = STAVE_HEADROOM + STAFF_LINE_SPAN + 44
 /** Extra pixels either side of a notehead. VexFlow's default (3) makes dense 16ths look like one bar. */
 export const LEDGER_STROKE_PX = 1
 

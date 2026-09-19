@@ -361,7 +361,8 @@ describe('dense-bar width and labels', () => {
     expect(first.chordY).toBe(top - CHORD_ABOVE_STAFF)
     expect(first.chordY).toBeLessThan(top - 8)
     expect(first.dynamicY).toBe(top + gap + DYNAMIC_BELOW_BASS)
-    expect(first.dynamicY).toBeGreaterThan(top + gap + 40)
+    // VexFlow bass lines occupy staveY+40 .. staveY+80.
+    expect(first.dynamicY).toBeGreaterThan(top + gap + 80)
     expect(first.dynamicX).toBeLessThan(noteStart)
     expect(first.roleY).toBeGreaterThan(first.dynamicY)
     expect(later.dynamicX).toBeGreaterThanOrEqual(x)
