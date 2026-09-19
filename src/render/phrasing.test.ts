@@ -95,11 +95,18 @@ describe('a breathing tune', () => {
   it('rests a stormy piece when phrasing is breathing, and does not rest a lyrical piece marked on_the_beat', () => {
     const beat = METER_INFO.four_four.beatTicks
     const stormBreathes = renderPlan(songPlan({ character: 'stormy_drama', phrasing: 'breathing', texture: 'alberti_melody' }), 3)
+    const stormOnBeat = renderPlan(songPlan({ character: 'stormy_drama', phrasing: 'on_the_beat', texture: 'alberti_melody' }), 3)
     const lyricalOnBeat = renderPlan(songPlan({ character: 'lyrical_song', phrasing: 'on_the_beat', texture: 'alberti_melody' }), 3)
-    const stormVoice = stormBreathes.bars[3].treble[0]
-    const lyricalVoice = lyricalOnBeat.bars[3].treble[0]
-    const heldLast = (voice: typeof stormVoice) => voice.filter((n) => n.start >= stormBreathes.meter.ticksPerBar - beat && n.dur >= beat)
-    expect(heldLast(stormVoice)).toHaveLength(0)
-    expect(lyricalVoice.reduce((sum, n) => sum + n.dur, 0)).toBeGreaterThan(stormVoice.reduce((sum, n) => sum + n.dur, 0))
+    const lyricalBreathes = renderPlan(songPlan({ character: 'lyrical_song', phrasing: 'breathing', texture: 'alberti_melody' }), 3)
+    const heldLast = (score: ReturnType<typeof renderPlan>) =>
+      score.bars[3].treble[0].filter((n) => n.start >= score.meter.ticksPerBar - beat && n.dur >= beat)
+    const beforeLast = (score: ReturnType<typeof renderPlan>) =>
+      score.bars[3].treble[0].filter((n) => n.start < score.meter.ticksPerBar - beat).reduce((sum, n) => sum + n.dur, 0)
+    expect(heldLast(stormBreathes)).toHaveLength(0)
+    expect(heldLast(lyricalBreathes)).toHaveLength(0)
+    expect(stormBreathes.bars[3].treble[0]).not.toEqual(stormOnBeat.bars[3].treble[0])
+    expect(lyricalOnBeat.bars[3].treble[0]).not.toEqual(lyricalBreathes.bars[3].treble[0])
+    expect(beforeLast(stormOnBeat)).toBeGreaterThanOrEqual(beforeLast(stormBreathes))
+    expect(beforeLast(lyricalOnBeat)).toBeGreaterThanOrEqual(beforeLast(lyricalBreathes))
   })
 })

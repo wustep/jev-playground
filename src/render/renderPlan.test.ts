@@ -293,6 +293,9 @@ describe('bossa_comp', () => {
       dynamics: 'mp',
       dynamicShape: 'arch',
       defaultInstrument: 'grand_piano',
+      arrangement: 'constant',
+      opening: 'straight_in',
+      phrasing: 'on_the_beat',
       bars: [
         { chord: 'ii9', role: 'statement', contour: 'arch' },
         { chord: 'V13', role: 'development', contour: 'wave' },

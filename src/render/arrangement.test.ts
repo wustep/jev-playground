@@ -113,8 +113,11 @@ describe('same-figure layer on ostinato builds', () => {
       expect(Math.min(...peakSteps)).toBe(Math.min(...midSteps))
       expect(Math.min(...peakSteps)).toBeGreaterThanOrEqual(2)
     }
-    const peakNotes = [...score.bars[peak].treble, ...score.bars[peak].bass].flat()
-    const midNotes = [...score.bars[mid].treble, ...score.bars[mid].bass].flat()
-    expect(peakNotes.length).toBeGreaterThanOrEqual(midNotes.length)
+    const bassPitches = (index: number) =>
+      (score.bars[index].bass[0] ?? []).reduce((n, note) => n + note.pitches.length, 0)
+    expect(bassPitches(peak)).toBeGreaterThan(bassPitches(mid))
+    if ((score.bars[peak].treble[0] ?? []).length) {
+      expect(score.bars[peak].treble.length).toBeGreaterThanOrEqual(2)
+    }
   })
 })
