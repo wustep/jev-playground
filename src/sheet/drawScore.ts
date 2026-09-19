@@ -73,11 +73,17 @@ const marginX = (width: number) => (width >= 720 ? 34 : 20)
   Metrics.getFontInfo = (key: string) => copy(fonts, key, fontInfo)
   Metrics.getStyle = (key: string) => copy(styles, key, style)
 }
-const SYSTEM_TOP = 46 // room above the treble staff for chord symbols
+const SYSTEM_TOP = 52 // room above the treble staff for chord symbols
 const STAFF_GAP = 96
-const SYSTEM_HEIGHT = 292
-/** Room under the bass staff for bar labels (SYSTEM_HEIGHT − top − gap). */
+const SYSTEM_HEIGHT = 300
+/** Room under the bass staff for dynamics + role labels (SYSTEM_HEIGHT − top − gap). */
 const SYSTEM_BELOW = SYSTEM_HEIGHT - SYSTEM_TOP - STAFF_GAP
+/** Chord symbols sit this many pixels above the treble top line. */
+export const CHORD_ABOVE_STAFF = 20
+/** Dynamics sit this many pixels below the bass top line (clear of the 5-line staff). */
+export const DYNAMIC_BELOW_BASS = 70
+/** Role text sits below the dynamic, still inside SYSTEM_BELOW. */
+export const ROLE_BELOW_BASS = 126
 /** Extra pixels either side of a notehead. VexFlow's default (3) makes dense 16ths look like one bar. */
 export const LEDGER_STROKE_PX = 1
 
@@ -200,8 +206,11 @@ export function settleRests(voices: BuiltVoice[]) {
 
 /** Empty staves still need a whole-bar rest (vamp bars often drop the tune). */
 export function voicesForStaff(voices: Voice[], clef: 'treble' | 'bass', meter: MeterInfo): BuiltVoice[] {
-  if (!voices.length) return [buildVoice([], clef, 0, 1, meter)]
-  return voices.map((voice, i) => buildVoice(voice, clef, i, voices.length, meter))
+  // Score promises at most two voices per staff. A leftover inner voice after a
+  // Jev overlay (or a buggy third part) would share stems with voice 1.
+  const kept = voices.slice(0, 2)
+  if (!kept.length) return [buildVoice([], clef, 0, 1, meter)]
+  return kept.map((voice, i) => buildVoice(voice, clef, i, kept.length, meter))
 }
 
 function midiSafe(pitch: string): number | null {
@@ -435,21 +444,79 @@ function drawQuietly(draw: () => void) {
   }
 }
 
-/** How much horizontal room a bar wants, from its busiest voice. */
-function barDensity(bar: Bar, meter: MeterInfo): number {
-  return Math.max(...[...bar.treble, ...bar.bass].map((voice) => engraveVoice(voice, meter).length), 1)
+/**
+ * How much horizontal room a bar wants: the busiest engraved voice, the
+ * number of distinct onsets, and a surcharge when two voices share a staff
+ * (Formatter has to leave space for accidentals on both).
+ */
+export function barDensity(bar: Bar, meter: MeterInfo): number {
+  const voices = [...bar.treble, ...bar.bass]
+  const maxVoice = Math.max(...voices.map((voice) => engraveVoice(voice, meter).length), 1)
+  const staffVoices = Math.max(bar.treble.length, bar.bass.length, 1)
+  const onsets = new Set<number>()
+  for (const voice of voices) {
+    for (const note of voice) {
+      if (note.pitches.length) onsets.add(note.start)
+    }
+  }
+  return Math.max(maxVoice, onsets.size) + Math.max(0, staffVoices - 1) * 6
 }
 
-function chooseBarsPerSystem(score: Score, width: number, firstBarExtra: number): number {
-  const busiest = Math.max(...score.bars.map((bar) => barDensity(bar, score.meter)))
-  const minBarWidth = Math.min(360, Math.max(150, busiest * 19 + 44))
-  const fit = Math.floor((width - marginX(width) * 2 - firstBarExtra) / minBarWidth)
+/** Pixels of note-area a bar needs before 16ths start colliding. */
+export function minBarWidth(density: number): number {
+  return Math.min(560, Math.max(180, density * 24 + 64))
+}
+
+export function chooseBarsPerSystem(score: Score, width: number, firstBarExtra: number): number {
+  const busiest = Math.max(...score.bars.map((bar) => barDensity(bar, score.meter)), 1)
+  const fit = Math.floor((width - marginX(width) * 2 - firstBarExtra) / minBarWidth(busiest))
   return [4, 2, 1].find((n) => n <= Math.max(1, fit)) ?? 1
+}
+
+/** Pack bars into systems of 4, 2, or 1 so each bar keeps its width floor. */
+export function packSystems(score: Score, width: number, firstBarExtra: number, laterBarExtra: number): Bar[][] {
+  const systems: Bar[][] = []
+  let i = 0
+  while (i < score.bars.length) {
+    const extra = systems.length === 0 ? firstBarExtra : laterBarExtra
+    const avail = width - marginX(width) * 2 - extra
+    let count = 1
+    let used = minBarWidth(barDensity(score.bars[i], score.meter))
+    while (count < 4 && i + count < score.bars.length) {
+      const next = minBarWidth(barDensity(score.bars[i + count], score.meter))
+      if (used + next > avail) break
+      used += next
+      count++
+    }
+    const snapped = [4, 2, 1].find((n) => n <= count) ?? 1
+    systems.push(score.bars.slice(i, i + snapped))
+    i += snapped
+  }
+  return systems
+}
+
+function allocateBarWidths(bars: readonly Bar[], avail: number, meter: MeterInfo): number[] {
+  const mins = bars.map((bar) => minBarWidth(barDensity(bar, meter)))
+  const sum = mins.reduce((total, value) => total + value, 0)
+  if (sum <= 0) return bars.map(() => avail / Math.max(1, bars.length))
+  const scale = avail / sum
+  return mins.map((min) => min * scale)
+}
+
+/** Chord / dynamic / role positions: above the treble, below the bass, in the clef margin. */
+export function sheetLabelLayout(top: number, gap: number, x: number, noteStart: number, first: boolean) {
+  return {
+    labelX: first ? noteStart - 6 : x + 8,
+    chordY: top - CHORD_ABOVE_STAFF,
+    dynamicX: x + (first ? 14 : 10),
+    dynamicY: top + gap + DYNAMIC_BELOW_BASS,
+    roleY: top + gap + ROLE_BELOW_BASS,
+  }
 }
 
 /**
  * Phones get the same engraving, drawn smaller: at full size a 16th-note bar
- * needs ~350px, so a 360px screen would squeeze one cramped bar per system.
+ * needs ~450px, so a 360px screen would squeeze one cramped bar per system.
  */
 export function sheetScale(width: number): number {
   if (width >= 720) return 1
@@ -470,12 +537,10 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
   const scale = sheetScale(cssWidth)
   const width = cssWidth / scale
   const signatureWidth = 54 + keySignatureWidth(score.keySignature)
-  const barsPerSystem = chooseBarsPerSystem(score, width, signatureWidth + 30)
-  const systemCount = Math.ceil(score.bars.length / barsPerSystem)
-  const systems = Array.from({ length: systemCount }, (_, system) => {
-    const bars = score.bars.slice(system * barsPerSystem, (system + 1) * barsPerSystem)
-    return { bars, pad: systemPadding(bars) }
-  })
+  const firstLead = signatureWidth + 30
+  const laterLead = signatureWidth
+  const systems = packSystems(score, width, firstLead, laterLead).map((bars) => ({ bars, pad: systemPadding(bars) }))
+  const systemCount = systems.length
   const height = systems.reduce((sum, system) => sum + systemHeight(system.pad), 8)
 
   const renderer = new Renderer(canvas, Renderer.Backends.CANVAS)
@@ -494,13 +559,13 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
     const { bars, pad } = systems[system]
     const top = systemTop + SYSTEM_TOP + pad.above
     const gap = STAFF_GAP + pad.gap
-    const lead = signatureWidth + (system === 0 ? 30 : 0)
-    const barWidth = (width - marginX(width) * 2 - lead) / barsPerSystem
+    const lead = system === 0 ? firstLead : laterLead
+    const noteWidths = allocateBarWidths(bars, width - marginX(width) * 2 - lead, meter)
     let x = marginX(width)
 
     bars.forEach((bar, column) => {
       const first = column === 0
-      const staveWidth = barWidth + (first ? lead : 0)
+      const staveWidth = noteWidths[column] + (first ? lead : 0)
       const treble = new Stave(x, top, staveWidth)
       const bass = new Stave(x, top + gap, staveWidth)
       if (first) {
@@ -545,7 +610,10 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
         if (upper.length) formatter.joinVoices(upper.map((b) => b.voice))
         if (lower.length) formatter.joinVoices(lower.map((b) => b.voice))
         all.push(...upper, ...lower)
-        if (all.length) formatter.format(all.map((b) => b.voice), Math.max(40, x + staveWidth - noteStart - 14))
+        if (all.length) {
+          const room = Math.max(40, x + staveWidth - noteStart - 12)
+          formatter.format(all.map((b) => b.voice), room)
+        }
         all.forEach((b) => b.beams.forEach(unifyBeamStems))
 
         upper.forEach((b) => drawQuietly(() => b.voice.draw(context, treble)))
@@ -578,38 +646,45 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       }
       if (!anchorMap.has(0)) anchorMap.set(0, noteStart)
       const anchors = [...anchorMap.entries()].map(([tick, ax]) => ({ tick, x: ax })).sort((a, b) => a.tick - b.tick)
-      layout.bars.push({ index: bar.index, x, width: staveWidth, top: top - 8, bottom: top + gap + 96 + pad.below, anchors })
+      layout.bars.push({
+        index: bar.index,
+        x,
+        width: staveWidth,
+        top: top - CHORD_ABOVE_STAFF - 6,
+        bottom: top + gap + ROLE_BELOW_BASS + 10 + pad.below,
+        anchors,
+      })
 
-      // Plan labels: what Jev (or the stub) decided for this bar.
-      const labelX = first ? noteStart - 6 : x + 8
+      // Plan labels: chords above the treble, dynamics + role below the bass.
+      const { labelX, chordY, dynamicX, dynamicY, roleY } = sheetLabelLayout(top, gap, x, noteStart, first)
       pen.save()
       pen.textBaseline = 'alphabetic'
       pen.fillStyle = theme.ink
       pen.font = '600 15px "Fraunces", "Academico", Georgia, serif'
-      pen.fillText(prettyChord(bar.chordSymbol), labelX, top - 4)
+      pen.fillText(prettyChord(bar.chordSymbol), labelX, chordY)
       const symbolWidth = pen.measureText(prettyChord(bar.chordSymbol)).width
       pen.fillStyle = theme.accent
       pen.font = '500 11px "JetBrains Mono", ui-monospace, monospace'
-      pen.fillText(bar.plan.chord, labelX + symbolWidth + 8, top - 5)
+      pen.fillText(bar.plan.chord, labelX + symbolWidth + 8, chordY - 1)
       if (bar.split && bar.plan.chord2) {
         // The second harmony, over the first note at or after the split.
         const at = anchors.find((anchor) => anchor.tick >= bar.split!.tick)
         const splitX = Math.max(labelX + symbolWidth + pen.measureText(bar.plan.chord).width + 16, at ? at.x - 4 : x + staveWidth / 2)
         pen.fillStyle = theme.ink
         pen.font = '600 15px "Fraunces", "Academico", Georgia, serif'
-        pen.fillText(prettyChord(bar.split.chordSymbol), splitX, top - 4)
+        pen.fillText(prettyChord(bar.split.chordSymbol), splitX, chordY)
         const splitWidth = pen.measureText(prettyChord(bar.split.chordSymbol)).width
         pen.fillStyle = theme.accent
         pen.font = '500 11px "JetBrains Mono", ui-monospace, monospace'
-        pen.fillText(bar.plan.chord2, splitX + splitWidth + 8, top - 5)
+        pen.fillText(bar.plan.chord2, splitX + splitWidth + 8, chordY - 1)
       }
       pen.fillStyle = theme.muted
       pen.font = '500 10.5px "JetBrains Mono", ui-monospace, monospace'
-      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace(/_/g, ' ')}`, labelX, top + gap + 134)
+      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace(/_/g, ' ')}`, labelX, roleY)
       if (bar.dynamic !== lastDynamic) {
         pen.fillStyle = theme.ink
         pen.font = 'italic 600 17px "Academico", "Fraunces", Georgia, serif'
-        pen.fillText(bar.dynamic, first ? noteStart - 16 : x + 4, top + 40 + gap / 2)
+        pen.fillText(bar.dynamic, dynamicX, dynamicY)
         lastDynamic = bar.dynamic
       }
       pen.restore()
