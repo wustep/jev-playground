@@ -23,7 +23,7 @@ import {
 } from './jevNotes'
 import { midiOf } from './pitch'
 import { renderPlan, timeline } from './renderPlan'
-import { METER_INFO } from './score'
+import { METER_INFO, type Voice } from './score'
 
 const planner = new HeuristicPlanner()
 
@@ -131,6 +131,30 @@ describe('realize + overlay', () => {
     expect(withBass.bars[body].treble[0]).toEqual(both.notes)
     expect(withBass.bars[body].bass[0]).toEqual(both.bass!.notes)
     expect(withBass.bars[body].bass[0]).not.toEqual(code.bars[body].bass[0])
+  })
+
+  it('drops leftover inner voices so Jev stems are not fighting renderPlan textures', async () => {
+    const plan = await samplePlan('four_four')
+    const phrase = closedPhrase(plan, 0)
+    const code = renderPlan(plan, 3)
+    const body = phrase.barIndex + (code.introBars ?? 0)
+    const inner: Voice = Array.from({ length: 16 }, (_, i) => ({ start: i, dur: 1, pitches: ['G4'], velocity: 64 }))
+    const crowded: typeof code = {
+      ...code,
+      bars: code.bars.map((bar, i) =>
+        i === body
+          ? { ...bar, treble: [bar.treble[0] ?? [], inner], bass: [bar.bass[0] ?? [], inner.map((note) => ({ ...note, pitches: ['C3'] }))] }
+          : bar,
+      ),
+    }
+    expect(crowded.bars[body].treble.length).toBeGreaterThan(1)
+    expect(crowded.bars[body].bass.length).toBeGreaterThan(1)
+
+    const overlaid = applyNotePhrase(crowded, phrase)
+    expect(overlaid.bars[body].treble).toHaveLength(1)
+    expect(overlaid.bars[body].treble[0]).toEqual(phrase.notes)
+    expect(overlaid.bars[body].bass).toHaveLength(1)
+    expect(overlaid.bars[body].bass[0]).toEqual(phrase.bass!.notes)
   })
 
   it('overlays the right-hand line on every plan bar, not just bar 1', async () => {

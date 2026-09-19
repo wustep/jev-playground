@@ -407,9 +407,11 @@ function isFiniteTick(value: number): boolean {
   return Number.isInteger(value) && value > 0
 }
 
-function overlayStaff(existing: Voice[], replacement: Voice, sample?: number): Voice[] {
+function overlayStaff(replacement: Voice, sample?: number): Voice[] {
   const shaped = sample == null ? replacement : replacement.map((note) => ({ ...note, velocity: note.velocity || sample }))
-  return existing.length === 0 ? [shaped] : [shaped, ...existing.slice(1)]
+  // Jev's line replaces the staff. Leftover inner voices were written against
+  // the code melody and fight stems / beams on the same staff.
+  return [shaped]
 }
 
 export function applyBassPhrase(score: Score, barIndex: number, bass: BassPhrase): Score {
@@ -419,7 +421,7 @@ export function applyBassPhrase(score: Score, barIndex: number, bass: BassPhrase
   const voice = parseScoreVoice(bass.notes, score.meter.ticksPerBar, { lo: BASS_LO, hi: BASS_HI })
   assertVoiceFillsBar(voice, score.meter.ticksPerBar, 'notes.bass')
   const sample = bar.bass[0]?.[0]?.velocity
-  const nextBass = overlayStaff(bar.bass, voice, sample)
+  const nextBass = overlayStaff(voice, sample)
   return {
     ...score,
     bars: score.bars.map((entry, i) => (i === index ? { ...entry, bass: nextBass } : entry)),
@@ -432,7 +434,7 @@ export function applyNotePhrase(score: Score, phrase: NotePhrase): Score {
   if (!bar) throw new JevNotesError(`Jev notes: no score bar for plan bar ${phrase.barIndex + 1}`)
   const voice = parseScoreVoice(phrase.notes, score.meter.ticksPerBar)
   const sample = bar.treble[0]?.[0]?.velocity
-  const treble = overlayStaff(bar.treble, voice, sample)
+  const treble = overlayStaff(voice, sample)
   let next: Score = {
     ...score,
     bars: score.bars.map((entry, i) => (i === index ? { ...entry, treble } : entry)),
@@ -447,7 +449,7 @@ export function applyNotePhrase(score: Score, phrase: NotePhrase): Score {
   return next
 }
 
-/** Replace RH (and bass when present) on every targeted plan bar. Intro framing stays put. */
+/** Replace the RH staff (and bass staff when present) on every targeted plan bar. Intro framing stays put. */
 export function applyNotePhrases(score: Score, phrases: readonly NotePhrase[]): Score {
   return phrases.reduce((next, phrase) => applyNotePhrase(next, phrase), score)
 }

@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { Formatter, Stave } from 'vexflow/bravura'
-import { METER_INFO, type Voice } from '../render/score'
+import { METER_INFO, type Bar, type Score, type Voice } from '../render/score'
 import {
   attachVoicesToStave,
+  barDensity,
   buildVoice,
+  CHORD_ABOVE_STAFF,
+  chooseBarsPerSystem,
+  DYNAMIC_BELOW_BASS,
   flattenWideBeams,
   LEDGER_STROKE_PX,
+  minBarWidth,
+  packSystems,
   settleRests,
+  sheetLabelLayout,
   systemPadding,
   tieIndexes,
   unifyBeamStems,
@@ -259,5 +266,105 @@ describe('beams, ties, and system padding', () => {
     ])
     expect(quiet.gap).toBe(0)
     expect(crowded.gap).toBeGreaterThan(quiet.gap)
+  })
+})
+
+function testBar(index: number, treble: Voice[], bass: Voice[] = [whole('C3')]): Bar {
+  return {
+    index,
+    plan: { chord: 'i', role: 'statement', contour: 'arch' },
+    chordSymbol: 'Fm',
+    treble,
+    bass,
+    dynamic: 'pp',
+  }
+}
+
+function testScore(bars: Bar[]): Score {
+  return {
+    plan: { version: 1 } as Score['plan'],
+    seed: 1,
+    keySignature: 'C',
+    meter,
+    bpm: 80,
+    bars,
+    pedal: 'half',
+    articulation: 1,
+    introBars: 0,
+    ritardando: false,
+  }
+}
+
+const DESKTOP_WIDTH = 960
+const FIRST_LEAD = 54 + 6 + 30
+
+describe('dense-bar width and labels', () => {
+  it('gives a 16th-note bar a width floor so Formatter is not squeezed', () => {
+    const bar = testBar(0, [sixteenths('G5')], [sixteenths('C3')])
+    const density = barDensity(bar, meter)
+    expect(density).toBeGreaterThanOrEqual(16)
+    expect(minBarWidth(density)).toBeGreaterThanOrEqual(400)
+    expect(() => {
+      const upper = buildStaff([sixteenths('G5')], 'treble')
+      const lower = buildStaff([sixteenths('C3')], 'bass')
+      formatTogether(upper, lower, true)
+      for (const row of upper[0].notes.map((note) => note.getYs())) expect(row.length).toBeGreaterThan(0)
+      for (const dirs of [...beamStemSets(upper), ...beamStemSets(lower)]) expect(dirs).toHaveLength(1)
+    }).not.toThrow()
+  })
+
+  it('puts a dense 16th bar on its own system at desktop width', () => {
+    const dense = testScore(Array.from({ length: 4 }, (_, i) => testBar(i, [sixteenths('G5')], [sixteenths('Eb2')])))
+    expect(chooseBarsPerSystem(dense, DESKTOP_WIDTH, FIRST_LEAD)).toBe(1)
+    const systems = packSystems(dense, DESKTOP_WIDTH, FIRST_LEAD, FIRST_LEAD - 30)
+    expect(systems.every((system) => system.length === 1)).toBe(true)
+    expect(systems).toHaveLength(4)
+  })
+
+  it('still packs four sparse bars onto one system', () => {
+    const sparse = testScore(Array.from({ length: 4 }, (_, i) => testBar(i, [whole('G4')])))
+    const systems = packSystems(sparse, DESKTOP_WIDTH, FIRST_LEAD, FIRST_LEAD - 30)
+    expect(systems).toHaveLength(1)
+    expect(systems[0]).toHaveLength(4)
+  })
+
+  it('charges extra density when two voices share a staff', () => {
+    const single = testBar(0, [sixteenths('G5')])
+    const doubled = testBar(0, [sixteenths('G5'), sixteenths('E5')])
+    expect(barDensity(doubled, meter)).toBeGreaterThan(barDensity(single, meter))
+  })
+
+  it('formats a Jev melody over a leftover 16th inner voice without fighting stems', () => {
+    const melody: Voice = [
+      { start: 0, dur: 4, pitches: ['C5'], velocity: 80 },
+      { start: 4, dur: 4, pitches: ['G4'], velocity: 80 },
+      { start: 8, dur: 4, pitches: ['E4'], velocity: 80 },
+      { start: 12, dur: 4, pitches: ['C5'], velocity: 80 },
+    ]
+    const leftover = sixteenths('G4')
+    expect(voicesForStaff([melody, leftover, leftover], 'treble', meter)).toHaveLength(2)
+    const upper = voicesForStaff([melody], 'treble', meter)
+    const lower = voicesForStaff([whole('C3')], 'bass', meter)
+    expect(() => formatTogether(upper, lower, true)).not.toThrow()
+    expect(upper).toHaveLength(1)
+    for (const dirs of beamStemSets(upper)) expect(dirs).toHaveLength(1)
+    for (const row of upper[0].notes.map((note) => note.getYs())) expect(row.length).toBeGreaterThan(0)
+  })
+
+  it('places dynamics below the bass staff and chords above the treble', () => {
+    const top = 80
+    const gap = 96
+    const x = 20
+    const noteStart = 110
+    const first = sheetLabelLayout(top, gap, x, noteStart, true)
+    const later = sheetLabelLayout(top, gap, x, noteStart, false)
+    expect(first.chordY).toBe(top - CHORD_ABOVE_STAFF)
+    expect(first.chordY).toBeLessThan(top - 8)
+    expect(first.dynamicY).toBe(top + gap + DYNAMIC_BELOW_BASS)
+    // VexFlow bass lines occupy staveY+40 .. staveY+80.
+    expect(first.dynamicY).toBeGreaterThan(top + gap + 80)
+    expect(first.dynamicX).toBeLessThan(noteStart)
+    expect(first.roleY).toBeGreaterThan(first.dynamicY)
+    expect(later.dynamicX).toBeGreaterThanOrEqual(x)
   })
 })
