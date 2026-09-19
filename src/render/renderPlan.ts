@@ -8,7 +8,7 @@
 
 import { Note as TonalNote } from 'tonal'
 import { themeSources } from '../plan/forms'
-import { BAR_COUNT_VALUES, DYNAMIC_IDS, ROLE_BASE, TEMPO_BPM, type BarCount, type BarRoleId, type CharacterId, type CompositionPlan, type DynamicId, type DynamicShapeId } from '../plan/schema'
+import { BAR_COUNT_VALUES, DYNAMIC_IDS, ROLE_BASE, TEMPO_BPM, resolveHookBars, type BarCount, type BarRoleId, type CharacterId, type CompositionPlan, type DynamicId, type DynamicShapeId } from '../plan/schema'
 import { rng } from '../planner/pick'
 import { newMemory, type BarContext, type BarNotes, type RenderMemory, type Texture } from './context'
 import { applyCadenceOrnament, STYLE_DIALECTS, timingOffsetSeconds } from './dialect'
@@ -183,7 +183,9 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   // A hand-edited plan may disagree with its form label, so a bar only returns
   // while its role still allows it (a cadence is always written fresh).
   const barCount = plan.bars.length as BarCount
-  const returns = (BAR_COUNT_VALUES as readonly number[]).includes(barCount) ? themeSources(plan.form, barCount) : []
+  const returns = (BAR_COUNT_VALUES as readonly number[]).includes(barCount)
+    ? themeSources(plan.form, barCount, resolveHookBars(plan))
+    : []
   const levels = arrangementLevels({ ...plan, arrangement: arrangementOf(plan) })
   const velocities = plan.bars.map((barPlan, index) =>
     clamp(baseVelocity + shapeOffset(plan.dynamicShape, index, plan.bars.length, barPlan.role) + (ROLE_VELOCITY[barPlan.role] ?? 0), 24, 118),

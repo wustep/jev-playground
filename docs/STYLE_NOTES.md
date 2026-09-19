@@ -414,6 +414,25 @@ Gap-study items 1–2, plus the Zimmer same-figure layer (item 3) — see
   keeps the written figure; `applyArrangement` still adds or strips a layer.
   No new label.
 
+## Hook length and Guide realize (fifth pass, 2026-09-19)
+
+Gap-study leftover from `docs/fable-context/GENERATED_VS_REFERENCE.md`:
+Glass/Zimmer `ret4` ≈ 0, Adagio needs an 8-bar return, Guide rest slots were
+inaudible, and Guide rewrote A′.
+
+**Changed**
+- Closed global `hookBars`: `2 | 4 | 8`. On `GLOBAL_FIELDS` after `phrasing`,
+  so both planners and the Jev `globals` request pick it up with no new op.
+  **Coder: allowlist `hookBars`.** Hand-edited plans default from form +
+  character (loops 4, vamps 2, lyrical 4). Beethoven lyrical priors pick 8;
+  Glass/Zimmer loops pick 4.
+- `themeSources` / `formSlots` take that length: a loop cell can return
+  whole (4); a 16-bar singing form with hook 8 is the 8-bar theme twice.
+- Guide realize (no new op): rest slots vacate a felt beat; theme-return
+  bars ornament the source melody instead of writing a new figure+goal.
+- Breathing / long-breathed phrase ends stay empty (no pickup). `upbeat`
+  still fills the rest.
+
 ## Left out, on purpose
 
 - **More meters.** 2/4, 9/8 and 12/8 are in (Beethoven marches/allegros, Debussy

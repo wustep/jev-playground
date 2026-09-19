@@ -27,6 +27,7 @@ const FIELD_LABEL: Record<GlobalField, string> = {
   opening: 'Opening',
   pedal: 'Pedal',
   phrasing: 'Phrasing',
+  hookBars: 'Hook',
 }
 
 function pretty(field: GlobalField, plan: CompositionPlan): string {

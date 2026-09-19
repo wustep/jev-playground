@@ -35,6 +35,8 @@ import {
   type PlanGlobals,
   type StyleId,
   type StyleMatchScore,
+  hookBarsValue,
+  resolveHookBars,
 } from '../plan/schema'
 import {
   BASS_PATTERN_QUESTION_ID,
@@ -190,16 +192,17 @@ export class JevPlanner implements Planner {
       globals[field] = decide(second, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
     }
     const barCount: BarCount = input.bars
+    const hook = hookBarsValue((globals as PlanGlobals).hookBars ?? '4')
     // Roles are the form, expanded by code: coherent by construction.
-    const roles = formRoles(globals.form as FormId, barCount)
+    const roles = formRoles(globals.form as FormId, barCount, hook)
     roles.forEach((role, i) => {
       decisions.push({ field: `bars[${i}].role`, choice: role, confidence: 1, probabilities: normalize(Object.fromEntries(BAR_ROLE_IDS.map((id) => [id, id === role ? 1 : 0]))) })
     })
 
     // 3 ─ one HarmonyBook phrase per 4-bar slot. Cadence splits are applied in
     // code from the book's `splits` list (no extra approach Choice).
-    const slots = formSlots(globals.form as FormId, barCount)
-    const returns = themeSources(globals.form as FormId, barCount)
+    const slots = formSlots(globals.form as FormId, barCount, hook)
+    const returns = themeSources(globals.form as FormId, barCount, hook)
     const book = bookFor(input.style, globals.key as KeyId)
     const pickedChords: ChordId[] = []
     const contours: ContourId[] = []
@@ -297,7 +300,8 @@ export class JevPlanner implements Planner {
    * rhythm, degrees and bass pattern, re-spelled on the later chord.
    *
    * `mode: 'guide'` — D1: Jev picks a closed figure + chord-tone goal; code
-   * writes the singing line. Theme returns reuse source figure+goal.
+   * writes the singing line. Theme returns reuse source figure+goal and
+   * ornament the source melody (realize-only; no new op).
    * No `pitch_1..4`. Accompaniment stays with renderPlan.
    */
   async writeNotes(
@@ -307,7 +311,7 @@ export class JevPlanner implements Planner {
   ): Promise<{ phrases: NotePhrase[]; exchanges: Required<Exchange>[] }> {
     if ((options?.mode ?? 'line') === 'guide') return this.writeGuideNotes(plan, input, options)
     if (plan.bars.length === 0) throw new Error('Jev notes: plan has no bars')
-    const returns = themeSources(plan.form, plan.bars.length as BarCount)
+    const returns = themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan))
     const phrases: NotePhrase[] = []
     const exchanges: Required<Exchange>[] = []
     const random = rng(input.seed ^ 0x4e07e5)
@@ -403,8 +407,9 @@ export class JevPlanner implements Planner {
 
   /**
    * D1: Jev picks figure + goal; code realizes the singing line. Theme-return
-   * bars reuse the source figure and goal, re-spelled on the later chord.
-   * `melody_so_far` carries prior figure/goal ids. No parallel degrees.
+   * bars reuse the source figure and goal and ornament that source melody
+   * rather than writing a new figure. `melody_so_far` carries prior
+   * figure/goal ids. No parallel degrees.
    */
   private async writeGuideNotes(
     plan: CompositionPlan,
@@ -412,7 +417,7 @@ export class JevPlanner implements Planner {
     options?: Pick<PlanOptions, 'signal'>,
   ): Promise<{ phrases: NotePhrase[]; exchanges: Required<Exchange>[] }> {
     if (plan.bars.length === 0) throw new Error('Jev notes: plan has no bars')
-    const returns = themeSources(plan.form, plan.bars.length as BarCount)
+    const returns = themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan))
     const phrases: NotePhrase[] = []
     const exchanges: Required<Exchange>[] = []
     const random = rng(input.seed ^ 0x4e07e5)
@@ -434,7 +439,11 @@ export class JevPlanner implements Planner {
       return parseJevGuideChoices({ figure, goal })
     }
 
-    const realize = (choices: { figure: NotePhrase['figure']; goal: NotePhrase['goal'] }, barIndex: number) =>
+    const realize = (
+      choices: { figure: NotePhrase['figure']; goal: NotePhrase['goal'] },
+      barIndex: number,
+      sourceNotes?: NotePhrase['notes'],
+    ) =>
       realizeJevGuideChoices(
         { figure: choices.figure!, goal: choices.goal! },
         plan,
@@ -444,6 +453,7 @@ export class JevPlanner implements Planner {
           lastNotes,
           lastRhythm,
           lyrical,
+          sourceNotes,
         },
       )
 
@@ -458,7 +468,7 @@ export class JevPlanner implements Planner {
       const source = returns[i]
       const from = source !== undefined ? phrases[source] : undefined
       if (from?.figure && from.goal) {
-        const phrase = realize({ figure: from.figure, goal: from.goal }, i)
+        const phrase = realize({ figure: from.figure, goal: from.goal }, i, from.notes)
         phrases.push(phrase)
         remember(phrase)
         continue

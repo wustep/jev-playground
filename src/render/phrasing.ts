@@ -11,6 +11,7 @@ import { themeSources } from '../plan/forms'
 import {
   BAR_COUNT_VALUES,
   defaultPhrasing,
+  resolveHookBars,
   type BarCount,
   type CharacterId,
   type CompositionPlan,
@@ -192,7 +193,9 @@ export function applyPhraseBreath(score: Score): void {
   const restTicks = phraseRestTicks(meter, phrasing)
   if (restTicks <= 0) return
   const returns =
-    (BAR_COUNT_VALUES as readonly number[]).includes(barCount) ? themeSources(plan.form as FormId, barCount as BarCount) : []
+    (BAR_COUNT_VALUES as readonly number[]).includes(barCount)
+      ? themeSources(plan.form as FormId, barCount as BarCount, resolveHookBars(plan))
+      : []
   const key = keyInfo(plan.key)
 
   for (let i = 0; i < score.bars.length; i++) {
@@ -204,6 +207,9 @@ export function applyPhraseBreath(score: Score): void {
     const restFrom = meter.ticksPerBar - restTicks
     clipVoiceTo(voice, restFrom)
     if (i >= score.bars.length - 1) continue
+    // `upbeat` fills the rest with a pickup. `breathing` / `long_breathed`
+    // leave the last beat(s) empty so occupancy can mark them silent.
+    if (phrasing !== 'upbeat') continue
     const nextPitch = firstMelodyPitch(score.bars[i + 1]?.treble[0])
     const fromPitch = lastMelodyPitch(voice)
     if (!nextPitch || !fromPitch) continue

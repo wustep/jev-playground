@@ -3,6 +3,8 @@ import {
   BAR_COUNT_VALUES,
   GLOBAL_FIELD_IDS,
   GLOBAL_FIELDS,
+  HOOK_BARS,
+  HOOK_BARS_IDS,
   PEDAL_IDS,
   PEDALS,
   PHRASING_IDS,
@@ -10,9 +12,11 @@ import {
   TEMPO_BPM,
   TEMPO_IDS,
   TEMPOS,
+  defaultHookBars,
   defaultPhrasing,
   parseGlobals,
   parsePlan,
+  resolveHookBars,
 } from './schema'
 
 const KEPT_TEMPO_BPM = {
@@ -138,6 +142,50 @@ describe('PHRASINGS', () => {
     expect(parsePlan({ ...lyrical, phrasing: 'upbeat' }).phrasing).toBe('upbeat')
     expect(parsePlan({ ...storm, phrasing: 'breathing' }).phrasing).toBe('breathing')
     expect(() => parsePlan({ ...lyrical, phrasing: 'none' })).toThrow(/phrasing/)
+  })
+})
+
+describe('HOOK_BARS', () => {
+  it('is a closed 2 | 4 | 8 Choice, fanned out with the other globals', () => {
+    expect(HOOK_BARS_IDS).toEqual(['2', '4', '8'])
+    expect(Object.keys(HOOK_BARS)).toEqual(HOOK_BARS_IDS)
+    expect(GLOBAL_FIELD_IDS).toContain('hookBars')
+    expect(GLOBAL_FIELDS.hookBars).toBe(HOOK_BARS)
+  })
+
+  it('defaults a hand-edited plan from form and character, and accepts an explicit pick', () => {
+    const bars = [
+      { chord: 'I', role: 'statement', contour: 'arch' },
+      { chord: 'V', role: 'development', contour: 'rise' },
+      { chord: 'V7', role: 'half_cadence', contour: 'fall' },
+      { chord: 'I', role: 'cadence', contour: 'fall' },
+    ]
+    const loop = {
+      version: 1,
+      style: 'glass',
+      character: 'hypnotic_pulse',
+      form: 'additive_loop',
+      key: 'F_minor',
+      meter: 'four_four',
+      texture: 'minimal_cells',
+      palette: 'diatonic',
+      tempo: 'andante',
+      dynamics: 'mp',
+      dynamicShape: 'late_surge',
+      defaultInstrument: 'grand_piano',
+      bars,
+    }
+    const vamp = { ...loop, form: 'vamp_and_tag', character: 'warm_groove' }
+    const lyrical = { ...loop, style: 'chopin', character: 'lyrical_song', form: 'period', key: 'Eb_major' }
+    expect(defaultHookBars('hypnotic_pulse', 'additive_loop')).toBe('4')
+    expect(defaultHookBars('warm_groove', 'vamp_and_tag')).toBe('2')
+    expect(defaultHookBars('lyrical_song', 'period')).toBe('4')
+    expect(parseGlobals(loop).hookBars).toBe('4')
+    expect(parseGlobals(vamp).hookBars).toBe('2')
+    expect(parseGlobals(lyrical).hookBars).toBe('4')
+    expect(resolveHookBars(parsePlan({ ...loop, hookBars: '8' }))).toBe(8)
+    expect(parsePlan({ ...lyrical, hookBars: '2' }).hookBars).toBe('2')
+    expect(() => parsePlan({ ...loop, hookBars: '16' })).toThrow(/hookBars/)
   })
 
   it('accepts 64-bar plans and rejects lengths outside BAR_COUNT_VALUES', () => {

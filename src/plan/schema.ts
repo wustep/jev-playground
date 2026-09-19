@@ -294,6 +294,49 @@ export function defaultPhrasing(character: CharacterId): PhrasingId {
   }
 }
 
+/**
+ * How many bars of the opening idea come back in the skyline. Independent of
+ * `form` so a 16-bar period can still be a 4-bar nocturne A, or an 8-bar
+ * Adagio theme said twice. Loop forms default to a 4-bar cell; vamps stay at 2.
+ */
+export const HOOK_BARS = {
+  '2': 'A two-bar hook — only the opening cell returns; the rest of each phrase goes its own way',
+  '4': 'A four-bar hook — the returning skyline is a four-bar cell or phrase, said again',
+  '8': 'An eight-bar hook — the returning skyline is a full eight-bar theme, the way a slow-movement period comes back',
+} as const
+export type HookBarsId = keyof typeof HOOK_BARS
+export const HOOK_BARS_IDS = keysOf<HookBarsId>(HOOK_BARS)
+export const HOOK_BARS_VALUES = [2, 4, 8] as const
+export type HookBars = (typeof HOOK_BARS_VALUES)[number]
+
+/** Numeric length of a closed `hookBars` pick. */
+export function hookBarsValue(id: HookBarsId): HookBars {
+  return Number(id) as HookBars
+}
+
+/** Hand-edited plans that omit `hookBars` keep a form-and-character default. */
+export function defaultHookBars(character: CharacterId, form: FormId): HookBarsId {
+  if (form === 'additive_loop' || form === 'layered_build') return '4'
+  if (form === 'vamp_and_tag' || form === 'mosaic_pairs') return '2'
+  switch (character) {
+    case 'lyrical_song':
+    case 'solemn_hymn':
+    case 'warm_groove':
+      return '4'
+    case 'hypnotic_pulse':
+    case 'meditative_stillness':
+    case 'dreamy_haze':
+      return '4'
+    default:
+      return '2'
+  }
+}
+
+/** Plan pick, or the form-and-character default. */
+export function resolveHookBars(plan: Pick<CompositionPlan, 'character' | 'form' | 'hookBars'>): HookBars {
+  return hookBarsValue(plan.hookBars ?? defaultHookBars(plan.character, plan.form))
+}
+
 export const BAR_COUNTS = {
   '4': 'Four bars — one short phrase, a single gesture',
   '8': 'Eight bars — a full period: a phrase and its answer',
@@ -539,6 +582,13 @@ export interface CompositionPlan {
    * breathes; perpetual / stormy stay on the beat).
    */
   phrasing?: PhrasingId
+  /**
+   * How many bars of the opening idea return in the skyline. Optional on
+   * hand-edited plans; planners always write it. The renderer defaults from
+   * `form` + `character` (loops 4, vamps 2, lyrical 4). Beethoven lyrical
+   * priors pick 8 so an Adagio theme can come back whole.
+   */
+  hookBars?: HookBarsId
   /** 4, 8, 16, 32 or 64 bars, one harmony each — two where a bar carries a `chord2`. */
   bars: BarPlan[]
 }
@@ -559,6 +609,7 @@ export const GLOBAL_FIELDS = {
   opening: OPENINGS,
   pedal: PEDALS,
   phrasing: PHRASINGS,
+  hookBars: HOOK_BARS,
 } as const
 export type GlobalField = keyof typeof GLOBAL_FIELDS
 export const GLOBAL_FIELD_IDS = Object.keys(GLOBAL_FIELDS) as GlobalField[]
@@ -602,9 +653,10 @@ export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError(`${path}: expected an object`)
   const obj = raw as Record<string, unknown>
   const character = parseOption(CHARACTERS, obj.character, `${path}.character`)
+  const form = parseOption(FORMS, obj.form, `${path}.form`)
   return {
     character,
-    form: parseOption(FORMS, obj.form, `${path}.form`),
+    form,
     key: parseOption(KEYS, obj.key, `${path}.key`),
     meter: parseOption(METERS, obj.meter, `${path}.meter`),
     texture: parseOption(TEXTURES, obj.texture, `${path}.texture`),
@@ -617,6 +669,7 @@ export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
     opening: obj.opening != null ? parseOption(OPENINGS, obj.opening, `${path}.opening`) : 'straight_in',
     pedal: obj.pedal != null ? parseOption(PEDALS, obj.pedal, `${path}.pedal`) : 'half',
     phrasing: obj.phrasing != null ? parseOption(PHRASINGS, obj.phrasing, `${path}.phrasing`) : defaultPhrasing(character),
+    hookBars: obj.hookBars != null ? parseOption(HOOK_BARS, obj.hookBars, `${path}.hookBars`) : defaultHookBars(character, form),
   }
 }
 

@@ -248,10 +248,10 @@ Borrowed iv still never sounds. Beethoven notes are still the storm.
 
 | # | Ship | Notes it changes |
 | --- | --- | --- |
-| 1 | **`hook_bars: 2 \| 4 \| 8`** | Glass/Zimmer skyline `ret4`; Adagio 8-bar return |
+| 1 | **`hook_bars: 2 \| 4 \| 8`** | Glass/Zimmer skyline `ret4`; Adagio 8-bar return. **This PR.** Coder: allowlist `hookBars`. |
 | 2 | **Beethoven lyrical so Generate can emit Adagio-register notes** | Register 81 → ~62; 2/4 alberti vs tremolo |
-| 3 | **Air that vacates a beat / downbeat** (not a pickup-filled phrase end) | 16/16 lyrical downbeats |
-| 4 | **Ornament the returning skyline** (code + Guide `turn`); do not re-realize A′ | Chopin Guide ret4 0.25 |
+| 3 | **Air that vacates a beat / downbeat** (not a pickup-filled phrase end) | 16/16 lyrical downbeats. **Partial this PR:** Guide rest slots vacate a felt beat; code-path `breathing` / `long_breathed` leave the last beat empty (no pickup). |
+| 4 | **Ornament the returning skyline** (Guide realize-only; no new op) | Chopin Guide ret4 0.25. **This PR.** |
 | 5 | **`notes_scope: singing_line \| none`** | Guide on prelude / Glass / Zimmer |
 | 6 | **Guide leap cap** | 29 st Laufey/Fox |
 | 7 | **Holds must not flatten phrases** (so Debussy/Bach *notes* walk the verified RNs) | I×8 planing; fifths after I–ii42 |

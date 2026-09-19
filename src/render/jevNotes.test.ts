@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BASS_PATTERN_IDS, FIGURE_QUESTION_ID, GOAL_QUESTION_ID, MELODY_DEGREE_IDS, MELODY_FIGURE_IDS, MELODY_GOAL_IDS, NOTE_TICK_VALUES, PHRASE_NOTE_COUNT, PHRASE_RHYTHMS, guideRestSlot, parseJevNoteChoices, parseNoteTick, type MelodyDegreeId } from '../plan/notes'
-import { METER_IDS, PlanValidationError, type BarCount, type BarRoleId, type CompositionPlan } from '../plan/schema'
+import { METER_IDS, PlanValidationError, resolveHookBars, type BarCount, type BarRoleId, type CompositionPlan } from '../plan/schema'
 import { HeuristicPlanner } from '../planner/HeuristicPlanner'
 import { JevPlanner, type JevTransport } from '../planner/JevPlanner'
 import { buildRequest, parseOp } from '../planner/jev/requests'
@@ -557,7 +557,7 @@ describe('Jev notes op', () => {
     expect(exchanges.every((exchange) => exchange.sent)).toBe(true)
     expect(phrases).toHaveLength(plan.bars.length)
     expect(notePhrasesCoverPlan(phrases, plan.bars.length)).toBe(true)
-    const returns = themeSources(plan.form, plan.bars.length as BarCount)
+    const returns = themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan))
     expect(exchanges).toHaveLength(returns.filter((source) => source === undefined).length)
     for (let i = 0; i < plan.bars.length; i++) {
       const source = returns[i]
@@ -670,7 +670,7 @@ describe('Jev notes op', () => {
     expect(exchanges.every((exchange) => exchange.op.op === 'notes' && exchange.op.mode === 'guide')).toBe(true)
     expect(phrases).toHaveLength(plan.bars.length)
     expect(phrases.every((phrase) => phrase.figure && phrase.goal && phrase.mode === 'guide')).toBe(true)
-    const returns = themeSources(plan.form, plan.bars.length as BarCount)
+    const returns = themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan))
     expect(exchanges).toHaveLength(returns.filter((source) => source === undefined).length)
     for (let i = 0; i < plan.bars.length; i++) {
       const source = returns[i]
@@ -756,6 +756,39 @@ describe('D1 guide realization', () => {
     const mid = onsets.findIndex((start) => start >= 8 && start % 4 === 0)
     expect(restIndexes).not.toContain(mid)
     expect(phrase.notes.some((note) => note.dur === Math.max(...ticks))).toBe(true)
+  })
+
+  it('turns a lyrical rest slot into a silent felt beat', () => {
+    const plan = cMajorPlan()
+    const phrase = realizeJevGuideChoices({ figure: 'hold_resolve', goal: 'fifth' }, plan, { lyrical: true })
+    expect(phrase.degrees).toContain('rest')
+    const beat = METER_INFO.four_four.beatTicks
+    let silent = 0
+    for (let b = 0; b < 4; b++) {
+      const t = b * beat
+      const covering = phrase.notes.filter((note) => note.start <= t && note.start + note.dur > t)
+      if (covering.length === 0) silent += 1
+    }
+    expect(silent).toBeGreaterThan(0)
+  })
+
+  it('ornaments a theme-return source melody instead of writing a new figure', () => {
+    const plan = cMajorPlan()
+    const source = realizeJevGuideChoices({ figure: 'step_to_goal', goal: 'third' }, plan, { lyrical: false, barIndex: 0 })
+    const ornamented = realizeJevGuideChoices({ figure: 'arpeggio_up', goal: 'fifth' }, plan, {
+      lyrical: false,
+      barIndex: 0,
+      sourceNotes: source.notes,
+      lastRhythm: source.rhythm,
+    })
+    const rewritten = realizeJevGuideChoices({ figure: 'arpeggio_up', goal: 'fifth' }, plan, { lyrical: false, barIndex: 0 })
+    const pcs = (phrase: NotePhrase) => phrase.notes.map((note) => midiOf(note.pitches[0]) % 12)
+    const share = (a: number[], b: number[]) => a.filter((pc, i) => i < b.length && pc === b[i]).length
+    const sourcePcs = pcs(source)
+    expect(share(pcs(ornamented), sourcePcs)).toBeGreaterThan(share(pcs(rewritten), sourcePcs))
+    expect(share(pcs(ornamented), sourcePcs)).toBeGreaterThanOrEqual(2)
+    expect(ornamented.figure).toBe('arpeggio_up')
+    expect(ornamented.goal).toBe('fifth')
   })
 
   it('prefers chord tones on strong beats', () => {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { formRoles, themeSources } from '../plan/forms'
-import { BAR_COUNT_VALUES, FORM_IDS, STYLE_IDS, type BarPlan, type ChordId, type CompositionPlan, type ContourId } from '../plan/schema'
+import { BAR_COUNT_VALUES, FORM_IDS, STYLE_IDS, resolveHookBars, type BarPlan, type ChordId, type CompositionPlan, type ContourId } from '../plan/schema'
 import { HeuristicPlanner } from '../planner/HeuristicPlanner'
+import { isPhraseFinalBar } from './phrasing'
 import { midiOf } from './pitch'
 import { renderPlan } from './renderPlan'
 import type { Voice } from './score'
@@ -33,6 +34,16 @@ describe('themeSources: which bars bring back which', () => {
     expect(themeSources('sentence', 8).slice(0, 4)).toEqual([undefined, undefined, 0, 1])
     expect(themeSources('mosaic_pairs', 16).slice(0, 8)).toEqual([undefined, undefined, 0, 1, undefined, undefined, 4, 5])
     expect(themeSources('additive_loop', 16)).toEqual([undefined, undefined, undefined, undefined, 0, 1, undefined, undefined, 0, 1, undefined, undefined, 0, 1, undefined, undefined])
+    expect(themeSources('additive_loop', 16, 4)).toEqual([
+      undefined, undefined, undefined, undefined, 0, 1, 2, undefined, 0, 1, 2, 3, 0, 1, undefined, undefined,
+    ])
+  })
+
+  it('maps a later eight-bar run onto the first theme when hookBars is 8', () => {
+    expect(themeSources('period', 16, 8)).toEqual([
+      undefined, undefined, undefined, undefined, 0, 1, 2, undefined, 0, 1, 2, 3, 0, 1, 2, undefined,
+    ])
+    expect(themeSources('period', 16, 8).filter((source) => source !== undefined)).toHaveLength(10)
   })
 
   it('never repeats in a fantasia, and only ever looks back, never at or from a cadence', () => {
@@ -125,8 +136,10 @@ describe('a returning phrase', () => {
       const { plan } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: false })
       const score = renderPlan(plan, seed)
       const body = score.bars.slice(score.introBars)
-      themeSources(plan.form, 16).forEach((source, i) => {
+      themeSources(plan.form, 16, resolveHookBars(plan)).forEach((source, i) => {
         if (source === undefined || !body[i].treble[0] || !body[source].treble[0]) return
+        // Phrase-end breath clips the source after the return was copied.
+        if (isPhraseFinalBar(i, 16) || isPhraseFinalBar(source, 16)) return
         expected++
         if (rhythm(body[i].treble[0]) === rhythm(body[source].treble[0])) returned++
       })

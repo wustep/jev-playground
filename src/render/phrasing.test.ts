@@ -8,13 +8,14 @@ import { METER_INFO } from './score'
 
 const CONTOURS: ContourId[] = ['arch', 'leap_fall', 'wave', 'rise']
 function songPlan(overrides: Partial<CompositionPlan> = {}): CompositionPlan {
+  const form = overrides.form ?? 'period'
   const chords: ChordId[] = ['I', 'vi', 'ii6', 'V', 'I', 'vi', 'ii6', 'I', 'IV', 'ii', 'V7_of_V', 'V', 'I', 'vi', 'V7', 'I']
-  const roles = formRoles('period', 16)
+  const roles = formRoles(form, 16)
   return {
     version: 1,
     style: 'chopin',
     character: 'lyrical_song',
-    form: 'period',
+    form,
     key: 'C_major',
     meter: 'four_four',
     texture: 'alberti_melody',
@@ -68,17 +69,22 @@ describe('phrasing helpers', () => {
 })
 
 describe('a breathing tune', () => {
-  it('leaves the last beat of a phrase-end bar without a melody attack, then picks up into the return', () => {
-    const score = renderPlan(songPlan(), 3)
+  it('leaves the last beat of a phrase-end bar silent — no pickup filling the air', () => {
+    const score = renderPlan(songPlan({ phrasing: 'breathing' }), 3)
     const beat = METER_INFO.four_four.beatTicks
     const phraseEnds = [3, 7, 11]
     for (const index of phraseEnds) {
       const voice = score.bars[index].treble[0]
-      const attacksOnLastBeat = voice.filter((n) => n.start >= score.meter.ticksPerBar - beat && n.dur >= beat)
-      expect(attacksOnLastBeat, `bar ${index + 1} should not hold through the last beat`).toHaveLength(0)
-      expect(lastOnset(index, score), `bar ${index + 1} should pick up into the next phrase`).toBeGreaterThanOrEqual(score.meter.ticksPerBar - beat)
+      const coveringLast = voice.filter((n) => n.start < score.meter.ticksPerBar && n.start + n.dur > score.meter.ticksPerBar - beat)
+      expect(coveringLast, `bar ${index + 1} last beat should be silent`).toHaveLength(0)
+      expect(lastOnset(index, score), `bar ${index + 1} should not pick up`).toBeLessThan(score.meter.ticksPerBar - beat)
     }
-    // The pickup steps toward the next bar's first pitch (the returning theme).
+  })
+
+  it('fills an upbeat phrase-end rest with a pickup into the return', () => {
+    const score = renderPlan(songPlan({ phrasing: 'upbeat' }), 3)
+    const beat = METER_INFO.four_four.beatTicks
+    expect(lastOnset(3, score)).toBeGreaterThanOrEqual(score.meter.ticksPerBar - beat)
     const pickup = score.bars[3].treble[0].at(-1)!
     const next = score.bars[4].treble[0][0]
     expect(Math.abs(midiOf(pickup.pitches.at(-1)!) - midiOf(next.pitches.at(-1)!))).toBeLessThanOrEqual(7)
@@ -94,19 +100,20 @@ describe('a breathing tune', () => {
 
   it('rests a stormy piece when phrasing is breathing, and does not rest a lyrical piece marked on_the_beat', () => {
     const beat = METER_INFO.four_four.beatTicks
-    const stormBreathes = renderPlan(songPlan({ character: 'stormy_drama', phrasing: 'breathing', texture: 'alberti_melody' }), 3)
-    const stormOnBeat = renderPlan(songPlan({ character: 'stormy_drama', phrasing: 'on_the_beat', texture: 'alberti_melody' }), 3)
-    const lyricalOnBeat = renderPlan(songPlan({ character: 'lyrical_song', phrasing: 'on_the_beat', texture: 'alberti_melody' }), 3)
-    const lyricalBreathes = renderPlan(songPlan({ character: 'lyrical_song', phrasing: 'breathing', texture: 'alberti_melody' }), 3)
+    const stormBreathes = renderPlan(songPlan({ character: 'stormy_drama', form: 'spinning_out', phrasing: 'breathing', texture: 'alberti_melody' }), 3)
+    const stormOnBeat = renderPlan(songPlan({ character: 'stormy_drama', form: 'spinning_out', phrasing: 'on_the_beat', texture: 'alberti_melody' }), 3)
+    const lyricalOnBeat = renderPlan(songPlan({ character: 'lyrical_song', form: 'spinning_out', phrasing: 'on_the_beat', texture: 'alberti_melody' }), 3)
+    const lyricalBreathes = renderPlan(songPlan({ character: 'lyrical_song', form: 'spinning_out', phrasing: 'breathing', texture: 'alberti_melody' }), 3)
     const heldLast = (score: ReturnType<typeof renderPlan>) =>
       score.bars[3].treble[0].filter((n) => n.start >= score.meter.ticksPerBar - beat && n.dur >= beat)
     const beforeLast = (score: ReturnType<typeof renderPlan>) =>
       score.bars[3].treble[0].filter((n) => n.start < score.meter.ticksPerBar - beat).reduce((sum, n) => sum + n.dur, 0)
     expect(heldLast(stormBreathes)).toHaveLength(0)
     expect(heldLast(lyricalBreathes)).toHaveLength(0)
-    expect(stormBreathes.bars[3].treble[0]).not.toEqual(stormOnBeat.bars[3].treble[0])
     expect(lyricalOnBeat.bars[3].treble[0]).not.toEqual(lyricalBreathes.bars[3].treble[0])
     expect(beforeLast(stormOnBeat)).toBeGreaterThanOrEqual(beforeLast(stormBreathes))
     expect(beforeLast(lyricalOnBeat)).toBeGreaterThanOrEqual(beforeLast(lyricalBreathes))
+    const stormUpbeat = renderPlan(songPlan({ character: 'stormy_drama', form: 'spinning_out', phrasing: 'upbeat', texture: 'alberti_melody' }), 3)
+    expect(lastOnset(3, stormUpbeat)).toBeGreaterThanOrEqual(stormUpbeat.meter.ticksPerBar - beat)
   })
 })

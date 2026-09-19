@@ -14,7 +14,7 @@
 //
 // NOTE: imported by the /api/jev serverless chain → explicit `.js` extensions.
 
-import type { BarCount, BarRoleId, FormId } from './schema.js'
+import type { BarCount, BarRoleId, FormId, HookBars } from './schema.js'
 
 /** How a phrase ends harmonically. */
 export type PhraseEnd = 'open' | 'half' | 'closed'
@@ -567,14 +567,34 @@ const LAYOUTS: Record<FormId, Layout> = {
   },
 }
 
+/**
+ * When the hook is eight bars, a 16-bar singing form is the 8-bar theme
+ * twice — not A A' B A''. Loops and vamps keep their usual 16-bar layouts;
+ * `themeSources` still copies eight bars of the first cell.
+ */
+const EIGHT_BAR_DOUBLE: ReadonlySet<FormId> = new Set<FormId>([
+  'period',
+  'sentence',
+  'arch_return',
+  'binary_dance',
+  'call_and_response',
+])
+
 /** The four-bar phrase slots of `form` at `bars` bars. */
-export function formSlots(form: FormId, bars: BarCount): readonly PhraseSlot[] {
-  return LAYOUTS[form][bars]
+export function formSlots(form: FormId, bars: BarCount, hookBars?: HookBars): readonly PhraseSlot[] {
+  const base = LAYOUTS[form][bars]
+  if (hookBars === 8 && bars === 16 && EIGHT_BAR_DOUBLE.has(form)) {
+    const eight = LAYOUTS[form][8]
+    if (eight.length === 2) {
+      return [eight[0], eight[1], { ...eight[0], varied: true }, { ...eight[1], varied: true, end: 'closed' }]
+    }
+  }
+  return base
 }
 
 /** Per-bar roles of `form` at `bars` bars — what both planners write into the plan. */
-export function formRoles(form: FormId, bars: BarCount): BarRoleId[] {
-  return formSlots(form, bars).flatMap((phrase) => [...phrase.roles])
+export function formRoles(form: FormId, bars: BarCount, hookBars?: HookBars): BarRoleId[] {
+  return formSlots(form, bars, hookBars).flatMap((phrase) => [...phrase.roles])
 }
 
 // ── the theme: which bars bring back which ──────────────────────────────────
@@ -612,8 +632,52 @@ const WRITTEN_FRESH: ReadonlySet<BarRoleId> = new Set<BarRoleId>(['cadence', 'ha
  * own two-bar idea twice. Cadences, surprises and dissolves stay fresh, so a
  * consequent can close where its antecedent paused.
  */
-export function themeSources(form: FormId, bars: BarCount): (number | undefined)[] {
-  const slots = formSlots(form, bars)
+function copyCountFor(kind: OpeningKind, hookBars?: HookBars): number {
+  if (hookBars === 2) return 2
+  if (hookBars === 4 || hookBars === 8) return 4
+  return RETURNING_BARS[kind]
+}
+
+function applyEightBarHook(slots: readonly PhraseSlot[], sources: (number | undefined)[]): void {
+  let themeAt = -1
+  for (let j = 0; j < slots.length - 1; j++) {
+    if (slots[j].material === slots[j + 1].material) {
+      themeAt = j
+      break
+    }
+  }
+  if (themeAt < 0) return
+  const material = slots[themeAt].material
+  const kind = OPENING[slots[themeAt].build]
+  for (let j = themeAt + 2; j < slots.length - 1; j++) {
+    if (slots[j].material !== material || slots[j + 1].material !== material) continue
+    if (OPENING[slots[j].build] !== kind) continue
+    for (let k = 0; k < 8; k++) {
+      const dest = j * 4 + k
+      const src = themeAt * 4 + k
+      // The whole eight-bar theme comes back, including its internal half
+      // cadence. Only the piece's last bar stays fresh.
+      if (dest === sources.length - 1) continue
+      sources[dest] = sources[src] ?? src
+    }
+  }
+}
+
+/**
+ * For each bar, the index of the earlier bar whose tune it brings back, or
+ * undefined where the line is new. A phrase returns the first phrase of the
+ * same material that opened the same way; a `duplicate` phrase also says its
+ * own two-bar idea twice. Cadences, surprises and dissolves stay fresh, so a
+ * consequent can close where its antecedent paused.
+ *
+ * `hookBars` (2 / 4 / 8) is how many bars of that opening idea come back in
+ * the skyline. Omitted, a loop keeps a two-bar hook and a singing phrase
+ * returns three bars up to its cadence — today's layout. `4` makes a loop
+ * cell return whole; `8` maps a later eight-bar run of the same material
+ * onto the first eight-bar theme.
+ */
+export function themeSources(form: FormId, bars: BarCount, hookBars?: HookBars): (number | undefined)[] {
+  const slots = formSlots(form, bars, hookBars)
   const sources: (number | undefined)[] = Array(slots.length * 4).fill(undefined)
   // A fantasia is through-composed by definition: no literal repeats.
   if (form === 'free_fantasia') return sources
@@ -622,11 +686,12 @@ export function themeSources(form: FormId, bars: BarCount): (number | undefined)
     // A coda is its own closing phrase unless it is written as a return (it opens by restating).
     const returns = phrase.build !== 'coda' || phrase.roles[0] === 'restatement'
     const i = returns ? slots.findIndex((earlier, at) => at < j && earlier.material === phrase.material && OPENING[earlier.build] === kind) : -1
+    const copyCount = copyCountFor(kind, hookBars)
     for (let k = 0; k < 4; k++) {
       const role = phrase.roles[k]
       if (WRITTEN_FRESH.has(role) || j * 4 + k === sources.length - 1) continue
       let source: number | undefined
-      if (i >= 0 && k < RETURNING_BARS[kind]) source = i * 4 + k
+      if (i >= 0 && k < copyCount) source = i * 4 + k
       // The second half of a duplicate is its first half again (and the first half of whatever that brought back).
       if (phrase.build === 'duplicate' && k >= 2) source = sources[j * 4 + k - 2] ?? j * 4 + k - 2
       if (source === undefined) continue
@@ -639,5 +704,6 @@ export function themeSources(form: FormId, bars: BarCount): (number | undefined)
       sources[j * 4 + k] = source
     }
   })
+  if (hookBars === 8) applyEightBarHook(slots, sources)
   return sources
 }
