@@ -567,8 +567,10 @@ export default function MusicApp() {
     const url = new URL(window.location.href)
     if (on) url.searchParams.set('debug', '1')
     else url.searchParams.delete('debug')
-    if (!on) url.searchParams.delete('notes')
-    else {
+    if (!on) {
+      url.searchParams.delete('notes')
+      if (notesMode !== 'code') setNotesModeState('code')
+    } else {
       const value = notesSearchValue(notesMode)
       if (value) url.searchParams.set('notes', value)
       else url.searchParams.delete('notes')
@@ -581,6 +583,7 @@ export default function MusicApp() {
     const url = new URL(window.location.href)
     const value = notesSearchValue(mode)
     if (value) {
+      setDebug(true)
       url.searchParams.set('debug', '1')
       url.searchParams.set('notes', value)
     } else {
@@ -661,6 +664,25 @@ export default function MusicApp() {
             </option>
           </select>
         </label>
+        <label
+          className="control-notes"
+          title="How the singing line is written. Default Generate stays Code writes the tune (renderPlan). Guide and Line need live Jev and turn Debug on so the notes exchanges show; illegal RH falls back to renderPlan."
+        >
+          Notes
+          <select value={notesMode} onChange={(event) => setNotesMode(event.target.value as NotesMode)}>
+            <option value="code" title={NOTES_MODE_TITLES.code}>
+              {NOTES_MODE_LABELS.code}
+            </option>
+            <option value="guide" title={NOTES_MODE_TITLES.guide} disabled={!jev?.planner}>
+              {NOTES_MODE_LABELS.guide}
+              {jev?.planner ? '' : ' (no key)'}
+            </option>
+            <option value="line" title={NOTES_MODE_TITLES.line} disabled={!jev?.planner}>
+              {NOTES_MODE_LABELS.line}
+              {jev?.planner ? '' : ' (no key)'}
+            </option>
+          </select>
+        </label>
         <label className="control-bars">
           Bars
           <select value={bars} onChange={(event) => setBars(Number(event.target.value) as BarCount)}>
@@ -732,22 +754,6 @@ export default function MusicApp() {
           <label>
             Seed
             <input type="number" min={1} value={seed} onChange={(event) => setSeed(Math.max(1, Number(event.target.value) || 1))} />
-          </label>
-          <label title="How the singing line is written. Default Generate stays Code writes the tune (renderPlan). Guide and Line need live Jev and stay Debug-only; illegal RH falls back to renderPlan.">
-            Notes
-            <select value={notesMode} onChange={(event) => setNotesMode(event.target.value as NotesMode)}>
-              <option value="code" title={NOTES_MODE_TITLES.code}>
-                {NOTES_MODE_LABELS.code}
-              </option>
-              <option value="guide" title={NOTES_MODE_TITLES.guide} disabled={!jev?.planner}>
-                {NOTES_MODE_LABELS.guide}
-                {jev?.planner ? '' : ' (no key)'}
-              </option>
-              <option value="line" title={NOTES_MODE_TITLES.line} disabled={!jev?.planner}>
-                {NOTES_MODE_LABELS.line}
-                {jev?.planner ? '' : ' (no key)'}
-              </option>
-            </select>
           </label>
           <div className="controls-actions">
             <button type="submit" className="ghost" disabled={busy} title="Regenerate with exactly this seed and these settings">

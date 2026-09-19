@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BAR_COUNT_VALUES,
   GLOBAL_FIELD_IDS,
   GLOBAL_FIELDS,
   PEDAL_IDS,
@@ -93,5 +94,26 @@ describe('PEDALS', () => {
     expect(parsePlan({ ...base, pedal: 'dry' }).pedal).toBe('dry')
     expect(parsePlan({ ...base, pedal: 'full' }).pedal).toBe('full')
     expect(() => parsePlan({ ...base, pedal: 'soft' })).toThrow(/pedal/)
+  })
+
+  it('accepts 64-bar plans and rejects lengths outside BAR_COUNT_VALUES', () => {
+    expect(BAR_COUNT_VALUES).toEqual([4, 8, 16, 32, 64])
+    const bar = { chord: 'I', role: 'statement', contour: 'arch' }
+    const base = {
+      version: 1,
+      style: 'bach',
+      character: 'playful_wit',
+      form: 'period',
+      key: 'C_major',
+      meter: 'four_four',
+      texture: 'two_voice_counterpoint',
+      palette: 'diatonic',
+      tempo: 'allegro',
+      dynamics: 'mf',
+      dynamicShape: 'terraced',
+      defaultInstrument: 'harpsichord',
+    }
+    expect(parsePlan({ ...base, bars: Array.from({ length: 64 }, () => bar) }).bars).toHaveLength(64)
+    expect(() => parsePlan({ ...base, bars: Array.from({ length: 48 }, () => bar) })).toThrow(/4, 8, 16, 32, 64/)
   })
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BAR_COUNT_VALUES,
   BAR_ROLE_IDS,
   CHARACTER_IDS,
   CHORD_IDS,
@@ -95,7 +96,7 @@ describe('renderPlan', () => {
     const planner = new HeuristicPlanner()
     for (const style of STYLE_IDS) {
       for (let seed = 1; seed <= 25; seed++) {
-        const { plan } = await planner.plan({ style, bars: ([4, 8, 16, 32] as const)[seed % 4], pick: 'sample', seed, brief: true })
+        const { plan } = await planner.plan({ style, bars: BAR_COUNT_VALUES[seed % BAR_COUNT_VALUES.length], pick: 'sample', seed, brief: true })
         expect(parsePlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan)
         assertWellFormed(renderPlan(plan, seed))
       }

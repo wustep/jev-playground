@@ -196,9 +196,9 @@ describe('HeuristicPlanner', () => {
   })
 
 
-  it('plans 16- and 32-bar forms end-to-end', async () => {
+  it('plans 16-, 32- and 64-bar forms end-to-end', async () => {
     const planner = new HeuristicPlanner()
-    for (const bars of [16, 32] as const) {
+    for (const bars of [16, 32, 64] as const) {
       const { plan } = await planner.plan({ style: 'bach', bars, pick: 'argmax', seed: 1, brief: true })
       expect(plan.bars).toHaveLength(bars)
       expect(parsePlan(plan)).toEqual(plan)
@@ -355,6 +355,13 @@ describe('/api/jev handler', () => {
     })
     expect(() => parseOp({ op: 'phrase', style: 'bach', globals, barCount: 8, slotIndex: 1, chords: ['I'], contours: ['arch'] })).toThrow(/chords/)
     expect(() => parseOp({ op: 'phrase', style: 'bach', globals, barCount: 7, slotIndex: 0, chords: [], contours: [] })).toThrow(/barCount/)
+    expect(parseOp({ op: 'phrase', style: 'bach', brief: true, globals, barCount: 64, slotIndex: 0, chords: [], contours: [] })).toMatchObject({
+      op: 'phrase',
+      barCount: 64,
+      slotIndex: 0,
+    })
+    const roles64 = Array.from({ length: 64 }, (_, i) => (i === 0 ? 'statement' : i === 63 ? 'cadence' : 'development'))
+    expect(parseOp({ op: 'bar', style: 'bach', brief: true, globals, roles: roles64, chords: [], index: 0 })).toMatchObject({ op: 'bar', index: 0 })
   })
 
   it('accepts the debug notes op and rejects anything else', () => {

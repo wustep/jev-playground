@@ -328,6 +328,10 @@ button.small {
   width: 96px;
 }
 
+.control-notes select {
+  min-width: 13.5rem;
+}
+
 .plan-status {
   /* Sits in the controls row next to the Bars select: centred on the select's box, not on its caption. */
   align-self: end;
@@ -1631,7 +1635,8 @@ button.small {
     min-width: 0;
   }
 
-  .control-bars select {
+  .control-bars select,
+  .control-notes select {
     min-width: 0;
   }
 

@@ -262,10 +262,11 @@ export const BAR_COUNTS = {
   '8': 'Eight bars — a full period: a phrase and its answer',
   '16': 'Sixteen bars — a double period: two phrases with a midpoint breath',
   '32': 'Thirty-two bars — a short binary form: exposition and return',
+  '64': 'Sixty-four bars — a long binary or loop: exposition, a second departure, and a full return',
 } as const
 export type BarCountId = keyof typeof BAR_COUNTS
 export const BAR_COUNT_IDS = keysOf<BarCountId>(BAR_COUNTS)
-export const BAR_COUNT_VALUES = [4, 8, 16, 32] as const
+export const BAR_COUNT_VALUES = [4, 8, 16, 32, 64] as const
 export type BarCount = (typeof BAR_COUNT_VALUES)[number]
 
 // ── Per-bar decisions ───────────────────────────────────────────────────────
@@ -487,7 +488,7 @@ export interface CompositionPlan {
   /**
    * How the piece starts. Optional on hand-edited plans (default straight_in,
    * so a 16-bar plan stays 16 score bars). Planners always write it.
-   * Vamp and pickup prepend extra Score.bars; plan.bars stays 4/8/16/32.
+   * Vamp and pickup prepend extra Score.bars; plan.bars stays 4/8/16/32/64.
    */
   opening?: OpeningId
   /**
@@ -495,7 +496,7 @@ export interface CompositionPlan {
    * write it. The renderer defaults from the texture (washed textures ring).
    */
   pedal?: PedalId
-  /** 4, 8, 16 or 32 bars, one harmony each — two where a bar carries a `chord2`. */
+  /** 4, 8, 16, 32 or 64 bars, one harmony each — two where a bar carries a `chord2`. */
   bars: BarPlan[]
 }
 
@@ -582,7 +583,7 @@ export function parsePlan(raw: unknown): CompositionPlan {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError('plan: expected an object')
   const obj = raw as Record<string, unknown>
   if (!Array.isArray(obj.bars) || !(BAR_COUNT_VALUES as readonly number[]).includes(obj.bars.length)) {
-    throw new PlanValidationError('plan.bars: expected an array of 4, 8, 16 or 32 bars')
+    throw new PlanValidationError(`plan.bars: expected an array of ${BAR_COUNT_VALUES.join(', ')} bars`)
   }
   return {
     version: 1,

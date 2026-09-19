@@ -232,7 +232,7 @@ export function parseMelodySoFar(raw: unknown, meter: MeterId, expectedLength?: 
     return []
   }
   if (!Array.isArray(raw)) throw new PlanValidationError('op.melodySoFar: expected an array')
-  if (raw.length > 32) throw new PlanValidationError('op.melodySoFar: expected at most 32 bars')
+  if (raw.length > 64) throw new PlanValidationError('op.melodySoFar: expected at most 64 bars')
   if (expectedLength !== undefined && raw.length !== expectedLength) {
     throw new PlanValidationError('op.melodySoFar: expected one entry per earlier bar')
   }
@@ -247,7 +247,7 @@ export function parseBassSoFar(raw: unknown, expectedLength?: number): BassPatte
     return []
   }
   if (!Array.isArray(raw)) throw new PlanValidationError('op.bassSoFar: expected an array')
-  if (raw.length > 32) throw new PlanValidationError('op.bassSoFar: expected at most 32 bars')
+  if (raw.length > 64) throw new PlanValidationError('op.bassSoFar: expected at most 64 bars')
   if (expectedLength !== undefined && raw.length !== expectedLength) {
     throw new PlanValidationError('op.bassSoFar: expected one entry per earlier bar')
   }
@@ -409,7 +409,7 @@ export function parseGuideSoFar(raw: unknown, expectedLength?: number): GuideMem
     return []
   }
   if (!Array.isArray(raw)) throw new PlanValidationError('op.melodySoFar: expected an array')
-  if (raw.length > 32) throw new PlanValidationError('op.melodySoFar: expected at most 32 bars')
+  if (raw.length > 64) throw new PlanValidationError('op.melodySoFar: expected at most 64 bars')
   if (expectedLength !== undefined && raw.length !== expectedLength) {
     throw new PlanValidationError('op.melodySoFar: expected one entry per earlier bar')
   }

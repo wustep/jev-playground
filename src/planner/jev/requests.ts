@@ -572,7 +572,9 @@ export function parseOp(raw: unknown): JevOp {
       return { op: 'globals', style: parseStyle(obj.style), brief: obj.brief === true, character: parseOption(CHARACTERS, obj.character, 'op.character') }
     case 'bar': {
       const roles = Array.isArray(obj.roles) ? obj.roles : []
-      if (![4, 8, 16, 32].includes(roles.length)) throw new PlanValidationError('op.roles: expected 4, 8, 16 or 32 roles')
+      if (!(BAR_COUNT_VALUES as readonly number[]).includes(roles.length)) {
+        throw new PlanValidationError(`op.roles: expected ${BAR_COUNT_VALUES.join(', ')} roles`)
+      }
       const chords = Array.isArray(obj.chords) ? obj.chords : []
       const index = obj.index
       if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= roles.length) {
@@ -596,7 +598,7 @@ export function parseOp(raw: unknown): JevOp {
       const globals = parseGlobals(obj.globals, 'op.globals')
       const barCount = obj.barCount
       if (typeof barCount !== 'number' || !(BAR_COUNT_VALUES as readonly number[]).includes(barCount)) {
-        throw new PlanValidationError('op.barCount: expected 4, 8, 16 or 32')
+        throw new PlanValidationError(`op.barCount: expected ${BAR_COUNT_VALUES.join(', ')}`)
       }
       const slots = formSlots(globals.form, barCount as BarCount)
       const slotIndex = obj.slotIndex
