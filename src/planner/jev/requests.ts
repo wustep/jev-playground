@@ -76,7 +76,9 @@ import {
   DYNAMIC_SHAPES,
   ARRANGEMENTS,
   PEDALS,
+  PHRASINGS,
   OPENINGS,
+  defaultPhrasing,
   PlanValidationError,
   parseBarPlan,
   parseGlobals,
@@ -209,6 +211,7 @@ function describeGlobals(globals: PlanGlobals): Json {
     arrangement: ARRANGEMENTS[globals.arrangement ?? 'lift_on_return'],
     opening: OPENINGS[globals.opening ?? 'straight_in'],
     ...(globals.pedal ? { sustain_pedal: PEDALS[globals.pedal] } : {}),
+    phrasing: PHRASINGS[globals.phrasing ?? defaultPhrasing(globals.character)],
   }
 }
 
@@ -247,6 +250,8 @@ const GLOBAL_INSTRUCTIONS: Record<Exclude<GlobalField, 'character'>, string> = {
   arrangement: 'How would the keyboard arrangement change as phrases return in a piece with the character in `piece_character`, in the style of `requested_style.name`? The options describe density over the form, not which notes to write.',
   opening: 'How would a short piece with the character in `piece_character` begin, in the style of `requested_style.name`? Straight in, a bar or two of accompaniment alone, or a short pickup into the first downbeat.',
   pedal: 'How much sustain pedal would a piece with the character in `piece_character` use, in the style of `requested_style.name`? Dry cuts notes at their written length; half lets chords overlap a little; full holds the pedal so sonorities ring through the bar.',
+  phrasing:
+    'How would the singing line treat phrase ends in a piece with the character in `piece_character`, in the style of `requested_style.name`? On the beat never rests; an upbeat leans in from an anacrusis; breathing lands early and rests; long-breathed leaves two beats of air. Independent of character — a stormy piece may still breathe.',
 }
 
 const choice = (instructions: string, criteria: Record<string, string>): ChoiceQuestion => ({

@@ -36,9 +36,14 @@ const lastOnset = (index: number, score: ReturnType<typeof renderPlan>) => {
 describe('phrasing helpers', () => {
   it('lets lyrical songs breathe and keeps perpetual motion on the beat', () => {
     expect(phrasingOf('lyrical_song')).toBe('breathing')
-    expect(phrasingOf('dreamy_haze')).toBe('long')
-    expect(phrasingOf('flowing_perpetual')).toBe('none')
-    expect(phrasingOf('hypnotic_pulse')).toBe('none')
+    expect(phrasingOf('dreamy_haze')).toBe('long_breathed')
+    expect(phrasingOf('flowing_perpetual')).toBe('on_the_beat')
+    expect(phrasingOf('hypnotic_pulse')).toBe('on_the_beat')
+  })
+
+  it('lets a stormy plan breathe when phrasing is set, and keeps a lyrical plan on the beat when asked', () => {
+    expect(phrasingOf({ character: 'stormy_drama', phrasing: 'breathing' })).toBe('breathing')
+    expect(phrasingOf({ character: 'lyrical_song', phrasing: 'on_the_beat' })).toBe('on_the_beat')
   })
 
   it('treats every fourth bar as a phrase end', () => {
@@ -85,5 +90,16 @@ describe('a breathing tune', () => {
     const phraseEnd = score.bars[3].treble[0]
     const covered = (voice: typeof midPhrase) => voice.reduce((sum, n) => sum + n.dur, 0)
     expect(covered(phraseEnd)).toBeGreaterThanOrEqual(covered(midPhrase) - 4)
+  })
+
+  it('rests a stormy piece when phrasing is breathing, and does not rest a lyrical piece marked on_the_beat', () => {
+    const beat = METER_INFO.four_four.beatTicks
+    const stormBreathes = renderPlan(songPlan({ character: 'stormy_drama', phrasing: 'breathing', texture: 'alberti_melody' }), 3)
+    const lyricalOnBeat = renderPlan(songPlan({ character: 'lyrical_song', phrasing: 'on_the_beat', texture: 'alberti_melody' }), 3)
+    const stormVoice = stormBreathes.bars[3].treble[0]
+    const lyricalVoice = lyricalOnBeat.bars[3].treble[0]
+    const heldLast = (voice: typeof stormVoice) => voice.filter((n) => n.start >= stormBreathes.meter.ticksPerBar - beat && n.dur >= beat)
+    expect(heldLast(stormVoice)).toHaveLength(0)
+    expect(lyricalVoice.reduce((sum, n) => sum + n.dur, 0)).toBeGreaterThan(stormVoice.reduce((sum, n) => sum + n.dur, 0))
   })
 })

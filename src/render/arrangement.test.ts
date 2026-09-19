@@ -60,6 +60,13 @@ describe('figureStep', () => {
     expect(figureStep({ arrangement: 2 }, 2)).toBe(2)
     expect(figureStep({ arrangement: 3 }, 2)).toBe(1)
   })
+
+  it('keeps the written ostinato step on build / peak_then_bare', () => {
+    expect(figureStep({ arrangement: 0, arrangementId: 'peak_then_bare', texture: 'melody_over_ostinato' }, 2)).toBe(2)
+    expect(figureStep({ arrangement: 3, arrangementId: 'build', texture: 'melody_over_ostinato' }, 2)).toBe(2)
+    expect(figureStep({ arrangement: 3, arrangementId: 'peak_then_bare', texture: 'alberti_melody' }, 2)).toBe(1)
+    expect(figureStep({ arrangement: 3, arrangementId: 'lift_on_return', texture: 'melody_over_ostinato' }, 2)).toBe(1)
+  })
 })
 
 describe('a lifted return', () => {
@@ -79,5 +86,35 @@ describe('a lifted return', () => {
     const lifted = renderPlan(periodPlan({ arrangement: 'lift_on_return' }), 2)
     const flat = renderPlan(periodPlan({ arrangement: 'constant' }), 2)
     expect(onsets(lifted, 4) - onsets(lifted, 0)).toBeGreaterThan(onsets(flat, 4) - onsets(flat, 0))
+  })
+})
+
+describe('same-figure layer on ostinato builds', () => {
+  it('keeps the ostinato step and adds a layer at the peak', () => {
+    const plan = periodPlan({
+      style: 'hans_zimmer',
+      character: 'hypnotic_pulse',
+      form: 'layered_build',
+      texture: 'melody_over_ostinato',
+      arrangement: 'peak_then_bare',
+      dynamicShape: 'late_surge',
+    })
+    const levels = arrangementLevels(plan)
+    const peak = levels.findIndex((level) => level >= 3)
+    const mid = levels.findIndex((level, i) => level === 2 && i < (peak === -1 ? levels.length : peak))
+    expect(peak).toBeGreaterThanOrEqual(0)
+    expect(mid).toBeGreaterThanOrEqual(0)
+    const score = renderPlan(plan, 5)
+    const bassStarts = (index: number) => (score.bars[index].bass[0] ?? []).map((n) => n.start)
+    const steps = (starts: number[]) => starts.slice(1).map((tick, i) => tick - starts[i]).filter((step) => step > 0)
+    const midSteps = steps(bassStarts(mid))
+    const peakSteps = steps(bassStarts(peak))
+    if (midSteps.length && peakSteps.length) {
+      expect(Math.min(...peakSteps)).toBe(Math.min(...midSteps))
+      expect(Math.min(...peakSteps)).toBeGreaterThanOrEqual(2)
+    }
+    const peakNotes = [...score.bars[peak].treble, ...score.bars[peak].bass].flat()
+    const midNotes = [...score.bars[mid].treble, ...score.bars[mid].bass].flat()
+    expect(peakNotes.length).toBeGreaterThanOrEqual(midNotes.length)
   })
 })

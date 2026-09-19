@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formRoles } from '../plan/forms'
-import { ARRANGEMENTS, OPENINGS, type BarPlan, type CompositionPlan, type ContourId } from '../plan/schema'
+import { ARRANGEMENTS, OPENINGS, PHRASINGS, defaultPhrasing, type BarPlan, type CompositionPlan, type ContourId } from '../plan/schema'
 import { HeuristicPlanner } from './HeuristicPlanner'
 import { buildRequest, describePlan, SONG_SCORE_QUESTION_ID } from './jev/requests'
 import {
@@ -171,8 +171,9 @@ describe('describePlan arrangement and opening', () => {
     const bare = plan()
     delete bare.arrangement
     delete bare.opening
-    const described = describePlan(bare) as { arrangement: string; opening: string }
+    const described = describePlan(bare) as { arrangement: string; opening: string; phrasing: string }
     expect(described.arrangement).toBe(ARRANGEMENTS.lift_on_return)
     expect(described.opening).toBe(OPENINGS.straight_in)
+    expect(described.phrasing).toBe(PHRASINGS[defaultPhrasing(bare.character)])
   })
 })

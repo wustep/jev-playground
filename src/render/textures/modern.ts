@@ -1,9 +1,9 @@
 import { Note } from 'tonal'
 import type { BaseRoleId, MeterId } from '../../plan/schema'
-import { meterGrid, note, pieceChoice, type BarContext, type BarNotes, type Slot } from '../context'
+import { meterGrid, note, pieceChoice, rhythmFor, slotsFrom, type BarContext, type BarNotes, type RhythmBank, type Slot } from '../context'
 import { melodyPitches } from '../melody'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from '../pitch'
-import type { Voice } from '../score'
+import type { MeterInfo, Voice } from '../score'
 import { bassPartner, essentialTones, leadVoicing, lowBass, sortAscending } from '../voiceLeading'
 
 // ── minimal cells ───────────────────────────────────────────────────────────
@@ -282,4 +282,158 @@ export function lushVoicings(bar: BarContext): BarNotes {
       ? [note(0, meter.ticksPerBar, [root, fifth], velocity - 6, { roll: true })]
       : [note(0, push, root, velocity - 4), note(push, meter.ticksPerBar - push, seventh ? [fifth, seventh] : [fifth], velocity - 12)]
   return { treble: [right], bass: [left] }
+}
+
+// ── bossa nova comp ─────────────────────────────────────────────────────────
+// Bass on 1 and the *and* of 2; shells (3rd + 7th) on partido-alto off-beats;
+// a sung tune on top. FIDELITY #5 / REFERENCE_PLAN_GAP Laufey.
+
+const BOSSA_TUNE: Record<MeterId, RhythmBank> = {
+  four_four: {
+    main: [[4, 4, 8], [6, 2, 4, 4], [-2, 6, 8]],
+    busy: [[2, 2, 4, 4, 4], [4, 2, 2, 4, 4]],
+    sparse: [[8, 8], [-4, 12]],
+    pause: [[4, 8, -4], [8, -8]],
+    close: [[8, -8], [12, -4]],
+  },
+  three_four: {
+    main: [[4, 4, 4], [6, 2, 4], [-2, 6, 4]],
+    busy: [[2, 2, 4, 4], [4, 2, 2, 4]],
+    sparse: [[8, 4], [12]],
+    pause: [[4, 4, -4], [8, -4]],
+    close: [[8, -4]],
+  },
+  two_four: {
+    main: [[4, 4], [2, 2, 4], [-2, 6]],
+    busy: [[2, 2, 2, 2], [4, 2, 2]],
+    sparse: [[8], [4, 4]],
+    pause: [[4, -4]],
+    close: [[4, -4]],
+  },
+  six_eight: {
+    main: [[4, 2, 6], [6, 6], [-2, 4, 6]],
+    busy: [[2, 2, 2, 6], [4, 2, 4, 2]],
+    sparse: [[6, 6], [12]],
+    pause: [[6, -6]],
+    close: [[6, -6]],
+  },
+  nine_eight: {
+    main: [[6, 6, 6], [4, 2, 6, 6], [-2, 4, 6, 6]],
+    busy: [[2, 2, 2, 6, 6], [4, 2, 4, 2, 6]],
+    sparse: [[6, 12], [18]],
+    pause: [[6, 6, -6]],
+    close: [[12, -6]],
+  },
+  twelve_eight: {
+    main: [[6, 6, 12], [4, 2, 6, 6, 6], [-2, 4, 6, 12]],
+    busy: [[2, 2, 2, 6, 6, 6], [4, 2, 6, 4, 2, 6]],
+    sparse: [[12, 12], [24]],
+    pause: [[12, -12], [6, 12, -6]],
+    close: [[18, -6]],
+  },
+}
+
+/** Bass attacks: beat 1 and the and of 2, repeated in the second half when the bar is long enough. */
+function bossaBassHits(meter: MeterInfo): { start: number; dur: number; tone: 'root' | 'fifth' }[] {
+  const beat = meter.beatTicks
+  const bar = meter.ticksPerBar
+  const half = Math.max(1, Math.floor(beat / 2))
+  const andOf2 = beat + half
+  if (andOf2 >= bar) {
+    const mid = Math.floor(bar / 2)
+    return [
+      { start: 0, dur: mid, tone: 'root' },
+      { start: mid, dur: bar - mid, tone: 'fifth' },
+    ]
+  }
+  const beat3 = beat * 2
+  const andOf4 = beat * 3 + half
+  if (andOf4 < bar) {
+    return [
+      { start: 0, dur: andOf2, tone: 'root' },
+      { start: andOf2, dur: beat3 - andOf2, tone: 'fifth' },
+      { start: beat3, dur: andOf4 - beat3, tone: 'root' },
+      { start: andOf4, dur: bar - andOf4, tone: 'fifth' },
+    ]
+  }
+  return [
+    { start: 0, dur: andOf2, tone: 'root' },
+    { start: andOf2, dur: bar - andOf2, tone: 'fifth' },
+  ]
+}
+
+/** Partido-alto-ish off-beats that miss the downbeat. */
+function bossaShellHits(meter: MeterInfo): { start: number; dur: number }[] {
+  switch (meter.id) {
+    case 'four_four':
+      return [
+        { start: 3, dur: 2 },
+        { start: 6, dur: 2 },
+        { start: 11, dur: 2 },
+      ]
+    case 'two_four':
+      return [
+        { start: 2, dur: 2 },
+        { start: 5, dur: 2 },
+      ]
+    case 'three_four':
+      return [
+        { start: 2, dur: 2 },
+        { start: 5, dur: 2 },
+        { start: 8, dur: 2 },
+      ]
+    case 'six_eight':
+      return [
+        { start: 3, dur: 2 },
+        { start: 8, dur: 2 },
+      ]
+    case 'nine_eight':
+      return [
+        { start: 3, dur: 2 },
+        { start: 8, dur: 2 },
+        { start: 14, dur: 2 },
+      ]
+    case 'twelve_eight':
+      return [
+        { start: 3, dur: 2 },
+        { start: 6, dur: 2 },
+        { start: 15, dur: 2 },
+        { start: 18, dur: 2 },
+      ]
+  }
+}
+
+export function bossaComp(bar: BarContext): BarNotes {
+  const { meter, velocity } = bar
+  const role: BaseRoleId = bar.isLast ? 'cadence' : bar.role
+  const root = lowBass(bar.chord, bar.memory.bass, 40, 33, 48)
+  bar.memory.bass = root
+  const fifth = bassPartner(bar.chord, root, bar.dialect.bassSpacing)
+  const third = bar.chord.core[1] ?? bar.chord.root
+  const seventh = bar.chord.core[3] ?? bar.chord.extensions[0] ?? bar.chord.core[2] ?? third
+  const shellPcs = [third, seventh].filter((pc, i, all) => pc && all.indexOf(pc) === i)
+  const shell = sortAscending(leadVoicing(shellPcs, bar.memory.voicings.bossa, 60))
+  bar.memory.voicings.bossa = shell
+
+  if (role === 'cadence') {
+    const top = nearestNote(bar.chord.core, bar.memory.lines.melody ?? 72, 64, 81)
+    return {
+      treble: [[note(0, meter.ticksPerBar, top, velocity)]],
+      bass: [[note(0, meter.ticksPerBar, [root, fifth], velocity - 6)]],
+    }
+  }
+
+  const bassHits = bossaBassHits(meter)
+  const left: Voice = bassHits.map((hit) =>
+    note(hit.start, hit.dur, hit.tone === 'root' ? root : fifth, velocity - 8 + (hit.start === 0 ? 4 : 0)),
+  )
+
+  const shells: Voice = bossaShellHits(meter).map((hit) =>
+    note(hit.start, hit.dur, shell, velocity - 6, hit.start % meter.beatTicks === 0 ? {} : { accent: true }),
+  )
+
+  const slots = slotsFrom(rhythmFor(bar, BOSSA_TUNE[meter.id], 'bossa-tune'))
+  const pitches = slots.length ? melodyPitches(bar, slots, { lo: 64, hi: 84, span: 6 }) : []
+  const tune: Voice = slots.map((slot, k) => note(slot.start, slot.dur, pitches[k], velocity + 8))
+  return { treble: [tune, shells].filter((voice) => voice.length > 0), bass: [left] }
 }

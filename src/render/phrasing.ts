@@ -1,37 +1,38 @@
-// Phrase breath and anacrusis. Driven from character: a lyrical song lets the
-// tune land, hold and rest; a perpetual motion piece does not. No new plan
-// label — the form already says where phrases end, and theme memory already
-// knows the first pitch of a returning phrase.
+// Phrase breath and anacrusis. Driven from the closed `phrasing` global
+// (on_the_beat | upbeat | breathing | long_breathed). Hand-edited plans that
+// omit it keep the character default in `defaultPhrasing` — a lyrical song
+// breathes; a perpetual or stormy piece stays on the beat. A stormy ballade
+// can still rest if the planner writes `phrasing: breathing`.
 //
 // Cross-bar ties are out of this cut (Note.dur still stays inside the bar).
 // The pickup lives in the rest at the end of the previous bar.
 
 import { themeSources } from '../plan/forms'
-import { BAR_COUNT_VALUES, type BarCount, type CharacterId, type FormId } from '../plan/schema'
+import {
+  BAR_COUNT_VALUES,
+  defaultPhrasing,
+  type BarCount,
+  type CharacterId,
+  type CompositionPlan,
+  type FormId,
+  type PhrasingId,
+} from '../plan/schema'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from './pitch'
 import type { MeterInfo, Note, Score, Voice } from './score'
 
-export type Phrasing = 'none' | 'breathing' | 'long'
+export type { PhrasingId }
 
-/** Characters whose tune should breathe at phrase ends. */
-export function phrasingOf(character: CharacterId): Phrasing {
-  switch (character) {
-    case 'lyrical_song':
-    case 'solemn_hymn':
-    case 'dance_lilt':
-    case 'warm_groove':
-    case 'restless_searching':
-      return 'breathing'
-    case 'meditative_stillness':
-    case 'dreamy_haze':
-      return 'long'
-    default:
-      return 'none'
-  }
+export function resolvePhrasing(plan: Pick<CompositionPlan, 'character' | 'phrasing'>): PhrasingId {
+  return plan.phrasing ?? defaultPhrasing(plan.character)
 }
 
-export const breathes = (character: CharacterId) => phrasingOf(character) !== 'none'
+/** Character default, or the plan's `phrasing` when a CompositionPlan is passed. */
+export function phrasingOf(input: CharacterId | Pick<CompositionPlan, 'character' | 'phrasing'>): PhrasingId {
+  return typeof input === 'string' ? defaultPhrasing(input) : resolvePhrasing(input)
+}
+
+export const breathes = (phrasing: PhrasingId) => phrasing !== 'on_the_beat'
 
 /** Last bar of a four-bar slot, or the last bar of the piece. */
 export function isPhraseFinalBar(index: number, count: number): boolean {
@@ -39,9 +40,9 @@ export function isPhraseFinalBar(index: number, count: number): boolean {
 }
 
 /** How much of the bar's end is air (then, often, a pickup). Never the whole bar. */
-export function phraseRestTicks(meter: MeterInfo, phrasing: Phrasing): number {
-  if (phrasing === 'none') return 0
-  const beats = phrasing === 'long' && meter.ticksPerBar >= meter.beatTicks * 3 ? 2 : 1
+export function phraseRestTicks(meter: MeterInfo, phrasing: PhrasingId): number {
+  if (phrasing === 'on_the_beat') return 0
+  const beats = phrasing === 'long_breathed' && meter.ticksPerBar >= meter.beatTicks * 3 ? 2 : 1
   return Math.min(meter.beatTicks * beats, meter.ticksPerBar - meter.beatTicks)
 }
 
@@ -184,8 +185,8 @@ export function pickupNotes(
  * its source (an earlier phrase-final that was written fresh) already breathed.
  */
 export function applyPhraseBreath(score: Score): void {
-  const phrasing = phrasingOf(score.plan.character)
-  if (phrasing === 'none') return
+  const phrasing = resolvePhrasing(score.plan)
+  if (phrasing === 'on_the_beat') return
   const { plan, meter } = score
   const barCount = plan.bars.length
   const restTicks = phraseRestTicks(meter, phrasing)
@@ -218,4 +219,3 @@ export function applyPhraseBreath(score: Score): void {
     for (let k = voice.length - 1; k >= 0; k--) if (voice[k].dur <= 0) voice.splice(k, 1)
   }
 }
-

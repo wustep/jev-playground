@@ -91,6 +91,7 @@ describe('dialect knobs in the renderer', () => {
       plan: bach.plan.bars[3],
       role: 'cadence',
       phraseFinal: true,
+      phrasing: 'breathing',
       breathes: true,
       arrangement: 2,
       character: 'lyrical_song',

@@ -23,6 +23,7 @@ import type {
   ArrangementId,
   OpeningId,
   PedalId,
+  PhrasingId,
   CharacterId,
   ChordId,
   ContourId,
@@ -55,6 +56,7 @@ export interface StylePriors {
   arrangement: Weights<ArrangementId>
   opening: Weights<OpeningId>
   pedal: Weights<PedalId>
+  phrasing: Weights<PhrasingId>
 }
 
 export interface Archetype {
@@ -125,6 +127,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       arrangement: { constant: 70, lift_on_return: 20, terraced_blocks: 10 },
       opening: { straight_in: 80, pickup: 15, vamp_intro: 5 },
       pedal: { dry: 70, half: 25, full: 5 },
+      phrasing: { on_the_beat: 70, breathing: 20, upbeat: 10 },
     },
     archetypes: {
       // Preludes in unbroken figuration (WTC I/1, I/2).
@@ -139,6 +142,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           pedal: { dry: 75, half: 25 },
           dynamicShape: { steady: 35, terraced: 25, late_surge: 25, waves: 15 },
           contour: { static: 30, arch: 25, rise: 15, fall: 15, wave: 15 },
+          phrasing: { on_the_beat: 90, breathing: 10 },
         },
       },
       // Two-part inventions.
@@ -151,6 +155,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { mf: 60, f: 25, mp: 15 },
           contour: { pendulum: 22, leap_fall: 18, rise: 18, fall: 18, wave: 14, arch: 10 },
           pedal: { dry: 85, half: 15 },
+          phrasing: { on_the_beat: 80, upbeat: 20 },
         },
       },
       // Four-part chorales.
@@ -164,6 +169,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamicShape: { steady: 60, terraced: 40 },
           defaultInstrument: { church_organ: 50, choir: 20, harpsichord: 15, grand_piano: 15 },
           contour: { arch: 30, fall: 30, rise: 20, dip: 10, static: 10 },
+          phrasing: { breathing: 80, long_breathed: 20 },
         },
       },
       // Sarabandes and arias: slow triple time, ornamented line over a walking bass.
@@ -177,6 +183,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { mp: 50, p: 30, mf: 20 },
           dynamicShape: { terraced: 40, waves: 30, steady: 30 },
           contour: { arch: 28, fall: 22, leap_fall: 18, wave: 16, rise: 10, dip: 6 },
+          phrasing: { breathing: 70, long_breathed: 20, upbeat: 10 },
         },
       },
       // Gigues, minuets, correntes.
@@ -189,6 +196,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           tempo: { allegro: 42, moderato: 30, presto: 12, vivace: 16 },
           contour: { leap_fall: 25, pendulum: 20, rise: 18, fall: 17, wave: 12, arch: 8 },
           pedal: { dry: 80, half: 20 },
+          phrasing: { upbeat: 50, breathing: 30, on_the_beat: 20 },
         },
       },
       // Minor-key toccatas.
@@ -201,6 +209,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           tempo: { allegro: 50, presto: 24, vivace: 16, prestissimo: 6, moderato: 4 },
           dynamics: { f: 55, mf: 45 },
           dynamicShape: { terraced: 45, late_surge: 35, steady: 20 },
+          phrasing: { on_the_beat: 90, breathing: 10 },
         },
       },
     },
@@ -274,6 +283,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       arrangement: { lift_on_return: 55, build: 20, peak_then_bare: 15, constant: 10 },
       opening: { straight_in: 55, pickup: 30, vamp_intro: 15 },
       pedal: { half: 40, dry: 35, full: 25 },
+      phrasing: { on_the_beat: 45, breathing: 30, long_breathed: 15, upbeat: 10 },
     },
     archetypes: {
       // Pathétique / Tempest / Appassionata allegros.
@@ -288,6 +298,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { f: 40, ff: 25, p: 25, pp: 10 },
           dynamicShape: { sudden_contrast: 45, build_then_drop: 25, crescendo: 20, late_surge: 10 },
           contour: { rise: 35, leap_fall: 15, fall: 15, drop_rise: 12, arch: 13, static: 10 },
+          phrasing: { on_the_beat: 85, breathing: 15 },
         },
       },
       // Adagio cantabile: a hymn-like tune over a murmuring accompaniment.
@@ -301,6 +312,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { p: 50, pp: 25, f: 25 },
           dynamicShape: { arch: 35, waves: 25, build_then_drop: 25, crescendo: 15 },
           contour: { arch: 30, fall: 20, wave: 18, rise: 16, leap_fall: 10, dip: 6 },
+          phrasing: { breathing: 70, long_breathed: 20, upbeat: 10 },
         },
       },
       // Op. 27/2, first movement.
@@ -316,6 +328,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           pedal: { full: 70, half: 30 },
           dynamicShape: { steady: 40, arch: 30, waves: 30 },
           contour: { static: 45, fall: 20, arch: 20, dip: 10, rise: 5 },
+          phrasing: { long_breathed: 80, breathing: 20 },
         },
       },
       // Waldstein, Eroica, Emperor.
@@ -414,11 +427,11 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   chopin: {
     brief:
-      'Polish–French piano, c. 1840. An ornamented vocal right hand (fioritura, delayed resolutions) over a wide-span left-hand arpeggio, a waltz bass-chord-chord, or a mazurka that accents beat two or three — not Alberti, not jazz stride, not block-chord shocks. Harmony stays tonal: chromatic inner voices, cadential 6/4 sharing the bar with V7, Neapolitan in minor, mazurka mixture; eight bars are a 4+4 period whose return is ornamented, often after a pickup. Pedalled grand piano, rubato-friendly; no parallel planing, no ii–V jazz turnaround.',
+      'Polish–French piano, c. 1840. An ornamented vocal right hand (fioritura, delayed resolutions) over a wide-span left-hand arpeggio, a waltz bass-chord-chord, or a mazurka that accents beat two or three — not Alberti, not jazz stride, not block-chord shocks. Nocturnes often sit in 12/8. Harmony stays tonal: chromatic inner voices, cadential 6/4 sharing the bar with V7, Neapolitan in minor, mazurka mixture; eight bars are a 4+4 period whose return is ornamented, often after a pickup. Pedalled grand piano, rubato-friendly; no parallel planing, no ii–V jazz turnaround.',
     priors: {
       form: { period: 30, sentence: 20, arch_return: 20, binary_dance: 15, spinning_out: 10, free_fantasia: 5 },
       key: { Db_major: 14, Ab_major: 12, Bb_major: 8, Eb_major: 8, Gb_major: 6, F_major: 5, C_major: 4, Cs_minor: 10, B_minor: 8, Fs_minor: 6, C_minor: 5, E_minor: 5, F_minor: 5, G_minor: 4 },
-      meter: { three_four: 45, four_four: 35, six_eight: 20 },
+      meter: { three_four: 38, four_four: 26, twelve_eight: 20, six_eight: 16 },
       texture: { rolling_nocturne: 22, alberti_melody: 18, chordal_melody: 14, stride_dance: 14, dramatic_chords: 12, broken_chord_prelude: 12, wash_arpeggio: 8 },
       palette: { chromatic_approach: 55, diatonic: 45 },
       tempo: { adagio: 24, andante: 22, moderato: 16, allegro: 14, largo: 6, larghetto: 8, presto: 5, vivace: 3, grave: 2 },
@@ -429,6 +442,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       arrangement: { lift_on_return: 60, build: 15, constant: 15, peak_then_bare: 10 },
       opening: { pickup: 45, vamp_intro: 30, straight_in: 25 },
       pedal: { full: 55, half: 35, dry: 10 },
+      phrasing: { breathing: 30, upbeat: 28, long_breathed: 22, on_the_beat: 20 },
     },
     archetypes: {
       // Nocturnes: singing cantabile over rolling left-hand figuration.
@@ -437,12 +451,13 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         priors: {
           form: { period: 45, arch_return: 30, sentence: 25 },
           key: { Db_major: 22, Ab_major: 18, Eb_major: 12, Gb_major: 10, F_major: 8, C_major: 6, Cs_minor: 12, B_minor: 6, E_minor: 6 },
-          meter: { four_four: 45, six_eight: 30, three_four: 25 },
+          meter: { twelve_eight: 48, six_eight: 22, four_four: 18, three_four: 12 },
           texture: { rolling_nocturne: 50, alberti_melody: 25, chordal_melody: 15, wash_arpeggio: 10 },
           tempo: { adagio: 50, andante: 30, largo: 15, moderato: 5 },
           dynamics: { p: 45, pp: 25, mp: 20, f: 10 },
           dynamicShape: { arch: 40, waves: 30, crescendo: 15, late_surge: 15 },
           contour: { arch: 32, fall: 20, wave: 20, leap_fall: 12, rise: 10, dip: 6 },
+          phrasing: { upbeat: 50, breathing: 30, long_breathed: 20 },
         },
       },
       // Mazurkas and waltzes.
@@ -457,6 +472,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { p: 35, mp: 30, mf: 20, f: 15 },
           dynamicShape: { waves: 35, arch: 25, sudden_contrast: 20, terraced: 20 },
           contour: { leap_fall: 22, wave: 20, arch: 18, rise: 16, fall: 14, dip: 10 },
+          phrasing: { upbeat: 45, breathing: 35, on_the_beat: 20 },
         },
       },
       // Ballades and scherzos.
@@ -471,6 +487,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { f: 35, ff: 20, p: 25, pp: 10, mf: 10 },
           dynamicShape: { sudden_contrast: 40, crescendo: 25, late_surge: 20, arch: 15 },
           contour: { rise: 28, leap_fall: 20, drop_rise: 16, fall: 14, arch: 12, wave: 10 },
+          phrasing: { on_the_beat: 55, breathing: 45 },
         },
       },
       // Études: unbroken figuration.
@@ -484,6 +501,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { mf: 35, mp: 25, f: 20, p: 20 },
           dynamicShape: { crescendo: 30, arch: 30, waves: 20, late_surge: 20 },
           contour: { wave: 28, rise: 22, fall: 18, arch: 16, static: 16 },
+          phrasing: { on_the_beat: 90, breathing: 10 },
         },
       },
       // Slow preludes and spare late nocturnes.
@@ -498,6 +516,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { pp: 50, p: 40, mp: 10 },
           dynamicShape: { steady: 35, arch: 30, waves: 20, decrescendo: 15 },
           contour: { static: 30, fall: 25, arch: 20, dip: 15, rise: 10 },
+          phrasing: { long_breathed: 70, breathing: 30 },
         },
       },
       // Light waltzes and mazurka jokes.
@@ -511,6 +530,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { p: 40, mf: 25, f: 20, mp: 15 },
           dynamicShape: { sudden_contrast: 45, terraced: 30, waves: 25 },
           contour: { leap_fall: 25, wave: 20, rise: 18, fall: 17, pendulum: 12, arch: 8 },
+          phrasing: { upbeat: 50, breathing: 30, on_the_beat: 20 },
         },
       },
     },
@@ -585,6 +605,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       arrangement: { lift_on_return: 40, constant: 30, terraced_blocks: 20, build: 10 },
       opening: { vamp_intro: 50, straight_in: 35, pickup: 15 },
       pedal: { full: 70, half: 25, dry: 5 },
+      phrasing: { long_breathed: 40, on_the_beat: 30, breathing: 20, upbeat: 10 },
     },
     archetypes: {
       dreamy_haze: {
@@ -597,6 +618,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           tempo: { adagio: 40, andante: 45, largo: 15 },
           dynamics: { pp: 50, p: 45, mp: 5 },
           dynamicShape: { arch: 45, waves: 25, steady: 15, decrescendo: 15 },
+          phrasing: { long_breathed: 70, breathing: 30 },
         },
       },
       // Arabesque, Jardins sous la pluie, Doctor Gradus.
@@ -607,6 +629,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           meter: { nine_eight: 30, six_eight: 28, four_four: 24, three_four: 18 },
           texture: { wash_arpeggio: 40, broken_chord_prelude: 25, toccata_perpetual: 20, displaced_arpeggio: 15 },
           palette: { pentatonic: 45, modal: 30, diatonic: 25 },
+          phrasing: { on_the_beat: 85, long_breathed: 15 },
           tempo: { andante: 35, moderato: 45, allegro: 20 },
           dynamics: { p: 55, pp: 25, mp: 20 },
           contour: { fall: 30, wave: 25, arch: 25, rise: 12, dip: 8 },
@@ -735,6 +758,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       arrangement: { terraced_blocks: 55, build: 25, constant: 15, peak_then_bare: 5 },
       opening: { vamp_intro: 65, straight_in: 30, pickup: 5 },
       pedal: { half: 45, dry: 40, full: 15 },
+      phrasing: { on_the_beat: 85, long_breathed: 15 },
     },
     archetypes: {
       hypnotic_pulse: {
@@ -744,6 +768,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           texture: { minimal_cells: 28, displaced_arpeggio: 22, interlocking_hands: 20, pulsing_chords: 18, broken_chord_prelude: 12 },
           tempo: { moderato: 45, allegro: 40, andante: 15 },
           dynamicShape: { terraced: 35, steady: 35, waves: 15, build_then_drop: 15 },
+          phrasing: { on_the_beat: 90, long_breathed: 10 },
         },
       },
       // Metamorphosis: a rocking accompaniment under a slow bare melody.
@@ -755,6 +780,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           tempo: { andante: 50, adagio: 35, largo: 15 },
           dynamics: { p: 50, mp: 35, pp: 15 },
           contour: { static: 35, fall: 30, rise: 20, arch: 15 },
+          phrasing: { long_breathed: 70, on_the_beat: 30 },
         },
       },
       // Mad Rush's fast sections.
@@ -869,6 +895,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       arrangement: { peak_then_bare: 50, build: 35, lift_on_return: 10, constant: 5 },
       opening: { vamp_intro: 70, straight_in: 25, pickup: 5 },
       pedal: { full: 50, half: 35, dry: 15 },
+      phrasing: { long_breathed: 45, on_the_beat: 40, breathing: 15 },
     },
     archetypes: {
       // Layered ostinato that thickens without becoming a cell-process étude.
@@ -881,6 +908,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { p: 35, mp: 35, mf: 20, f: 10 },
           dynamicShape: { crescendo: 40, late_surge: 30, waves: 15, build_then_drop: 15 },
           contour: { static: 40, rise: 25, wave: 15, arch: 12, fall: 8 },
+          phrasing: { long_breathed: 70, on_the_beat: 30 },
         },
       },
       // Warm major anthems.
@@ -1018,12 +1046,12 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   // ────────────────────────────────────────────────────────────────────────────
   laufey: {
     brief:
-      'Jazz-pop singer-songwriter piano, 2020s. A vocal-range hook in even four-bar phrases (period, returning A, or vamp-and-tag) over mid-register close voicings, a soft stride, or light broken chords — swing or gentle bossa syncopation, not a wide nocturne arpeggio and not sixteenths grouped 5+5+6. Harmony is song-form jazz: I–vi–ii–V and inverted ii–V–I, major sevenths, borrowed iv; no stacked ninths or thirteenths, no planing, no drone-loop build. Intimate, unhurried, mostly major; acoustic piano first.',
+      'Jazz-pop singer-songwriter piano, 2020s. A vocal-range hook in even four-bar phrases (period, returning A, or vamp-and-tag) over a bossa-nova comp (bass on 1 and the and of 2, shells on partido-alto), mid-register close voicings, or a soft stride — not a wide nocturne arpeggio and not sixteenths grouped 5+5+6. Harmony is song-form jazz: I–vi–ii–V, inverted ii–V–I, a ii9–V13 hook, major sevenths, and borrowed-iv phrases (I–V7/IV–vi7–iv6); no dense modern-jazz stacks, no planing, no drone-loop build. Intimate, unhurried, mostly major; acoustic piano first.',
     priors: {
       form: { period: 32, arch_return: 26, vamp_and_tag: 26, call_and_response: 16 },
       key: { F_major: 12, Bb_major: 11, Eb_major: 10, C_major: 10, Ab_major: 8, G_major: 7, A_major: 6, D_major: 5, D_minor: 8, A_minor: 7, C_minor: 6, F_minor: 5, G_minor: 5 },
       meter: { four_four: 62, three_four: 26, six_eight: 12 },
-      texture: { chordal_melody: 22, alberti_melody: 18, stride_dance: 16, lush_voicings: 14, rolling_nocturne: 12, aria_walking_bass: 8, syncopated_ostinato: 6, melody_over_ostinato: 4 },
+      texture: { bossa_comp: 24, chordal_melody: 18, alberti_melody: 14, stride_dance: 14, lush_voicings: 12, rolling_nocturne: 8, aria_walking_bass: 6, syncopated_ostinato: 4 },
       palette: { diatonic: 50, chromatic_approach: 32, modal: 10, blues: 8 },
       tempo: { andante: 34, adagio: 24, moderato: 20, largo: 6, larghetto: 8, allegro: 4, grave: 2, vivace: 2 },
       dynamics: { p: 42, mp: 32, pp: 16, mf: 10 },
@@ -1033,6 +1061,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       arrangement: { lift_on_return: 55, build: 20, constant: 15, peak_then_bare: 10 },
       opening: { vamp_intro: 55, pickup: 25, straight_in: 20 },
       pedal: { half: 50, full: 30, dry: 20 },
+      phrasing: { breathing: 50, upbeat: 30, long_breathed: 15, on_the_beat: 5 },
     },
     archetypes: {
       // Standards-shaped songs: a sung tune over piano accompaniment.
@@ -1040,7 +1069,8 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         weight: 32,
         priors: {
           form: { period: 50, arch_return: 35, vamp_and_tag: 15 },
-          texture: { chordal_melody: 40, alberti_melody: 30, rolling_nocturne: 20, lush_voicings: 10 },
+          texture: { bossa_comp: 38, chordal_melody: 28, alberti_melody: 20, lush_voicings: 14 },
+          phrasing: { breathing: 70, upbeat: 20, long_breathed: 10 },
           meter: { four_four: 60, three_four: 30, six_eight: 10 },
           tempo: { adagio: 40, andante: 45, largo: 15 },
           dynamics: { p: 50, mp: 35, pp: 15 },
@@ -1054,7 +1084,8 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         priors: {
           form: { vamp_and_tag: 45, call_and_response: 30, period: 25 },
           meter: { four_four: 80, six_eight: 20 },
-          texture: { stride_dance: 35, lush_voicings: 25, alberti_melody: 20, syncopated_ostinato: 20 },
+          texture: { bossa_comp: 45, stride_dance: 22, lush_voicings: 18, alberti_melody: 15 },
+          phrasing: { breathing: 55, upbeat: 35, long_breathed: 10 },
           palette: { diatonic: 40, chromatic_approach: 35, blues: 15, modal: 10 },
           tempo: { andante: 45, moderato: 40, adagio: 15 },
           dynamics: { mp: 50, p: 30, mf: 20 },
@@ -1100,26 +1131,27 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     holds: true,
     harmony: {
       major: {
-        // Song-form jazz-pop: I–vi–ii–V and inverted ii–V–I. No I–V–vi–IV.
-        heads: [['Imaj7', 'vi7'], ['I', 'I6'], ['Imaj7', 'ii7'], ['I', 'vi'], ['I6', 'ii65'], ['Imaj7', 'iii7'], ['I', 'V65'], ['Imaj7', 'IVmaj7'], ['vi7', 'ii7']],
-        seqs: [['ii7', 'V7'], ['vi7', 'ii7'], ['iii7', 'vi7'], ['V7_of_ii', 'ii7'], ['V7_of_vi', 'vi7'], ['IVmaj7', 'iii7'], ['ii65', 'V7'], ['V43', 'I6'], ['V7_of_V', 'V7'], ['iii7', 'V7_of_ii']],
+        // Song-form jazz-pop: I–vi–ii–V, inverted ii–V–I, borrowed-iv language, ii9–V13 hook. No I–V–vi–IV.
+        heads: [['ii9', 'V13'], ['I', 'V7_of_IV'], ['vi7', 'iv6'], ['Imaj7', 'vi7'], ['I', 'I6'], ['Imaj7', 'ii7'], ['I', 'vi'], ['I6', 'ii65'], ['Imaj7', 'iii7'], ['I', 'V65'], ['Imaj7', 'IVmaj7'], ['vi7', 'ii7']],
+        seqs: [['ii9', 'V13'], ['V7_of_IV', 'iv6'], ['ii7', 'V7'], ['vi7', 'ii7'], ['iii7', 'vi7'], ['V7_of_ii', 'ii7'], ['V7_of_vi', 'vi7'], ['IVmaj7', 'iii7'], ['ii65', 'V7'], ['V43', 'I6'], ['V7_of_V', 'V7'], ['iii7', 'V7_of_ii']],
         tails: {
-          closed: [['V7', 'I'], ['V65', 'I'], ['V7', 'Imaj7'], ['V43', 'I'], ['IVmaj7', 'I']],
-          half: [['ii7', 'V7'], ['ii65', 'V'], ['IVmaj7', 'V7'], ['vi7', 'V'], ['V7_of_V', 'V']],
-          open: [['V7', 'vi'], ['V42', 'I6'], ['IVmaj7', 'iii7'], ['vi7', 'ii7'], ['V7_of_IV', 'IV']],
+          closed: [['V13', 'Imaj7'], ['V7', 'I'], ['V65', 'I'], ['V7', 'Imaj7'], ['V43', 'I'], ['IVmaj7', 'I']],
+          half: [['ii9', 'V13'], ['ii7', 'V7'], ['ii65', 'V'], ['IVmaj7', 'V7'], ['vi7', 'V'], ['V7_of_V', 'V']],
+          open: [['vi7', 'iv6'], ['V7', 'vi'], ['V42', 'I6'], ['IVmaj7', 'iii7'], ['vi7', 'ii7'], ['V7_of_IV', 'IV']],
         },
         phrases: {
-          closed: [['ii7', 'V7', 'Imaj7', 'I'], ['I6', 'ii65', 'V7', 'I'], ['V43', 'I6', 'V7', 'I'], ['ii65', 'I64', 'V7', 'I'], ['vi7', 'ii7', 'V7', 'Imaj7']],
-          half: [['Imaj7', 'vi7', 'ii7', 'V7'], ['I', 'I6', 'ii65', 'V'], ['Imaj7', 'iii7', 'ii7', 'V7'], ['I', 'V7_of_vi', 'vi7', 'V7_of_ii']],
-          open: [['Imaj7', 'vi7', 'IVmaj7', 'iii7'], ['I', 'V65', 'I6', 'IV'], ['Imaj7', 'iii7', 'vi7', 'ii7'], ['vi7', 'ii7', 'V7', 'vi7']],
+          // Borrowed-iv language (katiekeyboard family) and the ii9–V13–I hook first so argmax/sample actually emit them.
+          closed: [['I', 'V7_of_IV', 'vi7', 'iv6'], ['ii9', 'V13', 'Imaj7', 'I'], ['I', 'Imaj7', 'IVmaj7', 'iv'], ['ii7', 'V7', 'Imaj7', 'I'], ['I6', 'ii65', 'V7', 'I'], ['V43', 'I6', 'V7', 'I'], ['ii65', 'I64', 'V7', 'I'], ['vi7', 'ii7', 'V7', 'Imaj7']],
+          half: [['Imaj7', 'vi7', 'ii9', 'V13'], ['I', 'V7_of_IV', 'vi7', 'iv6'], ['Imaj7', 'vi7', 'ii7', 'V7'], ['I', 'I6', 'ii65', 'V'], ['Imaj7', 'iii7', 'ii7', 'V7'], ['I', 'V7_of_vi', 'vi7', 'V7_of_ii']],
+          open: [['I', 'Imaj7', 'IVmaj7', 'iv'], ['Imaj7', 'vi7', 'IVmaj7', 'iii7'], ['I', 'V65', 'I6', 'IV'], ['Imaj7', 'iii7', 'vi7', 'ii7'], ['vi7', 'ii7', 'V7', 'vi7']],
         },
-        loops: [['Imaj7', 'vi7', 'ii7', 'V7'], ['I', 'I6', 'ii65', 'V7'], ['ii7', 'V7'], ['Imaj7', 'iii7'], ['I6', 'ii65', 'V43', 'I'], ['Imaj7', 'vi7']],
+        loops: [['ii9', 'V13', 'Imaj7', 'I'], ['I', 'V7_of_IV', 'vi7', 'iv6'], ['Imaj7', 'vi7', 'ii7', 'V7'], ['I', 'I6', 'ii65', 'V7'], ['ii7', 'V7'], ['Imaj7', 'iii7'], ['I6', 'ii65', 'V43', 'I'], ['Imaj7', 'vi7']],
         pedals: [['I', 'IV64', 'I', 'IV64'], ['V7sus4', 'V7', 'V7sus4', 'V7']],
-        codas: [['ii7', 'V7', 'Imaj7', 'I6_9'], ['IVmaj7', 'I64', 'V7', 'I'], ['vi7', 'ii7', 'V7', 'Imaj7']],
+        codas: [['ii9', 'V13', 'Imaj7', 'I6_9'], ['ii7', 'V7', 'Imaj7', 'I6_9'], ['IVmaj7', 'I64', 'V7', 'I'], ['vi7', 'ii7', 'V7', 'Imaj7']],
         finals: ['I', 'Imaj7', 'I6_9', 'Iadd9'],
-        splits: [['ii7', 'V7'], ['ii65', 'V'], ['ii7', 'V65'], ['IVmaj7', 'V7'], ['vi7', 'V7']], // ii–V in one bar, the standards' turnaround pace,
+        splits: [['ii9', 'V13'], ['ii7', 'V7'], ['ii65', 'V'], ['ii7', 'V65'], ['IVmaj7', 'V7'], ['vi7', 'V7']], // ii–V (and ii9–V13) in one bar,
         surprises: ['bII7', 'iv', 'V7_of_vi', 'sharp_i_dim7', 'bVIImaj7'],
-        subs: { Imaj7: ['I', 'I6', 'Iadd9'], I: ['I6', 'Imaj7'], vi7: ['vi', 'vi6'], ii7: ['ii65', 'ii9'], V7: ['V65', 'V43', 'V7sus4'], IVmaj7: ['IV', 'IV6'] },
+        subs: { Imaj7: ['I', 'I6', 'Iadd9'], I: ['I6', 'Imaj7'], vi7: ['vi', 'vi6'], ii7: ['ii65', 'ii9'], V7: ['V65', 'V43', 'V7sus4', 'V13'], IVmaj7: ['IV', 'IV6'], iv: ['iv6', 'iv_add6'] },
       },
       minor: {
         heads: [['i', 'iv7'], ['i7', 'ii_half_dim7'], ['i', 'V65'], ['i', 'i42'], ['i6', 'iv'], ['i7', 'iv7']],
@@ -1163,6 +1195,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       arrangement: { build: 40, lift_on_return: 35, peak_then_bare: 15, terraced_blocks: 10 },
       opening: { vamp_intro: 45, straight_in: 35, pickup: 20 },
       pedal: { full: 50, half: 40, dry: 10 },
+      phrasing: { long_breathed: 50, breathing: 30, on_the_beat: 20 },
     },
     archetypes: {
       dreamy_haze: {
@@ -1173,6 +1206,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           texture: { displaced_arpeggio: 40, wash_arpeggio: 25, chordal_melody: 20, lush_voicings: 15 },
           tempo: { andante: 50, moderato: 30, adagio: 20 },
           dynamics: { p: 50, mp: 35, pp: 15 },
+          phrasing: { long_breathed: 75, breathing: 25 },
         },
       },
       lyrical_song: {
@@ -1190,7 +1224,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         priors: {
           form: { vamp_and_tag: 70, call_and_response: 30 },
           meter: { four_four: 75, six_eight: 25 },
-          texture: { lush_voicings: 45, syncopated_ostinato: 20, stride_dance: 20, pulsing_chords: 15 },
+          texture: { lush_voicings: 35, bossa_comp: 25, syncopated_ostinato: 20, stride_dance: 20 },
           palette: { pentatonic: 40, blues: 35, chromatic_approach: 25 },
           tempo: { andante: 50, moderato: 40, adagio: 10 },
           defaultInstrument: { electric_piano: 65, grand_piano: 35 },

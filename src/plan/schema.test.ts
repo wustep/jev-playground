@@ -5,9 +5,9 @@ import {
   GLOBAL_FIELDS,
   PEDAL_IDS,
   PEDALS,
-  TEMPO_BPM,
-  TEMPO_IDS,
-  TEMPOS,
+  PHRASING_IDS,
+  PHRASINGS,
+  defaultPhrasing,
   parseGlobals,
   parsePlan,
 } from './schema'
@@ -94,6 +94,47 @@ describe('PEDALS', () => {
     expect(parsePlan({ ...base, pedal: 'dry' }).pedal).toBe('dry')
     expect(parsePlan({ ...base, pedal: 'full' }).pedal).toBe('full')
     expect(() => parsePlan({ ...base, pedal: 'soft' })).toThrow(/pedal/)
+  })
+})
+
+describe('PHRASINGS', () => {
+  it('is a closed four-way Choice, fanned out with the other globals', () => {
+    expect(PHRASING_IDS).toEqual(['on_the_beat', 'upbeat', 'breathing', 'long_breathed'])
+    expect(Object.keys(PHRASINGS)).toEqual(PHRASING_IDS)
+    expect(GLOBAL_FIELD_IDS).toContain('phrasing')
+    expect(GLOBAL_FIELDS.phrasing).toBe(PHRASINGS)
+  })
+
+  it('defaults a hand-edited plan from character and accepts an explicit pick', () => {
+    const bars = [
+      { chord: 'I', role: 'statement', contour: 'arch' },
+      { chord: 'V', role: 'development', contour: 'rise' },
+      { chord: 'V7', role: 'half_cadence', contour: 'fall' },
+      { chord: 'I', role: 'cadence', contour: 'fall' },
+    ]
+    const lyrical = {
+      version: 1,
+      style: 'chopin',
+      character: 'lyrical_song',
+      form: 'period',
+      key: 'Eb_major',
+      meter: 'twelve_eight',
+      texture: 'rolling_nocturne',
+      palette: 'diatonic',
+      tempo: 'andante',
+      dynamics: 'p',
+      dynamicShape: 'arch',
+      defaultInstrument: 'grand_piano',
+      bars,
+    }
+    const storm = { ...lyrical, style: 'beethoven', character: 'stormy_drama', meter: 'four_four', texture: 'tremolo_storm' }
+    expect(defaultPhrasing('lyrical_song')).toBe('breathing')
+    expect(defaultPhrasing('stormy_drama')).toBe('on_the_beat')
+    expect(parseGlobals(lyrical).phrasing).toBe('breathing')
+    expect(parseGlobals(storm).phrasing).toBe('on_the_beat')
+    expect(parsePlan({ ...lyrical, phrasing: 'upbeat' }).phrasing).toBe('upbeat')
+    expect(parsePlan({ ...storm, phrasing: 'breathing' }).phrasing).toBe('breathing')
+    expect(() => parsePlan({ ...lyrical, phrasing: 'none' })).toThrow(/phrasing/)
   })
 
   it('accepts 64-bar plans and rejects lengths outside BAR_COUNT_VALUES', () => {

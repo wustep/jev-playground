@@ -31,6 +31,7 @@ const SINGING_TEXTURES = new Set<TextureId>([
   'aria_walking_bass',
   'stride_dance',
   'lush_voicings',
+  'bossa_comp',
   'melody_over_ostinato',
   'chorale',
   'pulsing_chords',
