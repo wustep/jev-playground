@@ -104,17 +104,17 @@ function circularDistance(a: number, b: number): number {
  *   intended diatonic pitch class from the key and snap to the nearest
  *   palette tone (circular chroma). Ties prefer a non-tonic tone so
  *   “leading” does not collapse onto tonic when both are 1 semitone away,
- *   then the smaller ascending interval from the tonic. If the nearest
- *   tone is tonic and the degree is not, the next-nearest wins when it is
- *   at most one semitone farther.
+ *   then the raised neighbor (clockwise from the intended class). If the
+ *   nearest tone is tonic and the degree is not, the next-nearest wins
+ *   when it is at most one semitone farther.
  *
  * C major pentatonic [C D E G A]: tonic C, supertonic D, mediant E,
  * subdominant E (F→E), dominant G, submediant A, leading A (B prefers A
  * over tonic C).
  *
  * C whole-tone [C D E F# G# A#]: tonic C, supertonic D, mediant E,
- * subdominant F#, dominant F# (G ties F#/G#; smaller interval from tonic),
- * submediant G#, leading A#.
+ * subdominant F# (F ties E/F# → raised), dominant G#, submediant A#,
+ * leading A#.
  *
  * C minor pentatonic [C Eb F G Bb], minor functions: tonic C, supertonic Eb
  * (D→Eb), mediant Eb, subdominant F, dominant G, submediant G (Ab→G),
@@ -145,14 +145,15 @@ export function pitchClassForDegree(
         pc,
         chroma,
         dist: circularDistance(chroma, intended),
-        fromTonic: (chroma - tonicChroma + 12) % 12,
         isTonic: chroma === tonicChroma,
       }
     })
     .sort((a, b) => {
       if (a.dist !== b.dist) return a.dist - b.dist
       if (!allowTonic && a.isTonic !== b.isTonic) return a.isTonic ? 1 : -1
-      return a.fromTonic - b.fromTonic
+      const aRaise = (a.chroma - intended + 12) % 12
+      const bRaise = (b.chroma - intended + 12) % 12
+      return aRaise - bRaise
     })
   const best = ranked[0]
   const next = ranked[1]
@@ -259,6 +260,7 @@ export function spellDegree(
   targetMidi: number,
   options: SpellDegreeOptions = {},
 ): string | null {
+  if (degree === 'rest') return null
   const pc = pitchClassForDegree(degree, scale, options)
   if (!pc) return null
   const spec = DEGREE_STEPS[degree]

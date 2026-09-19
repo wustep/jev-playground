@@ -176,8 +176,8 @@ describe('realize + overlay', () => {
     expect(overlaid.bars[body].bass).toEqual(code.bars[body].bass)
   })
 
-  it('keeps a nocturne roll denser than a 4-note melody wipe', () => {
-    const plan = cMajorPlan()
+  it('keeps an Alberti left hand under the Jev tune', () => {
+    const plan: CompositionPlan = { ...cMajorPlan(), texture: 'alberti_melody' }
     const phrase = realizeJevNoteChoices(
       { rhythm: 'four_even', degrees: ['tonic', 'dominant', 'mediant', 'tonic'] },
       plan,
@@ -185,12 +185,14 @@ describe('realize + overlay', () => {
     const code = renderPlan(plan, 3)
     const overlaid = applyNotePhrase(code, phrase)
     const body = phrase.barIndex + (code.introBars ?? 0)
-    const attacks = (bar: (typeof code.bars)[number]) =>
-      [...bar.treble, ...bar.bass].reduce((sum, voice) => sum + voice.length, 0)
+    const attacks = (voices: Voice[]) => voices.reduce((sum, voice) => sum + voice.length, 0)
     expect(overlaid.bars[body].treble[0]).toEqual(phrase.notes)
+    expect(overlaid.bars[body].treble.slice(1)).toEqual(code.bars[body].treble.slice(1))
     expect(overlaid.bars[body].bass).toEqual(code.bars[body].bass)
-    expect(attacks(overlaid.bars[body])).toBeGreaterThan(phrase.notes.length + 1)
-    expect(attacks(overlaid.bars[body])).toBeGreaterThanOrEqual(attacks(code.bars[body]) - (code.bars[body].treble[0]?.length ?? 0) + phrase.notes.length)
+    expect(attacks(code.bars[body].bass)).toBeGreaterThanOrEqual(4)
+    expect(attacks([...overlaid.bars[body].treble, ...overlaid.bars[body].bass])).toBe(
+      phrase.notes.length + attacks(code.bars[body].treble.slice(1)) + attacks(code.bars[body].bass),
+    )
   })
 
   it('peels a chordal skyline so inner RH tones stay under the Jev tune', () => {
@@ -394,8 +396,8 @@ describe('gapped palette degree mapping', () => {
     expect(pitchClassForDegree('supertonic', wholeTone)).toBe('D')
     expect(pitchClassForDegree('mediant', wholeTone)).toBe('E')
     expect(pitchClassForDegree('subdominant', wholeTone)).toBe('F#')
-    expect(pitchClassForDegree('dominant', wholeTone)).toBe('F#')
-    expect(pitchClassForDegree('submediant', wholeTone)).toBe('G#')
+    expect(pitchClassForDegree('dominant', wholeTone)).toBe('G#')
+    expect(pitchClassForDegree('submediant', wholeTone)).toBe('A#')
     expect(pitchClassForDegree('leading', wholeTone)).toBe('A#')
 
     expect(pitchClassForDegree('tonic', majorBlues)).toBe('C')
