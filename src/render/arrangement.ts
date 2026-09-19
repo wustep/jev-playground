@@ -11,6 +11,7 @@ import {
   type CharacterId,
   type CompositionPlan,
   type StyleId,
+  type TextureId,
 } from '../plan/schema'
 import type { BarContext } from './context'
 import { nearestNote } from './pitch'
@@ -43,8 +44,21 @@ export function arrangementOf(plan: CompositionPlan): ArrangementId {
   return plan.arrangement ?? defaultArrangement(plan.style, plan.character)
 }
 
-/** Half-speed at 0, written at 1–2, doubled at 3. */
-export function figureStep(bar: Pick<BarContext, 'arrangement'>, written: number): number {
+/**
+ * Zimmer vs Glass: on ostinato textures under a build / peak_then_bare,
+ * keep the written figure and let `applyArrangement` add or strip a layer.
+ * No new allowlist label — bound to those textures + those arrangements.
+ */
+const OSTINATO_TEXTURES = new Set<TextureId>(['melody_over_ostinato', 'syncopated_ostinato'])
+
+export function keepOstinatoFigure(bar: Pick<BarContext, 'arrangementId' | 'texture'>): boolean {
+  if (bar.arrangementId !== 'build' && bar.arrangementId !== 'peak_then_bare') return false
+  return bar.texture == null || OSTINATO_TEXTURES.has(bar.texture)
+}
+
+/** Half-speed at 0, written at 1–2, doubled at 3 — unless the ostinato must stay put. */
+export function figureStep(bar: Pick<BarContext, 'arrangement' | 'arrangementId' | 'texture'>, written: number): number {
+  if (keepOstinatoFigure(bar)) return written
   if (bar.arrangement <= 0) return written * 2
   if (bar.arrangement >= 3) return Math.max(1, Math.floor(written / 2))
   return written

@@ -92,7 +92,7 @@ interface CompositionPlan {
   form: FormId                // 11: period, sentence, spinning_out, additive_loop, mosaic_pairs …
   key: KeyId                  // 21 keys, C_major … F_minor
   meter: MeterId              // four_four | three_four | two_four | six_eight | nine_eight | twelve_eight
-  texture: TextureId          // 22 textures: chorale … toccata_perpetual, rolling_nocturne, bell_organum
+  texture: TextureId          // 23 textures: chorale … toccata_perpetual, rolling_nocturne, bell_organum, bossa_comp
   palette: PaletteId          // diatonic | chromatic_approach | pentatonic | whole_tone | modal | modal_dark | blues
   tempo: TempoId              // larghissimo … prestissimo (bucketed bpm)
   dynamics: DynamicId         // pp … ff
@@ -135,7 +135,7 @@ Same interface, no network, same order of decisions: a character (one of the sty
 
 ### The renderer (`src/render/`)
 
-`harmony.ts` resolves key-relative chord labels to spelled pitch classes via **tonal** — including the bass note an inversion or pedal label dictates — and bends the melody scale toward chromatic chord tones; `voiceLeading.ts` (nearest-inversion voicings, bass handling, essential-tone selection) and `melody.ts` (contour-driven lines that snap to chord tones on strong positions and the palette scale on weak ones, stepwise runs, chromatic approach tones, and motif memory: a restatement over the statement's chord replays its tune; a `sequence` or `echo` bar reuses the previous bar's figure) are the small helpers; `textures/*` are the 22 texture generators, most of which pick one of several figures per piece from the seed. `renderPlan` then phrases each bar — a hairpin toward the next bar's level, metric accent and touch scaled by the piece's character. `renderPlan.test.ts` renders every style × many seeds and every texture × meter with random labels, and asserts the output is always engravable.
+`harmony.ts` resolves key-relative chord labels to spelled pitch classes via **tonal** — including the bass note an inversion or pedal label dictates — and bends the melody scale toward chromatic chord tones; `voiceLeading.ts` (nearest-inversion voicings, bass handling, essential-tone selection) and `melody.ts` (contour-driven lines that snap to chord tones on strong positions and the palette scale on weak ones, stepwise runs, chromatic approach tones, and motif memory: a restatement over the statement's chord replays its tune; a `sequence` or `echo` bar reuses the previous bar's figure) are the small helpers; `textures/*` are the 23 texture generators, most of which pick one of several figures per piece from the seed. `renderPlan` then phrases each bar — a hairpin toward the next bar's level, metric accent and touch scaled by the piece's character. `renderPlan.test.ts` renders every style × many seeds and every texture × meter with random labels, and asserts the output is always engravable.
 
 ### Audio (`src/audio/engine.ts`)
 

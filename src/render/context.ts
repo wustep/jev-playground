@@ -1,8 +1,8 @@
-import type { BarPlan, BaseRoleId, CharacterId, PaletteId } from '../plan/schema'
+import type { ArrangementId, BarPlan, BaseRoleId, CharacterId, PaletteId, PhrasingId, TextureId } from '../plan/schema'
 import type { StyleDialect } from './dialect'
 import type { KeyInfo, ResolvedChord } from './harmony'
 import { clamp } from './pitch'
-import { phrasingOf, phraseRestTicks, withEndRest } from './phrasing'
+import { phraseRestTicks, withEndRest } from './phrasing'
 import type { MeterInfo, Note, Voice } from './score'
 
 /** A remembered bar of one line: its pitches, and the chord they were heard over. */
@@ -73,7 +73,9 @@ export interface BarContext {
   returns?: number
   /** Last bar of a four-bar phrase (or of the piece). */
   phraseFinal: boolean
-  /** Whether this character's tune lands, holds and rests at phrase ends. */
+  /** Closed phrasing for this piece — drives phrase-end rests and pickups. */
+  phrasing: PhrasingId
+  /** Whether this piece's tune lands, holds and rests at phrase ends. */
   breathes: boolean
   /**
    * Arrangement density for this bar (0 bare … 3 full). Textures that carry
@@ -81,6 +83,10 @@ export interface BarContext {
    * applies the same levels to every texture.
    */
   arrangement: 0 | 1 | 2 | 3
+  /** Closed arrangement strategy — ostinato textures keep the same figure on build / peak_then_bare. */
+  arrangementId?: ArrangementId
+  /** Piece texture. `figureStep` only freezes the written step on ostinato + build / peak. */
+  texture?: TextureId
   /** `plan.role` folded onto the seven roles the gesture tables are keyed by. */
   role: BaseRoleId
   character: CharacterId
@@ -184,7 +190,7 @@ export function rhythmFor(bar: BarContext, bank: RhythmBank, memoryKey: string):
   const air = (rhythm: number[]) => {
     if (!bar.breathes || bar.returns !== undefined) return remember(rhythm)
     if (!bar.phraseFinal && !bar.isLast) return remember(rhythm)
-    const rest = phraseRestTicks(bar.meter, phrasingOf(bar.character))
+    const rest = phraseRestTicks(bar.meter, bar.phrasing)
     return remember(withEndRest(rhythm, rest))
   }
   if (bar.isLast) return air(choose(bank.close, bar.rand))

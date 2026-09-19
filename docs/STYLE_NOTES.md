@@ -25,7 +25,7 @@ textures in `src/render/textures/*`.
 | 1–2 role layouts per length, copy-pasted across styles | 11 forms × 4 lengths (`period`, `sentence`, `spinning_out`, `binary_dance`, `arch_return`, `additive_loop`, `mosaic_pairs`, `layered_build`, `vamp_and_tag`, `call_and_response`, `free_fantasia`) |
 | Independent priors → "presto chorale" | A **character** is decided first (12 of them); each style has 5–6 archetypes that override priors jointly, so a sarabande is slow *and* in 3/4 *and* sung |
 | 50 chords, root position only | 107: inversions (`I6`, `I64`, `V65`, `V43`, `V42`, `ii65`, `iv6` …), secondary dominants, pedal chords (`IV64`, `V7_over_I`), Neapolitan, chromatic mediants, mixture and jazz colours. The renderer puts the label's bass note at the bottom |
-| 10 textures | 22 (+ per-piece figure variants inside the old ones) |
+| 10 textures | 23 (+ per-piece figure variants inside the old ones; `bossa_comp` for Laufey / Fox groove) |
 | 5 contours, 7 roles | 9 contours (`wave`, `leap_fall`, `drop_rise`, `pendulum`), 11 roles (`sequence`, `echo`, `surprise`, `dissolve`) |
 | Flat velocities per bar | Within-bar hairpins, metric accent and touch that depend on the character; restatements replay the opening tune |
 | I–V–vi–IV loops (Glass major had *only* that) | Removed from every book; a guard re-rolls any progression whose roots spell the loop in any rotation (unit-tested over 480 plans) |
@@ -390,6 +390,29 @@ motif and the rest of the phrase was redrawn, so a period read a b c d / a e f g
 
 Still missing, in order: the tune never rests and never starts before the
 barline; the arrangement does not change when the tune returns; no intro bars.
+
+## Phrasing, 12/8 nocturnes, bossa (fourth pass, 2026-09-19)
+
+Gap-study items 1–2, plus the Zimmer same-figure layer (item 3) — see
+`docs/fable-context/REFERENCE_PLAN_GAP.md`.
+
+**Changed**
+- Closed global `phrasing`: `on_the_beat | upbeat | breathing | long_breathed`.
+  On `GLOBAL_FIELDS` next to `arrangement` / `pedal`, so both planners and the
+  Jev `globals` request pick it up with no new op. Hand-edited plans default
+  from character (lyrical → breathing; stillness / haze → long_breathed;
+  perpetual / stormy / pulse → on_the_beat). The renderer rests phrase ends
+  and writes pickups into returns from this label, not from character alone —
+  a stormy ballade can still breathe.
+- Chopin nocturne / `lyrical_song` meter prior now peaks on `twelve_eight`
+  (the enum already existed; Op. 9/2 is 12/8). Argmax picks it.
+- Laufey: texture `bossa_comp` (bass on 1 and the *and* of 2, 3rd+7th shells
+  on partido-alto off-beats, tune on top). Major book phrases now include
+  I–V7/IV–vi7–iv6, I–Imaj7–IVmaj7–iv, and ii9–V13–Imaj7. Song archetypes
+  favor the texture and those phrases.
+- Zimmer: on ostinato textures + `build` / `peak_then_bare`, `figureStep`
+  keeps the written figure; `applyArrangement` still adds or strips a layer.
+  No new label.
 
 ## Left out, on purpose
 

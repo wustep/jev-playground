@@ -4,7 +4,7 @@ import { brokenChordPrelude, chorale, twoVoiceCounterpoint } from './baroque'
 import { albertiMelody, dramaticChords } from './classical'
 import { ariaWalkingBass, rollingNocturne, scherzoStaccato, strideDance, toccataPerpetual, tremoloStorm } from './classicalExtra'
 import { parallelPlaning, washArpeggio } from './impressionist'
-import { lushVoicings, minimalCells, syncopatedOstinato } from './modern'
+import { bossaComp, lushVoicings, minimalCells, syncopatedOstinato } from './modern'
 import { bellOrganum, chordalMelody, displacedArpeggio, interlockingHands, melodyOverOstinato, pulsingChords } from './modernExtra'
 
 export const TEXTURE_RENDERERS: Record<TextureId, Texture> = {
@@ -18,6 +18,7 @@ export const TEXTURE_RENDERERS: Record<TextureId, Texture> = {
   minimal_cells: minimalCells,
   syncopated_ostinato: syncopatedOstinato,
   lush_voicings: lushVoicings,
+  bossa_comp: bossaComp,
   aria_walking_bass: ariaWalkingBass,
   toccata_perpetual: toccataPerpetual,
   stride_dance: strideDance,

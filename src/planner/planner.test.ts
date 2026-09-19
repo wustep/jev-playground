@@ -2,7 +2,7 @@ import { Midi } from '@tonejs/midi'
 import { describe, expect, it } from 'vitest'
 import { handleJev } from '../../server/jevHandler'
 import { scoreToMidi } from '../midi/exportMidi'
-import { BAR_COUNT_VALUES, BAR_ROLE_IDS, CHARACTER_IDS, FORM_IDS, PEDAL_IDS, STYLE_IDS, TEMPO_IDS, parsePlan } from '../plan/schema'
+import { BAR_COUNT_VALUES, BAR_ROLE_IDS, CHARACTER_IDS, FORM_IDS, PEDAL_IDS, PHRASING_IDS, STYLE_IDS, TEMPO_IDS, parsePlan } from '../plan/schema'
 import { formRoles, formSlots } from '../plan/forms'
 import { STYLE_PROFILES } from '../plan/styles'
 import { keyInfo, resolveChord } from '../render/harmony'
@@ -72,12 +72,14 @@ describe('JevPlanner', () => {
     expect(seen[0].state).toMatchObject({ requested_style: { name: 'Philip Glass' } })
     expect(JSON.stringify(seen[0].state)).not.toContain('minimalism')
     // Request 2 fans out form + the other globals, conditioned on that character. Length is never asked.
-    expect(Object.keys(seen[1].questions)).toHaveLength(12)
+    expect(Object.keys(seen[1].questions)).toHaveLength(13)
     expect(Object.keys(seen[1].questions)).toContain('arrangement')
     expect(Object.keys(seen[1].questions)).toContain('opening')
     expect(Object.keys(seen[1].questions)).toContain('pedal')
+    expect(Object.keys(seen[1].questions)).toContain('phrasing')
     expect(Object.keys(seen[1].questions.tempo.criteria as object)).toEqual(TEMPO_IDS)
     expect(Object.keys(seen[1].questions.pedal.criteria as object)).toEqual(PEDAL_IDS)
+    expect(Object.keys(seen[1].questions.phrasing.criteria as object)).toEqual(PHRASING_IDS)
     expect(Object.keys(seen[1].questions)).not.toContain('barCount')
     expect(JSON.stringify(seen[1].state)).toContain('steady motoric pulse')
     // Phrase requests carry the book options and prior-slot contour context.
@@ -261,6 +263,26 @@ describe('HeuristicPlanner', () => {
     expect(STYLE_PROFILES.bach.archetypes.dance_lilt?.priors.meter).toMatchObject({ twelve_eight: expect.any(Number), nine_eight: expect.any(Number) })
     expect(STYLE_PROFILES.beethoven.archetypes.heroic_bright?.priors.meter).toMatchObject({ two_four: expect.any(Number) })
     expect(STYLE_PROFILES.debussy.archetypes.dreamy_haze?.priors.meter).toMatchObject({ nine_eight: expect.any(Number) })
+  })
+
+  it('puts twelve_eight on Chopin nocturne / lyrical priors so argmax prefers 12/8 over 4/4', async () => {
+    const lyrical = STYLE_PROFILES.chopin.archetypes.lyrical_song?.priors.meter
+    expect(lyrical?.twelve_eight).toBeGreaterThan(lyrical?.four_four ?? 0)
+    expect(lyrical?.twelve_eight).toBeGreaterThan(lyrical?.six_eight ?? 0)
+    expect(lyrical?.twelve_eight).toBeGreaterThan(lyrical?.three_four ?? 0)
+    const planner = new HeuristicPlanner()
+    const { plan } = await planner.plan({ style: 'chopin', bars: 16, pick: 'argmax', seed: 1, brief: true })
+    expect(plan.character).toBe('lyrical_song')
+    expect(plan.meter).toBe('twelve_eight')
+    expect(plan.phrasing).toBeDefined()
+  })
+
+  it('writes phrasing and favors bossa_comp on Laufey song argmax', async () => {
+    const planner = new HeuristicPlanner()
+    const { plan } = await planner.plan({ style: 'laufey', bars: 16, pick: 'argmax', seed: 1, brief: true })
+    expect(plan.character).toBe('lyrical_song')
+    expect(plan.texture).toBe('bossa_comp')
+    expect(plan.phrasing).toBe('breathing')
   })
 
   it('scores its own style at least as high as the others', async () => {

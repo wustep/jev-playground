@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BAR_COUNT_VALUES, FORM_IDS, KEY_IDS, STYLE_IDS } from './schema'
 import { formSlots } from './forms'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, withPhraseNovelty } from './harmonyPhrases'
+import { STYLE_PROFILES } from './styles'
 
 describe('harmony phrase catalog', () => {
   it('offers a closed, expandable list for every style, key and slot', () => {
@@ -48,5 +49,22 @@ describe('harmony phrase catalog', () => {
     const raw = Object.fromEntries(options.map((option) => [option.id, 1 / options.length]))
     const adjusted = withPhraseNovelty(raw, [...first.chords], options)
     expect(adjusted[first.id]).toBeLessThan(raw[first.id])
+  })
+
+  it('puts borrowed-iv and ii9–V13 phrases in the Laufey major book', () => {
+    const book = STYLE_PROFILES.laufey.harmony.major
+    const phrases = [...book.phrases.closed, ...book.phrases.half, ...book.phrases.open]
+    expect(phrases.some((phrase) => phrase.includes('V7_of_IV') && phrase.includes('iv6'))).toBe(true)
+    expect(phrases.some((phrase) => phrase.includes('ii9') && phrase.includes('V13'))).toBe(true)
+    expect(phrases.some((phrase) => phrase.includes('Imaj7') && phrase.includes('iv'))).toBe(true)
+    expect(book.heads.some((head) => head[0] === 'ii9' && head[1] === 'V13')).toBe(true)
+    expect(book.splits.some((pair) => pair[0] === 'ii9' && pair[1] === 'V13')).toBe(true)
+  })
+
+  it('favors bossa_comp on Laufey song archetypes', () => {
+    const lyrical = STYLE_PROFILES.laufey.archetypes.lyrical_song?.priors.texture
+    const groove = STYLE_PROFILES.laufey.archetypes.warm_groove?.priors.texture
+    expect(lyrical?.bossa_comp).toBeGreaterThan(lyrical?.chordal_melody ?? 0)
+    expect(groove?.bossa_comp).toBeGreaterThan(groove?.stride_dance ?? 0)
   })
 })

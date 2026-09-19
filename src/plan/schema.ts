@@ -126,6 +126,8 @@ export const TEXTURES = {
     'Left-hand ostinato in 3+3+2 groupings under sparse syncopated right-hand stabs in open fourths and short motifs',
   lush_voicings:
     'Rolled rich extended chords (ninths, elevenths) held under gentle pentatonic melodic fills; laid-back, soulful',
+  bossa_comp:
+    'Bossa-nova piano: bass on 1 and the and of 2, shell voicings (3rd + 7th) on partido-alto off-beats, a sung tune on top',
   aria_walking_bass:
     'Ornamented singing right-hand line over a steadily walking left-hand bass in even eighth notes',
   toccata_perpetual:
@@ -256,6 +258,41 @@ export const PEDALS = {
 } as const
 export type PedalId = keyof typeof PEDALS
 export const PEDAL_IDS = keysOf<PedalId>(PEDALS)
+
+/**
+ * How the singing line treats the barline and the phrase end. Independent of
+ * `character` so a stormy ballade can still land and rest, and a nocturne can
+ * lean in from an upbeat without changing its character label.
+ */
+export const PHRASINGS = {
+  on_the_beat:
+    'The tune attacks the downbeat of every bar and does not rest at phrase ends — a perpetual, stormy or motor line',
+  upbeat:
+    'The tune leans in from an anacrusis: phrase ends leave a beat of air that a pickup fills into the next downbeat',
+  breathing:
+    'The tune lands early at phrase ends, holds, and rests — a sung line that takes a breath before the next phrase',
+  long_breathed:
+    'Long tones and more air: phrase ends rest for two beats, then a sparse pickup into the return',
+} as const
+export type PhrasingId = keyof typeof PHRASINGS
+export const PHRASING_IDS = keysOf<PhrasingId>(PHRASINGS)
+
+/** Hand-edited plans that omit `phrasing` keep today's character-driven default. */
+export function defaultPhrasing(character: CharacterId): PhrasingId {
+  switch (character) {
+    case 'lyrical_song':
+    case 'solemn_hymn':
+    case 'dance_lilt':
+    case 'warm_groove':
+    case 'restless_searching':
+      return 'breathing'
+    case 'meditative_stillness':
+    case 'dreamy_haze':
+      return 'long_breathed'
+    default:
+      return 'on_the_beat'
+  }
+}
 
 export const BAR_COUNTS = {
   '4': 'Four bars — one short phrase, a single gesture',
@@ -496,6 +533,12 @@ export interface CompositionPlan {
    * write it. The renderer defaults from the texture (washed textures ring).
    */
   pedal?: PedalId
+  /**
+   * How the tune treats phrase ends and pickups. Optional on hand-edited plans;
+   * planners always write it. The renderer defaults from `character` (lyrical
+   * breathes; perpetual / stormy stay on the beat).
+   */
+  phrasing?: PhrasingId
   /** 4, 8, 16, 32 or 64 bars, one harmony each — two where a bar carries a `chord2`. */
   bars: BarPlan[]
 }
@@ -515,6 +558,7 @@ export const GLOBAL_FIELDS = {
   arrangement: ARRANGEMENTS,
   opening: OPENINGS,
   pedal: PEDALS,
+  phrasing: PHRASINGS,
 } as const
 export type GlobalField = keyof typeof GLOBAL_FIELDS
 export const GLOBAL_FIELD_IDS = Object.keys(GLOBAL_FIELDS) as GlobalField[]
@@ -557,8 +601,9 @@ export function parseBarPlan(raw: unknown, path: string): BarPlan {
 export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError(`${path}: expected an object`)
   const obj = raw as Record<string, unknown>
+  const character = parseOption(CHARACTERS, obj.character, `${path}.character`)
   return {
-    character: parseOption(CHARACTERS, obj.character, `${path}.character`),
+    character,
     form: parseOption(FORMS, obj.form, `${path}.form`),
     key: parseOption(KEYS, obj.key, `${path}.key`),
     meter: parseOption(METERS, obj.meter, `${path}.meter`),
@@ -571,6 +616,7 @@ export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
     arrangement: obj.arrangement != null ? parseOption(ARRANGEMENTS, obj.arrangement, `${path}.arrangement`) : 'lift_on_return',
     opening: obj.opening != null ? parseOption(OPENINGS, obj.opening, `${path}.opening`) : 'straight_in',
     pedal: obj.pedal != null ? parseOption(PEDALS, obj.pedal, `${path}.pedal`) : 'half',
+    phrasing: obj.phrasing != null ? parseOption(PHRASINGS, obj.phrasing, `${path}.phrasing`) : defaultPhrasing(character),
   }
 }
 

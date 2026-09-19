@@ -15,7 +15,7 @@ import { applyCadenceOrnament, STYLE_DIALECTS, timingOffsetSeconds } from './dia
 import { keyInfo, resolveChord, scaleFor, type ResolvedChord } from './harmony'
 import { applyArrangement, arrangementLevels, arrangementOf } from './arrangement'
 import { applyEnding, applyOpening } from './framing'
-import { applyPhraseBreath, breathes, isPhraseFinalBar } from './phrasing'
+import { applyPhraseBreath, breathes, isPhraseFinalBar, resolvePhrasing } from './phrasing'
 import { clamp, midiOf } from './pitch'
 import { METER_INFO, type Bar, type Note, type Score, type TimedNote, type Voice } from './score'
 import { pedalOf, TEXTURE_RENDERERS } from './textures'
@@ -210,8 +210,11 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       plan: barPlan,
       returns: PUNCTUATION.has(barPlan.role) ? undefined : returns[index],
       phraseFinal: isPhraseFinalBar(index, plan.bars.length),
-      breathes: breathes(plan.character),
+      phrasing: resolvePhrasing(plan),
+      breathes: breathes(resolvePhrasing(plan)),
       arrangement: levels[index],
+      arrangementId: arrangementOf(plan),
+      texture: plan.texture,
       role: ROLE_BASE[barPlan.role],
       character: plan.character,
       palette: plan.palette,

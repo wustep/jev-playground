@@ -277,3 +277,39 @@ describe('extended meters', () => {
     }
   })
 })
+
+describe('bossa_comp', () => {
+  it('puts bass on 1 and the and of 2, with off-beat shells under the tune', () => {
+    const plan: CompositionPlan = {
+      version: 1,
+      style: 'laufey',
+      character: 'warm_groove',
+      form: 'period',
+      key: 'Db_major',
+      meter: 'four_four',
+      texture: 'bossa_comp',
+      palette: 'diatonic',
+      tempo: 'andante',
+      dynamics: 'mp',
+      dynamicShape: 'arch',
+      defaultInstrument: 'grand_piano',
+      arrangement: 'constant',
+      opening: 'straight_in',
+      phrasing: 'on_the_beat',
+      bars: [
+        { chord: 'ii9', role: 'statement', contour: 'arch' },
+        { chord: 'V13', role: 'development', contour: 'wave' },
+        { chord: 'Imaj7', role: 'half_cadence', contour: 'fall' },
+        { chord: 'I', role: 'cadence', contour: 'fall' },
+      ],
+    }
+    const score = renderPlan(plan, 2)
+    assertWellFormed(score)
+    const bass = score.bars[0].bass[0] ?? []
+    expect(bass.some((n) => n.start === 0)).toBe(true)
+    expect(bass.some((n) => n.start === 6)).toBe(true)
+    const shells = score.bars[0].treble[1] ?? []
+    expect(shells.length).toBeGreaterThan(0)
+    expect(shells.every((n) => n.start !== 0)).toBe(true)
+  })
+})
