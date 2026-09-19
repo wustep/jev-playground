@@ -1437,9 +1437,15 @@ button.small {
   }
 }
 
-/* The piece on the stand is about to be replaced. */
+/* The piece on the stand is about to be replaced, or no longer matches the controls. */
 .sheet-panel.is-stale .sheet-frame {
   opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.sheet-panel.is-stale .transport {
+  opacity: 0.55;
   transition: opacity 0.15s ease;
 }
 

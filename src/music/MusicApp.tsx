@@ -12,6 +12,7 @@ import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
 import { DIAL_PLANNER, autoplayAfterStyleSwitch, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
 import { cachedNotesMode, NOTES_MODE_LABELS, NOTES_MODE_TITLES, notesSearchValue, parseNotesSearchParam, type NotesMode } from './notesMode'
+import { displayedPlanIdentity, displayedSheetIsStale, plannerSelectIsDirty, staleSettingsStatus } from './sheetStale'
 import { generateStatusLatencyMs, generatedPlanStatus, planHeuristicSample, readyPlanStatus, restoredPlanStatus, stampGenerateLatency } from './planTiming'
 import { styleCache, type Generated } from './styleCache'
 
@@ -92,6 +93,8 @@ export default function MusicApp() {
   const [pendingAsksJev, setPendingAsksJev] = useState(false)
   const [picking, setPicking] = useState(false)
   const [planStatus, setPlanStatus] = useState<string | null>(null)
+  /** User moved Planner off the planner that produced the piece now on the stand. */
+  const [plannerDirty, setPlannerDirty] = useState(false)
 
   const generate = useCallback(
     async (overrides: Partial<PlanInput> & { planner?: PlannerId } = {}, opts: { cancelPrior?: boolean } = {}) => {
@@ -326,6 +329,33 @@ export default function MusicApp() {
     void generate({ planner: DIAL_PLANNER }, { cancelPrior: false })
   }, [generate, style, bars])
 
+  // Bars is a structural invalidation (unlike Debug). Same path as a dial miss:
+  // restore a cache hit at this length, otherwise stub-plan until Generate.
+  const seenBarsRef = useRef(bars)
+  useEffect(() => {
+    if (seenBarsRef.current === bars) return
+    seenBarsRef.current = bars
+    if (!bootedRef.current) return
+    const cached = styleCache.get(style)
+    if (cached && cached.input.bars === bars) {
+      abortRef.current?.abort()
+      engine.stop()
+      setPlaying(false)
+      setProgress(null)
+      setError(null)
+      setEditedPlan(null)
+      setMatches(null)
+      setSeed(cached.input.seed)
+      setGenerated(cached)
+      setInstrument(cached.plan.defaultInstrument)
+      setPendingStyle(null)
+      setPendingAsksJev(false)
+      setPlanStatus(readyPlanStatus(cached.input.bars))
+      return
+    }
+    void generate({ planner: DIAL_PLANNER })
+  }, [bars, style, generate, engine])
+
   // Offline heuristic prewarm for every style at 16 bars. Live Jev is cached
   // only when the user clicks Generate — prewarming every style via Jev was
   // ~18 requests each and blew the 90/min rate limit on first paint.
@@ -497,6 +527,26 @@ export default function MusicApp() {
 
   // ── transport ─────────────────────────────────────────────────────────────
 
+  const planKey = displayedPlanIdentity(generated)
+  useEffect(() => {
+    setPlannerDirty(false)
+  }, [planKey])
+
+  const busy = progress !== null || picking
+  const pendingNotes = pendingAsksJev && debug && notesMode !== 'code'
+  const stale = displayedSheetIsStale({
+    busy,
+    pendingStyle,
+    pendingNotes,
+    plannerDirty,
+    generated,
+    input: { style, bars, pick, brief, seed },
+    notesMode,
+    debug,
+  })
+  const inFlight = busy || pendingStyle !== null || pendingNotes
+  const statusText = stale && !inFlight ? staleSettingsStatus() : planStatus
+
   const play = useCallback(async () => {
     if (!score) return
     setPlaying(true)
@@ -511,7 +561,7 @@ export default function MusicApp() {
   /** A click on bar N: jump there if sounding, otherwise start playing from there. */
   const seekBar = useCallback(
     async (index: number) => {
-      if (!score) return
+      if (!score || stale) return
       const from = index * score.meter.ticksPerBar * secondsPerTick(score)
       if (engine.seek(from)) return
       setPlaying(true)
@@ -521,7 +571,7 @@ export default function MusicApp() {
         setPlaying(false)
       }
     },
-    [engine, score, instrument, loop],
+    [engine, score, instrument, loop, stale],
   )
 
   const stop = useCallback(() => {
@@ -542,6 +592,14 @@ export default function MusicApp() {
     void play()
   }, [score, play])
 
+  // Settings that invalidate the piece stop the old one — same as a dial swap.
+  // Do not clear resumePlayRef: a dial switch may still want to start the replacement.
+  useEffect(() => {
+    if (!stale) return
+    engine.stop()
+    setPlaying(false)
+  }, [stale, engine])
+
   const chooseInstrument = (id: InstrumentId) => {
     setInstrument(id)
     // Swap live if the context already exists (we're inside a user gesture).
@@ -556,11 +614,11 @@ export default function MusicApp() {
       if (event.code !== 'Space' || (target && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return
       event.preventDefault()
       if (playing) stop()
-      else void play()
+      else if (!stale) void play()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playing, play, stop])
+  }, [playing, play, stop, stale])
 
   const toggleDebug = (on: boolean) => {
     setDebug(on)
@@ -601,7 +659,6 @@ export default function MusicApp() {
   // ── view ──────────────────────────────────────────────────────────────────
 
   const accent = STYLE_THEME[plan?.style ?? style].accent
-  const busy = progress !== null || picking
   // Decisions landed so far over the number a plan of this length makes (globals + role/chord/contour per bar).
   const planProgress = busy ? Math.min(1, (progress?.length ?? 0) / (GLOBAL_FIELD_IDS.length + bars * 3)) : 0
   const edited = editedPlan !== null
@@ -657,7 +714,14 @@ export default function MusicApp() {
       <div className="controls">
         <label>
           Planner
-          <select value={plannerChoice} onChange={(event) => setPlannerChoice(event.target.value as PlannerId)}>
+          <select
+            value={plannerChoice}
+            onChange={(event) => {
+              const next = event.target.value as PlannerId
+              setPlannerChoice(next)
+              setPlannerDirty(plannerSelectIsDirty(generatePlanner(next, Boolean(jev?.planner)), generated?.trace.planner))
+            }}
+          >
             <option value="heuristic">Heuristic stub (offline)</option>
             <option value="jev" disabled={!jev?.planner}>
               Jev — live{jev?.planner ? '' : ' (no key)'}
@@ -693,9 +757,9 @@ export default function MusicApp() {
             ))}
           </select>
         </label>
-        {planStatus && (
+        {statusText && (
           <span className="plan-status" role="status">
-            {planStatus}
+            {statusText}
           </span>
         )}
         <div className="controls-actions">
@@ -769,9 +833,9 @@ export default function MusicApp() {
       {generated && plan && score && (
         <>
           <div className="workbench">
-            <section className={`panel sheet-panel ${busy ? 'is-stale' : ''}`} aria-busy={busy}>
+            <section className={`panel sheet-panel ${stale ? 'is-stale' : ''}`} aria-busy={stale}>
               <div className="transport">
-                <button type="button" className={`primary play ${playing ? 'is-playing' : ''}`} onClick={() => (playing ? stop() : void play())} aria-pressed={playing}>
+                <button type="button" className={`primary play ${playing ? 'is-playing' : ''}`} onClick={() => (playing ? stop() : void play())} aria-pressed={playing} disabled={stale && !playing}>
                   {playing ? 'Stop' : 'Play'}
                 </button>
                 <label className="switch">
@@ -794,8 +858,9 @@ export default function MusicApp() {
                 <button
                   type="button"
                   className={`ghost icon-button push-right ${saved ? 'is-saved' : ''}`}
-                  title={saved ? `Saved ${saved}` : 'Download MIDI'}
+                  title={stale ? 'This score is out of date with the current settings' : saved ? `Saved ${saved}` : 'Download MIDI'}
                   aria-label={saved ? `Saved ${saved}` : 'Download MIDI'}
+                  disabled={stale}
                   onClick={() => {
                     setSaved(downloadMidi(score, instrument))
                     setTimeout(() => setSaved(null), 2500)
@@ -812,7 +877,7 @@ export default function MusicApp() {
                   )}
                 </button>
               </div>
-              <SheetView score={score} engine={engine} playing={playing} accent={accent} onSeekBar={(index) => void seekBar(index)} />
+              <SheetView score={score} engine={engine} playing={playing} accent={accent} stale={stale} onSeekBar={(index) => void seekBar(index)} />
             </section>
 
             <PlanPanel plan={plan} score={score} decisions={generated.trace.decisions} edited={edited} onApply={setEditedPlan} debug={debug} />

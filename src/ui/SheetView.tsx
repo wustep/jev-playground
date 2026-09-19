@@ -21,6 +21,8 @@ interface Props {
   engine: AudioEngine
   playing: boolean
   accent: string
+  /** The stand is muted — same pending state as a dial-tab swap. */
+  stale?: boolean
   /** A bar was clicked: play (or keep playing) from its start. */
   onSeekBar?: (index: number) => void
 }
@@ -32,7 +34,7 @@ const MUTED = '#7a756b'
  * Two stacked canvases: VexFlow paints the notation once per score/resize;
  * a transparent overlay repaints the playhead every frame from the audio clock.
  */
-export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) {
+export function SheetView({ score, engine, playing, accent, stale = false, onSeekBar }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
@@ -160,13 +162,14 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
   }
 
   return (
-    <div className="sheet-frame" ref={frameRef} tabIndex={-1}>
+    <div className="sheet-frame" ref={frameRef} tabIndex={-1} aria-busy={stale} aria-disabled={stale}>
       <canvas
         ref={sheetRef}
         className="sheet-canvas"
         aria-label="Sheet music for the generated piece. Click a bar to play from there."
-        title="Click a bar to play from there"
+        title={stale ? 'This score is out of date with the current settings' : 'Click a bar to play from there'}
         onClick={(event) => {
+          if (stale) return
           const bar = barFromEvent(event)
           if (bar) {
             beginFollow()
@@ -174,7 +177,7 @@ export function SheetView({ score, engine, playing, accent, onSeekBar }: Props) 
           }
         }}
         onMouseMove={(event) => {
-          event.currentTarget.style.cursor = barFromEvent(event) ? 'pointer' : 'default'
+          event.currentTarget.style.cursor = !stale && barFromEvent(event) ? 'pointer' : 'default'
         }}
       />
       <canvas ref={overlayRef} className="sheet-overlay" aria-hidden="true" />
