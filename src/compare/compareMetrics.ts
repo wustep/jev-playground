@@ -23,8 +23,10 @@
  * would not generalise to an arbitrary MIDI.
  */
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { basename } from 'node:path'
-import { Midi } from '@tonejs/midi'
+
+const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import('@tonejs/midi')
 import { keyInfo, resolveChord } from '../render/harmony'
 import { midiOf } from '../render/pitch'
 import type { Bar, Score, Voice } from '../render/score'
@@ -231,15 +233,42 @@ export function scoreHasSplitTreble(score: Score): boolean {
   return score.bars.slice(score.introBars ?? 0).some((bar) => bar.treble.length >= 2)
 }
 
+export function firstSplitTrebleBar(score: Score): Bar | undefined {
+  return score.bars.slice(score.introBars ?? 0).find((bar) => bar.treble.length >= 2)
+}
+
+function meanMidi(voices: Voice[]): number | null {
+  const events = skyline(voices)
+  if (!events.length) return null
+  return events.reduce((sum, event) => sum + event.midi, 0) / events.length
+}
+
+/**
+ * Opening tacet: the only treble voice is the same roll that later sits under
+ * a sung line (`rolling_nocturne` bar 0). Not every 1-voice bar — a late
+ * doubled climax must not erase Bach's figure or a Guide overlay on that bar.
+ */
+export function isTacetAccompanimentBar(bar: Bar, firstSplit?: Bar): boolean {
+  const inner = firstSplit?.treble[1]
+  if (bar.treble.length >= 2 || !bar.treble[0]?.length || !inner?.length) return false
+  if (firstSplit && bar.index >= firstSplit.index) return false
+  // The roll fills the bar; an overlaid / figure-as-tune line is a handful of notes.
+  if (bar.treble[0].length < 6) return false
+  const topMean = meanMidi([bar.treble[0]])
+  const innerMean = meanMidi([inner])
+  if (topMean == null || innerMean == null) return false
+  return Math.abs(topMean - innerMean) <= 4
+}
+
 /**
  * Singing / top melody voice after overlay rules.
  * Two treble voices → `treble[0]` is the sung line (chordal skyline = top pitch).
- * One treble voice in a piece that later splits → accompaniment-only tacet (empty).
- * One treble voice throughout → that voice *is* the figure / chorale.
+ * One treble voice that matches a later inner roll → accompaniment-only tacet.
+ * Otherwise the single voice *is* the figure / chorale / overlaid tune.
  */
-export function singingVoices(bar: Bar, splitTreble: boolean): Voice[] {
+export function singingVoices(bar: Bar, firstSplit?: Bar): Voice[] {
   if (bar.treble.length >= 2) return bar.treble[0] ? [bar.treble[0]] : []
-  if (splitTreble) return []
+  if (isTacetAccompanimentBar(bar, firstSplit)) return []
   return bar.treble[0] ? [bar.treble[0]] : []
 }
 
@@ -382,7 +411,7 @@ function summarizeRows(rows: MelodyBarRow[]) {
   }
 }
 
-function chordToneRate(score: Score, splitTreble: boolean): number {
+function chordToneRate(score: Score, firstSplit?: Bar): number {
   const key = keyInfo(score.plan.key)
   let tones = 0
   let n = 0
@@ -397,7 +426,7 @@ function chordToneRate(score: Score, splitTreble: boolean): number {
     }
     const primary = pcsOf(chord)
     const secondary = chord2 ? pcsOf(chord2) : primary
-    for (const event of skyline(singingVoices(bar, splitTreble))) {
+    for (const event of skyline(singingVoices(bar, firstSplit))) {
       n += 1
       const set = event.start >= split ? secondary : primary
       if (set.has(event.midi % 12)) tones += 1
@@ -425,9 +454,10 @@ export function scoreMetrics(score: Score) {
   const body = score.bars.slice(score.introBars)
   const meter = score.meter
   const splitTreble = scoreHasSplitTreble(score)
+  const firstSplit = firstSplitTrebleBar(score)
   const melodyRows = rowsFromEvents(
     body.map((bar) => {
-      const voices = singingVoices(bar, splitTreble)
+      const voices = singingVoices(bar, firstSplit)
       const events = skyline(voices)
       return {
         events,
@@ -464,7 +494,7 @@ export function scoreMetrics(score: Score) {
   return {
     ...melody,
     meter: meter.id,
-    chordToneRate: chordToneRate(score, splitTreble),
+    chordToneRate: chordToneRate(score, firstSplit),
     introBars: score.introBars,
     innerRhNotes: innerRhCount(score),
     voice: 'singing-treble' as const,

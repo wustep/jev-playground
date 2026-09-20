@@ -12,6 +12,7 @@ import {
   midiThematicStartOverride,
   scoreHasSplitTreble,
   scoreMetrics,
+  isTacetAccompanimentBar,
   singingVoices,
   skyline,
   splitMidiHands,
@@ -137,25 +138,51 @@ describe('generated singing voice', () => {
   it('takes only treble[0] after overlay rules, not the inner roll', () => {
     const melody = voice([[0, 12, ['Db5']], [12, 6, ['Ab5']]])
     const roll = voice([[0, 2, ['Ab3']], [2, 2, ['Db4']], [4, 2, ['F4']]])
-    const split = true
-    const sung = singingVoices(barOf([melody, roll]), split)
+    const later = barOf([melody, roll])
+    const sung = singingVoices(barOf([melody, roll]), later)
     expect(sung).toEqual([melody])
     const tops = skyline(sung).map((e) => e.midi)
     expect(tops).toEqual([73, 80])
     expect(skyline([melody, roll]).some((e) => e.midi < 70)).toBe(true)
   })
 
-  it('treats a one-voice tacet bar as empty when later bars split the staff', () => {
-    const roll = voice([[0, 2, ['Ab3']], [2, 2, ['Db4']]])
-    expect(singingVoices(barOf([roll]), true)).toEqual([])
-    expect(singingVoices(barOf([roll]), false)).toEqual([roll])
+  it('treats a one-voice roll as tacet only when it matches a later inner voice', () => {
+    const roll = voice([
+      [0, 2, ['Ab3']],
+      [2, 2, ['Db4']],
+      [4, 2, ['F4']],
+      [6, 2, ['Ab3']],
+      [8, 2, ['Db4']],
+      [10, 2, ['F4']],
+    ])
+    const melody = voice([[0, 12, ['Db5']]])
+    const later = barOf([melody, roll])
+    later.index = 2
+    const tacet = barOf([roll])
+    tacet.index = 1
+    expect(isTacetAccompanimentBar(tacet, later)).toBe(true)
+    expect(singingVoices(tacet, later)).toEqual([])
+    expect(singingVoices(tacet, undefined)).toEqual([roll])
+    expect(singingVoices(barOf([melody]), later)).toEqual([melody])
+  })
+
+  it('does not treat a sparse overlaid tune as tacet just because it sits near the inner', () => {
+    const inner = voice([[0, 2, ['E4']], [2, 2, ['G4']], [4, 2, ['C5']]])
+    const tune = voice([[0, 8, ['E4']], [8, 8, ['G4']]])
+    const later = barOf([tune, inner])
+    later.index = 3
+    const early = barOf([tune])
+    early.index = 0
+    expect(isTacetAccompanimentBar(early, later)).toBe(false)
+    expect(singingVoices(early, later)).toEqual([tune])
   })
 
   it('starts Chopin code ret4 after the tacet accompaniment bar', () => {
     const score = renderPlan(songPlan(), 1)
     expect(score.introBars).toBe(1)
     expect(scoreHasSplitTreble(score)).toBe(true)
-    expect(singingVoices(score.bars[score.introBars], true)).toEqual([])
+    const firstSplit = score.bars.slice(score.introBars).find((bar) => bar.treble.length >= 2)
+    expect(singingVoices(score.bars[score.introBars], firstSplit)).toEqual([])
     const metrics = scoreMetrics(score)
     expect(metrics.voice).toBe('singing-treble')
     expect(metrics.thematicStartBar).toBe(1)

@@ -2,6 +2,61 @@
 
 Stephen, 2026-09-19, after #46. This note is about **sounding music**: the realized Score skyline from three note-producing paths, compared to the real references.
 
+---
+
+# Addendum — hand-split scoreboard (2026-09-20)
+
+ZOOMOUT_POST_48 item 1. The tables below this addendum scored the **top of both hands**. Every lyrical Mutopia file in this repo puts accompaniment on the treble staff, so the old “Ref notes” column described the roll, not the tune. Re-run: `npx --yes tsx scripts/compare-generated-vs-reference.ts`. Helpers: `src/compare/compareMetrics.ts`. Rule: [`docs/ref-midi/public/README.md`](../ref-midi/public/README.md).
+
+**What we score now**
+
+- MIDI: Mutopia **staff-name** hand (RH / figure vs LH). Track index is not the hand — BWV 846 puts `lower` on track 0.
+- Generated code/guide/line: **singing voice only** (`treble[0]` after overlay). A `rolling_nocturne` tacet bar is empty, not the roll.
+- `ret4` / `ret8` start at the first **thematic** bar (Chopin MIDI pickup aligns to the LH downbeat at tick 192; Debussy Arabesque skips `s1 | s1`; generated Chopin skips the tacet roll).
+
+`combinedSkyline` is still in the JSON so the old numbers can be diffed. Do not aim later ships at it.
+
+## Hypothesis check (Chopin register)
+
+The zoom-out guessed the old “closest code win” (71.4 ≈ 72.4) was both-hands skyline, and that RH would show us **~5 st low** vs the MIDI melody (76.5).
+
+| | Combined skyline (old) | Melody / singing (now) |
+| --- | --- | --- |
+| MIDI Op. 9/2 | **72.4** | **76.5** (upper track, pickup-aligned) |
+| code argmax | **71.4** | **76.4** (treble[0], skip tacet) |
+
+**Half right.** The win was an artifact. The 5-st gap was 71.4 (roll filling the generated skyline) vs 76.5 (MIDI RH). Once both sides score the tune, **registers match**. What the old 0.75 `ret4` was sitting on does *not*: melody `ret4` is **0.563 / run 1** against MIDI **0.813 / run 4**. Aim at the return, not the octave.
+
+## Corrected scoreboard — argmax, melody only
+
+Generate = heuristic argmax. Living-artist Ref = reference JSON → same singing-voice metrics. MIDI rows are the Mutopia melody/figure track.
+
+| Dial | Ref melody | code melody | guide melody | line melody |
+| --- | --- | --- | --- | --- |
+| **Bach** MIDI figure (`upper`, track 1) | 4/4; register **69.1**; **0/16** downbeats; 50 % silent (figure is off the beat); ret4 0 / run 1. Combined was 66.4 / 16/16 / 0 % — that was the LH. | Register **66.1**, 48 % silent, **1/16** downbeats, ret4 0.25 / run 6. Same family as the figure. | **Invents a tune**: 16/16 downbeats, 0 % silent, register 63.7. Q1 yes. | 16/16; ret4 0.88 is four even degrees. Register 74.8. |
+| **Beethoven** MIDI Adagio | 2/4; register **62**; ret8 **0.94** / run **8**; 16/16 downbeats; LH onsets 2.5 → **10**. Combined register agrees (LH is far below). | Still the wrong piece: 4/4 tremolo, register **71.7** (combined was 80.6 — inner storm tones). ret4 0.06; LH 4 → 8. | Register **80**, 16/16, summit ×**24**. | Register 78.8; fake ret4 0.88. |
+| **Chopin** MIDI Op. 9/2 | 12/8; register **76.5**; ret4 **0.81** / run **4**; 16/16 downbeats; 1.6 % silent; LH density ~24, constant. Combined register was 72.4. | 12/8; register **76.4**; ret4 **0.56** / run **1** (theme@1 — skipped tacet). 15/15 downbeats, 6.7 % silent. LH 1.25 → 1.75. Combined still prints 71.4 / ret4 0.75. | Register 65.5, 14 rest slots → **22 % silent** (now audible on the singing voice), still 16/16 downbeats. ret4 0.58. Q1 yes. | ret4 0.83 / run 4; 16/16; register 62.9. |
+| **Debussy** MIDI Arabesque | 4/4; register **70.8** from thematic bar 2; **12/16** downbeats, 4 silent; 6.3 % silent beats; ret4 0.06. Combined was 65.1 / 16/16 / 0 % — the arpeggio. | 9/8 planing, register **75.9** (+5 vs melody, not +15). ret4 0.67; 15/16 downbeats. Combined register still 79.9. | 16/16 downbeats, 25 % silent, 12 rest slots, register 64.4. | 16/16, register 63.6, ret4 0.67. |
+| **Glass** JSON→code | ret4 **0.06** / run 1; register 65.6; 8/8 downbeats. | Same hole: ret4 **0.06** / run 1, 16/16, summit ×11. | Rising tune, register 77.8, ret4 0.5 / run 4. Q1 yes. | ret4 0.88 — ignore (copied degrees). |
+| **Zimmer** JSON→code | ostinato; ret4 0.75 / run 4 on the 8-bar sketch after a pickup-ish bar; register 77.7. | Chant-ish (leap mean **0.28**) but ret4 **0.00** / run 2; 15/16 downbeats; summit ×4; LH 4 → **11**. | ret4 0; 16/16; leap max 16. Q1 yes. | Fake ret4 1.00. |
+| **Laufey** JSON→code | arch; 15.6 % silent; ret4 0.58; register 74.2. | Bossa LH 2 → 2.5. Line still **16/16** downbeats, 9.4 % silent, ret4 0.69, register 75.7. | 14 rest slots → 22 % silent, still 16/16 downbeats. Leap max 5. ret4 0.75. Q1 yes. | Leap max 10; 16/16; fake ret4 0.92. |
+| **Fox** JSON→code | rise; 12.5 % silent; ret4 0.25; register 74. | Displacement; ret4 0.63 / run 3; 16/16; leap max **24**; register 67.9. | 16/16, 19 % silent, ret4 0.81. Q1 yes. | 19 % silent; leap max 20; fake ret4 0.88. |
+
+**What later ships should believe**
+
+- **Chopin is not a register miss and not a register win.** 76.4 ≈ 76.5. The leftover is the return (0.56 vs 0.81) and 15/15 downbeats.
+- **Debussy is +5, not +15.** Still high and in 9/8.
+- **Beethoven is still a different piece** — 71.7 vs 62, 4/4 vs 2/4, ret4 0.06 vs ret8 0.94. Combined 80.6 was the storm’s inner peaks.
+- **Bach MIDI occupancy was the LH.** The figure track attacks **no** downbeats. Guide writing 16/16 is the error.
+- **Glass / Zimmer `ret4` ≈ 0 on Generate is real** (not a hand-split artifact).
+- Guide rest slots now show up as singing-voice silence (Chopin 22 %, Laufey 22 %). Downbeats are still all attacked.
+
+Sections below are the **pre-split board**. Treat their MIDI registers (Chopin 72.4, Debussy 65.1) and “16/16 every lyrical downbeat” claims as both-hands ghosts.
+
+---
+
+# Original note (both-hands skyline, 2026-09-19)
+
 | Path | How notes get written | What we ran |
 | --- | --- | --- |
 | **code** | labels → `renderPlan` | Heuristic argmax, 16 bars. Default Generate. |
@@ -272,6 +327,8 @@ npx --yes tsx scripts/compare-generated-vs-reference.ts --out /tmp/generated-vs-
 npx --yes tsx scripts/compare-generated-vs-reference.ts --live-jev --live-styles chopin,laufey
 ```
 
+JSON now includes `handSplit`, `thematicStartBar`, `combinedSkyline` (old both-hands number), and `accompaniment`. Believe the top-level melody fields.
+
 No MIDI written. Public-domain encodings stay in [`docs/ref-midi/public/`](../ref-midi/public/). Living-artist rows stay JSON-only; their “Ref” column is that JSON rendered.
 
 ---
@@ -280,7 +337,7 @@ No MIDI written. Public-domain encodings stay in [`docs/ref-midi/public/`](../re
 
 - Guide/Line are fake closed picks through production realize functions. No live Jev.
 - n = 8 argmax + 24 samples + 8 reference-JSON realizes + 4 Mutopia files. Not the 192-piece FIDELITY sweep.
-- MIDI skyline is blunt (both hands). Chopin ret4 0.81 and Pathétique ret8 0.94 matching FIDELITY is why those files are trusted.
+- MIDI skyline **was** blunt (both hands). Superseded by the 2026-09-20 addendum: Mutopia staff-name hand split + thematic start. Chopin ret4 0.81 and Pathétique ret8 0.94 still match FIDELITY on the melody track.
 - Glass / Zimmer / Laufey / Fox RNs stay inferred. No commercial sheet, no prices.
 
 Do not merge. Coder merges when Music pings.
