@@ -10,11 +10,13 @@
  *
  * Guide / line overlays use the same realize paths as MusicApp. Without a live
  * key they use fake closed picks (same sketch as dump-heuristic-plans).
+ *
+ * Metrics score the melody only (Mutopia RH/figure track; generated singing
+ * voice after overlay). ret4 starts at the first thematic bar. See
+ * `src/compare/compareMetrics.ts` and `docs/ref-midi/public/README.md`.
  */
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 
-const { Midi } = createRequire(import.meta.url)('@tonejs/midi') as typeof import('@tonejs/midi')
 import {
   GLOBAL_FIELD_IDS,
   parsePlan,
@@ -39,7 +41,6 @@ import { themeSources } from '../src/plan/forms'
 import { HeuristicPlanner } from '../src/planner/HeuristicPlanner'
 import { JevPlanner, directTransport } from '../src/planner/JevPlanner'
 import { prefersLongAndRest } from '../src/planner/jev/notesPriors'
-import { keyInfo, resolveChord } from '../src/render/harmony'
 import {
   applyNotePhrases,
   lastSoundingMidi,
@@ -47,9 +48,8 @@ import {
   realizeJevNoteChoices,
   type NotePhrase,
 } from '../src/render/jevNotes'
-import { midiOf } from '../src/render/pitch'
 import { renderPlan } from '../src/render/renderPlan'
-import type { Score, Voice } from '../src/render/score'
+import { bassFingerprint, innerRhCount, midiMetrics, scoreMetrics } from '../src/compare/compareMetrics'
 
 /** Closed figure + goal a Notes:guide pass might pick. Not live Jev. */
 function sketchGuideBar(role: BarRoleId, contour: ContourId): { figure: MelodyFigureId; goal: MelodyGoalId } {
@@ -128,293 +128,6 @@ function labelHits(generated: CompositionPlan, reference: CompositionPlan, wante
 
 function firstChords(plan: CompositionPlan, n = 8): string[] {
   return plan.bars.slice(0, n).map((bar) => (bar.chord2 ? `${bar.chord}|${bar.chord2}` : bar.chord))
-}
-
-function skyline(voices: Voice[]): { start: number; dur: number; midi: number; pc: number }[] {
-  const events: { start: number; dur: number; midi: number; pc: number }[] = []
-  for (const voice of voices) {
-    for (const note of voice) {
-      if (!note.pitches.length) continue
-      const midis = note.pitches.map((p) => midiOf(p))
-      const top = Math.max(...midis)
-      events.push({ start: note.start, dur: note.dur, midi: top, pc: ((top % 12) + 12) % 12 })
-    }
-  }
-  events.sort((a, b) => a.start - b.start || b.midi - a.midi)
-  const out: typeof events = []
-  for (const event of events) {
-    const last = out[out.length - 1]
-    if (last && last.start === event.start) continue
-    out.push(event)
-  }
-  return out
-}
-
-function occupancy(events: { start: number; dur: number; midi: number }[], ticksPerBar: number, beatTicks: number) {
-  const beats = Math.max(1, Math.floor(ticksPerBar / beatTicks))
-  let attacked = 0
-  let held = 0
-  let silent = 0
-  for (let beat = 0; beat < beats; beat++) {
-    const t = beat * beatTicks
-    const covering = events.filter((e) => e.start <= t && e.start + e.dur > t)
-    if (covering.some((e) => e.start === t)) attacked += 1
-    else if (covering.length) held += 1
-    else silent += 1
-  }
-  return { attacked, held, silent, beats }
-}
-
-function barPcs(events: { start: number; dur: number; pc: number }[], ticksPerBar: number, beatTicks: number): number[] {
-  const beats = Math.max(1, Math.floor(ticksPerBar / beatTicks))
-  const pcs: number[] = []
-  for (let beat = 0; beat < beats; beat++) {
-    const t = beat * beatTicks
-    const covering = events.filter((e) => e.start <= t && e.start + e.dur > t)
-    const attack = covering.find((e) => e.start === t) ?? covering[0]
-    pcs.push(attack ? attack.pc : -1)
-  }
-  return pcs
-}
-
-function pcMatch(a: number[], b: number[]): number {
-  if (!a.length || a.length !== b.length) return 0
-  let hits = 0
-  let n = 0
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] < 0 && b[i] < 0) continue
-    n += 1
-    if (a[i] === b[i] && a[i] >= 0) hits += 1
-  }
-  return n ? hits / n : 0
-}
-
-function shapeOf(midis: number[]): 'rise' | 'fall' | 'arch' | 'static' | 'empty' {
-  if (midis.length < 2) return midis.length ? 'static' : 'empty'
-  const first = midis[0]
-  const last = midis[midis.length - 1]
-  const peak = Math.max(...midis)
-  const trough = Math.min(...midis)
-  if (peak - trough <= 2) return 'static'
-  const peakAt = midis.indexOf(peak) / (midis.length - 1)
-  if (peakAt > 0.25 && peakAt < 0.75 && peak - first >= 3 && peak - last >= 3) return 'arch'
-  if (last - first >= 3) return 'rise'
-  if (first - last >= 3) return 'fall'
-  return 'static'
-}
-
-function leaps(midis: number[]): { mean: number; max: number; overP4: number } {
-  if (midis.length < 2) return { mean: 0, max: 0, overP4: 0 }
-  const gaps: number[] = []
-  for (let i = 1; i < midis.length; i++) gaps.push(Math.abs(midis[i] - midis[i - 1]))
-  return {
-    mean: Number((gaps.reduce((a, b) => a + b, 0) / gaps.length).toFixed(2)),
-    max: Math.max(...gaps),
-    overP4: gaps.filter((g) => g > 5).length,
-  }
-}
-
-function chordToneRate(score: Score): number {
-  const key = keyInfo(score.plan.key)
-  let tones = 0
-  let n = 0
-  for (const bar of score.bars.slice(score.introBars)) {
-    const chord = resolveChord(key, bar.plan.chord)
-    const chord2 = bar.plan.chord2 ? resolveChord(key, bar.plan.chord2) : undefined
-    const split = bar.split?.tick ?? score.meter.splitTick
-    const pcsOf = (c: typeof chord) => {
-      const fromMidi = new Set<number>()
-      for (const pc of c.pcs) fromMidi.add(midiOf(`${pc}4`) % 12)
-      return fromMidi
-    }
-    const primary = pcsOf(chord)
-    const secondary = chord2 ? pcsOf(chord2) : primary
-    for (const event of skyline(bar.treble)) {
-      n += 1
-      const set = event.start >= split ? secondary : primary
-      if (set.has(event.midi % 12)) tones += 1
-    }
-  }
-  return n ? Number((tones / n).toFixed(3)) : 0
-}
-
-function bassFingerprint(score: Score): string {
-  return score.bars
-    .map((bar) =>
-      bar.bass
-        .flat()
-        .map((note) => `${note.start}:${note.dur}:${note.pitches.join(',')}`)
-        .join('|'),
-    )
-    .join('/')
-}
-
-function innerRhCount(score: Score): number {
-  return score.bars.reduce((n, bar) => n + bar.treble.slice(1).reduce((m, v) => m + v.length, 0), 0)
-}
-
-function scoreMetrics(score: Score) {
-  const body = score.bars.slice(score.introBars)
-  const meter = score.meter
-  const barRows = body.map((bar) => {
-    const events = skyline(bar.treble)
-    return {
-      events,
-      pcs: barPcs(events, meter.ticksPerBar, meter.beatTicks),
-      occ: occupancy(events, meter.ticksPerBar, meter.beatTicks),
-      midis: events.map((e) => e.midi),
-      bassOnsets: bar.bass.flat().filter((n) => n.pitches.length).length,
-    }
-  })
-  const first16 = barRows.slice(0, 16)
-  const silentBeats = first16.reduce((n, row) => n + row.occ.silent, 0)
-  const totalBeats = first16.reduce((n, row) => n + row.occ.beats, 0)
-  const downAttack = first16.filter((row) => row.events.some((e) => e.start === 0)).length
-  const downSilent = first16.filter((row) => !row.events.some((e) => e.start <= 0 && e.start + e.dur > 0)).length
-  const downHeld = first16.length - downAttack - downSilent
-  const ret4 =
-    first16.length >= 8
-      ? Number(
-          (
-            [0, 1, 2, 3].reduce((s, i) => s + pcMatch(first16[i].pcs, first16[i + 4].pcs), 0) / 4
-          ).toFixed(3),
-        )
-      : null
-  const ret8 =
-    first16.length >= 16
-      ? Number(
-          (
-            [0, 1, 2, 3, 4, 5, 6, 7].reduce((s, i) => s + pcMatch(first16[i].pcs, first16[i + 8].pcs), 0) / 8
-          ).toFixed(3),
-        )
-      : null
-  let longestRun = 1
-  for (let run = 2; run <= 8; run++) {
-    for (let start = 0; start + run * 2 <= first16.length; start++) {
-      const later = start + run
-      if (later + run > first16.length) continue
-      const match =
-        Array.from({ length: run }, (_, i) => pcMatch(first16[start + i].pcs, first16[later + i].pcs)).reduce((a, b) => a + b, 0) / run
-      if (match >= 0.75) longestRun = Math.max(longestRun, run)
-    }
-  }
-  const midis = first16.flatMap((row) => row.midis)
-  const uniqueMidis = new Set(midis)
-  const summit = midis.length ? Math.max(...midis) : 0
-  const summitHits = midis.filter((m) => m === summit).length
-  const bassEarly = first16.slice(0, 4).reduce((n, row) => n + row.bassOnsets, 0) / Math.max(1, Math.min(4, first16.length))
-  const bassReturn = first16.slice(8, 12).reduce((n, row) => n + row.bassOnsets, 0) / Math.max(1, first16.slice(8, 12).length)
-  const register = midis.length ? Number((midis.reduce((a, b) => a + b, 0) / midis.length).toFixed(1)) : 0
-  return {
-    barsMeasured: first16.length,
-    meter: meter.id,
-    silentBeatPct: totalBeats ? Number((silentBeats / totalBeats).toFixed(3)) : 0,
-    downbeats: { attacked: downAttack, held: downHeld, silent: downSilent, n: first16.length },
-    longestReturnRun: longestRun,
-    ret4,
-    ret8,
-    chordToneRate: chordToneRate(score),
-    leaps: leaps(midis),
-    contour: shapeOf(first16.slice(0, 8).map((row) => (row.midis.length ? row.midis.reduce((a, b) => a + b, 0) / row.midis.length : 0))),
-    registerMean: register,
-    registerMin: midis.length ? Math.min(...midis) : 0,
-    registerMax: summit,
-    summitHits,
-    uniqueMelodyPcs: uniqueMidis.size,
-    bassOnsetsEarly: Number(bassEarly.toFixed(2)),
-    bassOnsetsReturn: Number(bassReturn.toFixed(2)),
-    introBars: score.introBars,
-    innerRhNotes: innerRhCount(score),
-  }
-}
-
-function midiMetrics(path: string, barsWanted = 16) {
-  const midi = new Midi(readFileSync(path))
-  const ts = midi.header.timeSignatures[0]?.timeSignature ?? [4, 4]
-  const num = ts[0] ?? 4
-  const den = ts[1] ?? 4
-  const ppq = midi.header.ppq
-  const ticksPerBar = ppq * num * (4 / den)
-  const beatTicks = den === 8 ? ppq * 1.5 : ppq
-  const notes = midi.tracks.flatMap((track, trackIndex) =>
-    track.notes.map((note) => ({
-      ticks: note.ticks,
-      durationTicks: note.durationTicks,
-      midi: note.midi,
-      trackIndex,
-    })),
-  )
-  if (!notes.length) {
-    return { error: 'empty midi', path }
-  }
-  const start = Math.min(...notes.map((n) => n.ticks))
-  const rows = []
-  for (let i = 0; i < barsWanted; i++) {
-    const barStart = start + i * ticksPerBar
-    const inBar = notes.filter((n) => n.ticks >= barStart && n.ticks < barStart + ticksPerBar)
-    const events = inBar
-      .map((n) => ({
-        start: n.ticks - barStart,
-        dur: n.durationTicks,
-        midi: n.midi,
-        pc: n.midi % 12,
-      }))
-      .sort((a, b) => a.start - b.start || b.midi - a.midi)
-    const sky: typeof events = []
-    for (const event of events) {
-      const last = sky[sky.length - 1]
-      if (last && last.start === event.start) continue
-      sky.push(event)
-    }
-    rows.push({
-      events: sky,
-      pcs: barPcs(sky, ticksPerBar, beatTicks),
-      occ: occupancy(sky, ticksPerBar, beatTicks),
-      midis: sky.map((e) => e.midi),
-      onsets: events.length,
-    })
-  }
-  const silentBeats = rows.reduce((n, row) => n + row.occ.silent, 0)
-  const totalBeats = rows.reduce((n, row) => n + row.occ.beats, 0)
-  const midis = rows.flatMap((row) => row.midis)
-  const ret4 =
-    rows.length >= 8
-      ? Number(([0, 1, 2, 3].reduce((s, i) => s + pcMatch(rows[i].pcs, rows[i + 4].pcs), 0) / 4).toFixed(3))
-      : null
-  const ret8 =
-    rows.length >= 16
-      ? Number(([0, 1, 2, 3, 4, 5, 6, 7].reduce((s, i) => s + pcMatch(rows[i].pcs, rows[i + 8].pcs), 0) / 8).toFixed(3))
-      : null
-  let longestRun = 1
-  for (let run = 2; run <= 8; run++) {
-    for (let startBar = 0; startBar + run * 2 <= rows.length; startBar++) {
-      const later = startBar + run
-      const match =
-        Array.from({ length: run }, (_, i) => pcMatch(rows[startBar + i].pcs, rows[later + i].pcs)).reduce((a, b) => a + b, 0) / run
-      if (match >= 0.75) longestRun = Math.max(longestRun, run)
-    }
-  }
-  return {
-    path,
-    tracks: midi.tracks.length,
-    meter: `${num}/${den}`,
-    barsMeasured: rows.length,
-    silentBeatPct: totalBeats ? Number((silentBeats / totalBeats).toFixed(3)) : 0,
-    downbeats: {
-      attacked: rows.filter((row) => row.events.some((e) => e.start === 0)).length,
-      n: rows.length,
-    },
-    longestReturnRun: longestRun,
-    ret4,
-    ret8,
-    leaps: leaps(midis),
-    registerMean: midis.length ? Number((midis.reduce((a, b) => a + b, 0) / midis.length).toFixed(1)) : 0,
-    registerMin: midis.length ? Math.min(...midis) : 0,
-    registerMax: midis.length ? Math.max(...midis) : 0,
-    summitHits: midis.length ? midis.filter((m) => m === Math.max(...midis)).length : 0,
-    onsetDensityEarly: Number((rows.slice(0, 4).reduce((n, r) => n + r.onsets, 0) / 4).toFixed(2)),
-    onsetDensityReturn: Number((rows.slice(8, 12).reduce((n, r) => n + r.onsets, 0) / Math.max(1, rows.slice(8, 12).length)).toFixed(2)),
-  }
 }
 
 function pickLineRhythm(meter: CompositionPlan['meter'], lyrical: boolean, contour: ContourId): PhraseRhythmId {
@@ -658,7 +371,7 @@ async function main() {
   const payload = {
     generatedAt: new Date().toISOString(),
     note:
-      'Heuristic plans are live. Guide/line without --live-jev use fake closed picks through realizeJevGuideChoices / realizeJevNoteChoices (same paths as MusicApp). No MIDI written. No secrets logged.',
+      'Heuristic plans are live. Guide/line without --live-jev use fake closed picks through realizeJevGuideChoices / realizeJevNoteChoices (same paths as MusicApp). Metrics are melody-only (Mutopia RH/figure track; generated singing voice) and ret4 starts at the first thematic bar. No MIDI written. No secrets logged.',
     liveJev: { available: live.available, reason: live.reason, styles: live.available ? liveStyles : [], samples: live.samples },
     styles: perStyle,
   }
