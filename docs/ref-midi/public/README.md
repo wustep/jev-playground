@@ -20,3 +20,31 @@ All files below were fetched from [Mutopia](https://www.mutopiaproject.org/). Th
 | [`debussy-l75-clair-de-lune.mid`](debussy-l75-clair-de-lune.mid) | Debussy, *Clair de lune* (Suite bergamasque) L. 75 | [debussy_Ste_Bergamesq_Clair](https://www.mutopiaproject.org/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.mid) | Public Domain | Mutopia-2010/12/21-1778 |
 
 `.gitignore` ignores `docs/ref-midi/**/*.mid` except this folder. Do not add Glass / Zimmer / Laufey / Fox MIDI here.
+
+## Hand / staff tracks
+
+These Mutopia piano encodings are **one track per engraved staff**, not a
+musical voice analysis. Compare metrics (`src/compare/compareMetrics.ts`)
+split on this rule:
+
+| Hand | Staff-name tokens | What we score |
+| --- | --- | --- |
+| Melody / figure (RH) | `upper`, `up`, `rh`, `right`, `one`, `soprano`, `treble`, `figure` | Register, occupancy, `ret4` |
+| Accompaniment (LH) | `lower`, `down`, `lh`, `left`, `two`, `bass`, `bottom` | Reported separately |
+
+**Track index is not the hand.** BWV 846 puts `lower` on track 0 and `upper`
+on track 1. Channel numbers are not reliable either (some files 0/1, others
+1/2). If a file has no staff name, the helper falls back to the higher-mean
+note-bearing track.
+
+The split is right for the files in this folder (checked against the `.ly`
+staves in the zoom-out after #48) and would not generalise to an arbitrary
+MIDI. Chopin Op. 9/2’s upper track still includes some inner / crossing
+notes; that overstates melody attacks slightly.
+
+**Thematic start.** `ret4` / `ret8` skip intro/prelude bars that are not the
+theme. Pickup is aligned to the first accompaniment downbeat when the melody
+starts an anacrusis earlier (Op. 9/2: RH eighth at tick 0, theme + LH at
+192). Debussy Arabesque is a file-specific override: the tune is `s1 | s1`
+then enters, so thematic bar 2. Beethoven Pathétique II and BWV 846 start at
+bar 0.
