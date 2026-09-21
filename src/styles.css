@@ -1751,6 +1751,9 @@ button.small {
 
 .inbox-schema {
   margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
   font-size: 12px;
   color: var(--muted);
 }
@@ -2010,6 +2013,10 @@ button.small {
   .inbox-frame,
   .match-frame {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .match-you {
+    order: 2;
   }
 }
 
