@@ -5,13 +5,23 @@ import { routeFor } from './shell/route'
 import { Diamond } from './ui/Diamond'
 import './styles.css'
 
-// Each demo is its own chunk: the landing page and the trolley never download
-// the music engraver (VexFlow is most of the bundle).
+// Each demo is its own chunk: the landing page and the trolley / inbox /
+// match demos never download the music engraver (VexFlow is most of the bundle).
 const MusicApp = lazy(() => import('./music/MusicApp'))
 const TrolleyApp = lazy(() => import('./trolley/TrolleyApp'))
+const InboxApp = lazy(() => import('./inbox/InboxApp'))
+const MatchApp = lazy(() => import('./match/MatchApp'))
+
+const TITLES: Record<ReturnType<typeof routeFor>, string> = {
+  landing: 'Jev Playground',
+  music: 'Music · Jev Playground',
+  trolley: 'Trolley · Jev Playground',
+  inbox: 'Inbox · Jev Playground',
+  match: 'Match · Jev Playground',
+}
 
 const route = routeFor(window.location.pathname)
-document.title = route === 'music' ? 'Music · Jev Playground' : route === 'trolley' ? 'Trolley · Jev Playground' : 'Jev Playground'
+document.title = TITLES[route]
 
 /** Shown while a demo's chunk downloads: same shell, same heading position, so nothing jumps when it arrives. */
 function RouteLoading({ name }: { name: string }) {
@@ -20,7 +30,10 @@ function RouteLoading({ name }: { name: string }) {
       <header className="masthead">
         <div>
           <h1>
-            <a className="home-link" href="/">Jev Playground</a> <span className="muted">/ {name}</span>
+            <a className="home-link" href="/">
+              Jev Playground
+            </a>{' '}
+            <span className="muted">/ {name}</span>
           </h1>
         </div>
       </header>
@@ -31,8 +44,18 @@ function RouteLoading({ name }: { name: string }) {
   )
 }
 
+function Demo() {
+  if (route === 'music') return <MusicApp />
+  if (route === 'trolley') return <TrolleyApp />
+  if (route === 'inbox') return <InboxApp />
+  if (route === 'match') return <MatchApp />
+  return <Landing />
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Suspense fallback={<RouteLoading name={route} />}>{route === 'music' ? <MusicApp /> : route === 'trolley' ? <TrolleyApp /> : <Landing />}</Suspense>
+    <Suspense fallback={<RouteLoading name={route} />}>
+      <Demo />
+    </Suspense>
   </StrictMode>,
 )
