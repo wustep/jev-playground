@@ -6,6 +6,7 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { rng } from '../planner/pick'
 import { shuffleInPlace } from '../shared/jevMath'
+import { Masthead, StubChip } from '../ui/Masthead'
 import { rankPeople, toggleIn } from './match'
 import { DEFAULT_YOU, PEOPLE } from './people'
 import { ENERGIES, HOBBIES, LOOKING_FOR, type Energy, type Hobby, type LookingFor, type Person, type YouProfile } from './types'
@@ -29,32 +30,19 @@ export default function MatchApp() {
   const patch = (partial: Partial<YouProfile>) => setYou((prev) => ({ ...prev, ...partial }))
 
   return (
-    <div className="app match" style={{ '--accent': ACCENT } as CSSProperties}>
-      <header className="masthead">
-        <div>
-          <h1>
-            <a className="home-link" href="/">
-              Jev Playground
-            </a>{' '}
-            <span className="muted">/ match</span>
-          </h1>
-        </div>
-        <div className="masthead-side">
-          <span className="status-chip" title="This demo is a client heuristic stub — same pattern as the music planner when there is no key.">
-            <span className="dot" />
-            Jev offline · stub
-          </span>
-        </div>
-      </header>
+    <div className="app match-demo" style={{ '--accent': ACCENT } as CSSProperties}>
+      <Masthead name="match">
+        <StubChip />
+      </Masthead>
 
-      <section className="panel match-intro">
-        <p className="match-lede">
+      <section className="panel intro">
+        <p className="intro-lede">
           Structured questions over hobbies and looking-for — the <a href={JEV_POST}>Jev</a> shape, not a chatbot. Each nobody gets a hypothesis, a fit score, a
           confidence, and reasons. Edit “you” and the ranking recomputes. Fictional people only.
         </p>
-        <div className="match-toolbar">
-          <button type="button" className="primary" onClick={() => setSeed((n) => n + 1)}>
-            Reshuffle nobodies
+        <div className="intro-actions">
+          <button type="button" className="ghost" onClick={() => setSeed((n) => n + 1)}>
+            🎲 Reshuffle nobodies
           </button>
         </div>
       </section>
@@ -94,7 +82,7 @@ export default function MatchApp() {
                 <button
                   key={hobby}
                   type="button"
-                  className={`ghost small ${you.hobbies.includes(hobby) ? 'is-chip-on' : ''}`}
+                  className={`ghost small ${you.hobbies.includes(hobby) ? 'is-on' : ''}`}
                   aria-pressed={you.hobbies.includes(hobby)}
                   onClick={() => patch({ hobbies: toggleIn(you.hobbies, hobby) as Hobby[] })}
                 >
@@ -108,7 +96,7 @@ export default function MatchApp() {
                 <button
                   key={wish}
                   type="button"
-                  className={`ghost small ${you.lookingFor.includes(wish) ? 'is-chip-on' : ''}`}
+                  className={`ghost small ${you.lookingFor.includes(wish) ? 'is-on' : ''}`}
                   aria-pressed={you.lookingFor.includes(wish)}
                   onClick={() => patch({ lookingFor: toggleIn(you.lookingFor, wish) as LookingFor[] })}
                 >

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { rng } from '../planner/pick'
 import { shuffleInPlace } from '../shared/jevMath'
+import { Masthead, StubChip } from '../ui/Masthead'
 import { gmailBase64UrlToUtf8, senderName } from './gmail'
 import { cloneInbox, INBOX_SEED } from './messages'
 import { cloneSettings, DEFAULT_REASON_SETTINGS, jitterActivations, REASON_CATALOG, triageItem } from './triage'
@@ -75,7 +76,7 @@ function InboxRow({
         <p className="inbox-snippet">{message.snippet}</p>
         <div className="inbox-chips">
           {topReasons.map((reason) => (
-            <span key={reason.id} className="inbox-chip">
+            <span key={reason.id} className="tag">
               {REASON_CATALOG[reason.id].label}
             </span>
           ))}
@@ -84,7 +85,7 @@ function InboxRow({
 
       <div className="inbox-rec">
         <div className="inbox-rec-row">
-          <span className={`inbox-pill action-${row.shown.toLowerCase()}`}>{row.shown}</span>
+          <span className={`tag inbox-pill action-${row.shown.toLowerCase()}`}>{row.shown}</span>
           {row.override ? (
             <span className="muted inbox-rec-note">
               override · stub {row.result.recommended} {pct(row.result.scores[row.result.recommended])}%
@@ -105,6 +106,7 @@ function InboxRow({
                 key={action}
                 type="button"
                 className={`ghost small inbox-override action-${action.toLowerCase()} ${row.override === action ? 'is-on' : ''}`}
+                aria-pressed={row.override === action}
                 onClick={() => onOverride(message.id, action)}
               >
                 {action}
@@ -226,51 +228,44 @@ export default function InboxApp() {
 
   return (
     <div className="app inbox" style={{ '--accent': ACCENT } as CSSProperties}>
-      <header className="masthead">
-        <div>
-          <h1>
-            <a className="home-link" href="/">
-              Jev Playground
-            </a>{' '}
-            <span className="muted">/ inbox</span>
-          </h1>
-        </div>
-        <div className="masthead-side">
-          <span className="status-chip" title="This demo is a client heuristic stub — same pattern as the music planner when there is no key.">
-            <span className="dot" />
-            Jev offline · stub
-          </span>
-        </div>
-      </header>
+      <Masthead name="inbox">
+        <StubChip />
+      </Masthead>
 
-      <section className="panel inbox-intro">
-        <p className="inbox-lede">
+      <section className="panel intro">
+        <p className="intro-lede">
           <a href={JEV_POST}>Jev</a> is a System One model: it returns a distribution, not a paragraph. Each fictional message gets a Delete / Review / Leave
           confidence triad, driven by closed reason tags you can toggle and reweight. Sample data uses the Gmail <code>users.messages</code> shape; the people
           are made up.
         </p>
-        <div className="inbox-toolbar">
+        <div className="intro-actions">
+          <button type="button" className="ghost" onClick={reshuffle}>
+            🎲 Reshuffle
+          </button>
           <button type="button" className="primary" onClick={runAll}>
             Run all
           </button>
-          <button type="button" className="ghost" onClick={reshuffle}>
-            Reshuffle
-          </button>
-          {(['all', ...TRIAGE_ACTIONS] as const).map((key) => (
-            <button key={key} type="button" className={`ghost ${filter === key ? 'is-filter-on' : ''}`} aria-pressed={filter === key} onClick={() => setFilter(key)}>
-              {key === 'all' ? 'All' : key}
-            </button>
-          ))}
-          <div className="inbox-counts" aria-live="polite">
-            <span className="count-delete">{counts.Delete} Delete</span>
-            <span className="count-review">{counts.Review} Review</span>
-            <span className="count-leave">{counts.Leave} Leave</span>
-          </div>
         </div>
       </section>
 
       <div className="inbox-frame">
         <section className="panel inbox-list" aria-label="Inbox">
+          <header className="panel-head">
+            <h2>Inbox</h2>
+            <div className="inbox-filters" role="group" aria-label="Filter by action" aria-live="polite">
+              {(['all', ...TRIAGE_ACTIONS] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`ghost small ${filter === key ? 'is-on' : ''}`}
+                  aria-pressed={filter === key}
+                  onClick={() => setFilter(key)}
+                >
+                  {key === 'all' ? 'All' : key} <span className="filter-count">{key === 'all' ? rows.length : counts[key]}</span>
+                </button>
+              ))}
+            </div>
+          </header>
           <div role="list">
             {visible.length === 0 ? (
               <p className="inbox-empty muted">Nothing in this filter.</p>

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Landing } from './landing/Landing'
 import { routeFor } from './shell/route'
 import { Diamond } from './ui/Diamond'
+import { Masthead } from './ui/Masthead'
 import './styles.css'
 
 // Each demo is its own chunk: the landing page and the trolley / inbox /
@@ -27,16 +28,7 @@ document.title = TITLES[route]
 function RouteLoading({ name }: { name: string }) {
   return (
     <div className="app">
-      <header className="masthead">
-        <div>
-          <h1>
-            <a className="home-link" href="/">
-              Jev Playground
-            </a>{' '}
-            <span className="muted">/ {name}</span>
-          </h1>
-        </div>
-      </header>
+      <Masthead name={name} />
       <p className="route-loading-body">
         <Diamond className="diamond" /> Loading {name}…
       </p>

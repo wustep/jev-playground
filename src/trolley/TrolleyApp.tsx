@@ -10,6 +10,7 @@ import { Outcome } from './Outcome'
 import { castOffline, castWithJev, jevAvailable, judgeOffline, judgeWithJev, randomTheme, type Exchange, type Verdict } from './play'
 import { rng } from '../planner/pick'
 import { Diamond } from '../ui/Diamond'
+import { Masthead } from '../ui/Masthead'
 import { CLASSIC, ENTITIES, ENTITY_IDS, MAX_COUNT, MAX_CUSTOM_LABEL, MAX_GROUPS_PER_TRACK, THEMES, TRAITS, TRAIT_IDS, TWISTS, TWIST_IDS, swapTracks, type EntityId, type Group, type Scenario, type ThemeId, type TraitId, type TwistId } from './schema'
 
 const newSeed = () => Math.floor(Math.random() * 99_999) + 1
@@ -267,23 +268,16 @@ export default function TrolleyApp() {
 
   return (
     <div className="app trolley" style={{ '--accent': ACCENT } as CSSProperties}>
-      <header className="masthead">
-        <div>
-          <h1>
-            <a className="home-link" href="/">Jev Playground</a> <span className="muted">/ trolley</span>
-          </h1>
-        </div>
-        <div className="masthead-side">
-          <span className={`status-chip ${jev?.available ? 'on' : ''}`}>
-            <span className="dot" />
-            {jev === null ? 'Checking Jev…' : jev.available ? 'Jev connected' : 'Jev offline · stub'}
-          </span>
-          <label className="switch">
-            <input type="checkbox" checked={debug} onChange={(event) => toggleDebug(event.target.checked)} />
-            <span>Debug</span>
-          </label>
-        </div>
-      </header>
+      <Masthead name="trolley">
+        <span className={`status-chip ${jev?.available ? 'on' : ''}`}>
+          <span className="dot" />
+          {jev === null ? 'Checking Jev…' : jev.available ? 'Jev connected' : 'Jev offline · stub'}
+        </span>
+        <label className="switch">
+          <input type="checkbox" checked={debug} onChange={(event) => toggleDebug(event.target.checked)} />
+          <span>Debug</span>
+        </label>
+      </Masthead>
 
       <section className="panel dilemma" aria-live="polite" aria-busy={busy === 'cast'}>
         <p className={`dilemma-text ${busy === 'cast' ? 'is-stale' : ''}`}>{scenarioText(scenario)}</p>

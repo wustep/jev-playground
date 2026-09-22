@@ -191,6 +191,12 @@ button.small {
   font-size: 10.5px;
 }
 
+/* A pressed toggle (filters, chips): inked in, like the selected dial stop. */
+button.ghost.is-on {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -305,7 +311,9 @@ button.small {
   align-items: flex-end;
 }
 
-.controls label {
+.controls label,
+.match-you-body label,
+.match-chips legend {
   display: grid;
   gap: 4px;
   font-family: var(--mono);
@@ -967,7 +975,8 @@ button.small {
   max-width: 1080px;
 }
 
-.dilemma {
+.dilemma,
+.intro {
   padding: 18px 20px;
   display: grid;
   gap: 14px;
@@ -980,16 +989,24 @@ button.small {
   line-height: 1.4;
 }
 
-.dilemma-actions {
+.dilemma-actions,
+.intro-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.dilemma-actions .primary {
+.dilemma-actions .primary,
+.intro-actions .primary {
   margin-left: auto;
   height: 40px;
   font-weight: 600;
+}
+
+.intro-lede {
+  margin: 0;
+  max-width: 72ch;
+  color: #3d3a34;
 }
 
 .dilemma-theme {
@@ -1460,51 +1477,19 @@ button.small {
   max-width: 1280px;
 }
 
-.inbox-intro,
-.match-intro {
-  padding: 16px 18px;
-  display: grid;
-  gap: 14px;
+.inbox-list .panel-head {
+  flex-wrap: wrap;
 }
 
-.inbox-lede,
-.match-lede {
-  margin: 0;
-  max-width: 72ch;
-}
-
-.inbox-toolbar,
-.match-toolbar {
+.inbox-filters {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
-.inbox .is-filter-on,
-.match .is-chip-on {
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
-}
-
-.inbox-counts {
-  margin-left: auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
-.count-delete {
-  color: var(--delete);
-}
-.count-review {
-  color: var(--review);
-}
-.count-leave {
-  color: var(--leave);
+.filter-count {
+  opacity: 0.6;
+  margin-left: 2px;
 }
 
 .inbox-frame {
@@ -1618,14 +1603,6 @@ button.small {
   margin-top: 4px;
 }
 
-.inbox-chip {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  padding: 1px 7px;
-  border: 1px solid var(--line);
-  color: var(--muted);
-}
-
 .inbox-rec-row {
   display: flex;
   align-items: center;
@@ -1635,12 +1612,8 @@ button.small {
 }
 
 .inbox-pill {
-  font-family: var(--mono);
-  font-size: 10.5px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  padding: 2px 7px;
-  border: 1px solid var(--line);
 }
 
 .inbox-pill.action-delete,
@@ -1777,7 +1750,7 @@ button.small {
 
 .inbox-reasons-lede {
   margin: 0;
-  padding: 0 14px 12px;
+  padding: 12px 14px;
   font-size: 13px;
 }
 
@@ -1844,8 +1817,9 @@ button.small {
 }
 
 /* ── match ────────────────────────────────────────────────────────────────── */
+/* Root is `.match-demo`: bare `.match` is music's style-match cell. */
 
-.match {
+.match-demo {
   max-width: 1280px;
 }
 
@@ -1862,16 +1836,6 @@ button.small {
   padding: 14px;
 }
 
-.match-you-body label {
-  display: grid;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
 .match-you-body input[type='text'],
 .match-you-body textarea,
 .match-you-body select {
@@ -1881,7 +1845,8 @@ button.small {
   border: 1px solid var(--ink);
   background: var(--sheet);
   padding: 7px 10px;
-  font: inherit;
+  font-family: var(--sans);
+  font-size: 13.5px;
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
@@ -1905,11 +1870,6 @@ button.small {
 .match-chips legend {
   padding: 0;
   margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 .match-list {
@@ -2038,11 +1998,6 @@ button.small {
     padding: 12px 14px;
   }
 
-  .inbox-counts {
-    margin-left: 0;
-    width: 100%;
-  }
-
   .track-swap {
     align-self: stretch;
   }
@@ -2056,18 +2011,21 @@ button.small {
     font-size: 14px;
   }
 
-  .dilemma {
+  .dilemma,
+  .intro {
     padding: 14px;
   }
 
-  .dilemma-actions .primary {
+  .dilemma-actions .primary,
+  .intro-actions .primary {
     margin-left: 0;
     flex: 1 1 100%;
     height: 48px;
     font-size: 16px;
   }
 
-  .dilemma-actions .ghost {
+  .dilemma-actions .ghost,
+  .intro-actions .ghost {
     flex: 1 1 0;
   }
 
@@ -2111,6 +2069,13 @@ button.small {
 
   .trolley-controls select {
     min-width: 0;
+  }
+
+  .match-you-body input[type='text'],
+  .match-you-body textarea,
+  .match-you-body select {
+    min-height: 44px;
+    font-size: 16px;
   }
 
   .app {
