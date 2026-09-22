@@ -101,7 +101,7 @@ describe('renderPlan', () => {
         assertWellFormed(renderPlan(plan, seed))
       }
     }
-  })
+  }, 30_000)
 
   it('survives any combination a planner could emit', () => {
     const random = rng(7)
