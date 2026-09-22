@@ -153,8 +153,51 @@ export function matchPerson(you: YouProfile, person: Person): MatchResult {
   }
 }
 
-export function rankPeople(you: YouProfile, people: Person[]): MatchResult[] {
+export function rankPeople(you: YouProfile, people: readonly Person[]): MatchResult[] {
   return people.map((person) => matchPerson(you, person)).toSorted((a, b) => b.fit - a.fit || b.confidence - a.confidence)
+}
+
+export type LiveMatchScores = {
+  hobbies: number
+  lookingFor: number
+  complement: number
+  fit: number
+  confidence: number
+}
+
+/**
+ * Keep code-written notes and the city / energy rows. Replace the three
+ * structured scores, the fit, and the confidence with Jev’s answers, then
+ * rewrite the hypothesis from that order.
+ */
+export function overlayLiveScores(you: YouProfile, person: Person, live: LiveMatchScores): MatchResult {
+  const base = matchPerson(you, person)
+  const reasons = base.reasons
+    .map((reason) => {
+      if (reason.id === 'hobbies') return { ...reason, score: clamp01(live.hobbies) }
+      if (reason.id === 'lookingFor') return { ...reason, score: clamp01(live.lookingFor) }
+      if (reason.id === 'complement') return { ...reason, score: clamp01(live.complement) }
+      return reason
+    })
+    .toSorted((a, b) => b.score - a.score)
+  return {
+    person,
+    fit: clamp01(live.fit),
+    confidence: clamp01(live.confidence),
+    hypothesis: hypothesis(you, person, reasons),
+    reasons,
+  }
+}
+
+function sameSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  const left = new Set(a)
+  return b.every((item) => left.has(item))
+}
+
+/** Draft vs last Save. Order of chips does not count as a change. */
+export function sameYou(a: YouProfile, b: YouProfile): boolean {
+  return a.name === b.name && a.city === b.city && a.bio === b.bio && a.energy === b.energy && sameSet(a.hobbies, b.hobbies) && sameSet(a.lookingFor, b.lookingFor)
 }
 
 export function toggleIn<T>(list: T[], item: T): T[] {

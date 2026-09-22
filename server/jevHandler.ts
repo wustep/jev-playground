@@ -6,13 +6,15 @@
 //
 // It is deliberately NOT a generic passthrough: the body is a typed op from a
 // fixed allowlist (music: concept / globals / bar / phrase / score / notes; trolley:
-// cast / judge) that is re-validated against the enums, and the actual
+// cast / judge; inbox: triage; match: rank) that is re-validated against the enums, and the actual
 // state/questions are rebuilt here. A stranger with the URL can only ask this
 // app's questions — and only so many per minute (server/rateLimit.ts).
 //
 // What never leaves this function: the key, any env value other than the
 // model name, and the upstream response body of a failed call.
 
+import { InboxValidationError, buildInboxRequest, parseInboxOp } from '../src/inbox/requests.js'
+import { MatchValidationError, buildMatchRequest, parseMatchOp } from '../src/match/requests.js'
 import { PlanValidationError } from '../src/plan/schema.js'
 import { buildRequest, parseOp } from '../src/planner/jev/requests.js'
 import { callSystemOne, DEFAULT_MODEL, SystemOneError, type SystemOneRequest } from '../src/planner/jev/systemOne.js'
@@ -48,6 +50,9 @@ function limiterFor(env: JevEnv): RateLimiter {
 
 /** Allowlist: anything that is not one of this app's ops throws a validation error. */
 function requestFor(raw: unknown, model: string): SystemOneRequest {
+  const op = (raw as { op?: unknown } | null)?.op
+  if (op === 'inbox_triage') return buildInboxRequest(parseInboxOp(raw), model)
+  if (op === 'match_rank') return buildMatchRequest(parseMatchOp(raw), model)
   return isTrolleyOp(raw) ? buildTrolleyRequest(parseTrolleyOp(raw), model) : buildRequest(parseOp(raw), model)
 }
 
@@ -83,7 +88,13 @@ export async function handleJev(request: Request, env: JevEnv, limiter: RateLimi
   try {
     systemOneRequest = requestFor(JSON.parse(text), model)
   } catch (error) {
-    if (error instanceof PlanValidationError || error instanceof TrolleyValidationError || error instanceof SyntaxError) {
+    if (
+      error instanceof PlanValidationError ||
+      error instanceof TrolleyValidationError ||
+      error instanceof InboxValidationError ||
+      error instanceof MatchValidationError ||
+      error instanceof SyntaxError
+    ) {
       return json({ error: `Invalid request: ${error instanceof SyntaxError ? 'body is not valid JSON' : error.message}` }, 400, rateHeaders)
     }
     return json({ error: 'Invalid request' }, 400, rateHeaders)

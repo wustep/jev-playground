@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { JevChipPhase } from '../shared/jevStatus'
 
 /** Every demo's header: the home link, the route name, and whatever sits on the right (status chip, Debug switch). */
 export function Masthead({ name, children }: { name: string; children?: ReactNode }) {
@@ -17,12 +18,22 @@ export function Masthead({ name, children }: { name: string; children?: ReactNod
   )
 }
 
-/** The chip for demos that only ever run the client heuristic stub. */
-export function StubChip() {
+const CHIP_LABEL: Record<JevChipPhase, string> = {
+  checking: 'Checking Jev…',
+  loading: 'Asking Jev…',
+  live: 'Jev connected',
+  offline: 'Jev offline · stub',
+  error: 'Jev error · stub',
+}
+
+/** Live / offline / loading / error. Same chip the trolley masthead uses, plus a failure state that is not a fake success. */
+export function JevStatusChip({ phase, detail }: { phase: JevChipPhase; detail?: string | null }) {
+  const label = CHIP_LABEL[phase]
+  const on = phase === 'live' || phase === 'loading'
   return (
-    <span className="status-chip" title="This demo runs a client heuristic stub — same pattern as the music planner when there is no key.">
+    <span className={`status-chip${on ? ' on' : ''}${phase === 'error' ? ' is-error' : ''}`} title={detail || label} role="status">
       <span className="dot" />
-      Jev offline · stub
+      {label}
     </span>
   )
 }

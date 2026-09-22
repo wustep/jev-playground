@@ -130,6 +130,11 @@ code {
   box-shadow: 0 0 0 3px color-mix(in srgb, #2f9e5b 25%, transparent);
 }
 
+.status-chip.is-error .dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent);
+}
+
 /* ── controls ─────────────────────────────────────────────────────────────── */
 
 button,
@@ -1870,6 +1875,27 @@ button.ghost.is-on {
 .match-chips legend {
   padding: 0;
   margin-bottom: 6px;
+}
+
+.match-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 4px;
+}
+
+.match-save .primary {
+  min-width: 8.5rem;
+}
+
+.match-list.is-pending .match-card {
+  opacity: 0.55;
+}
+
+.match-empty {
+  margin: 0;
+  padding: 28px 8px;
 }
 
 .match-list {
