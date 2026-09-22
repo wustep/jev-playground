@@ -8,7 +8,9 @@ import {
   cloneSettings,
   DEFAULT_REASON_SETTINGS,
   emptyActivations,
+  mixActionScores,
   scoreActions,
+  scoreActionsWithChoice,
   softmax,
   triageItem,
 } from './triage'
@@ -28,6 +30,30 @@ function activations(patch: Partial<ReasonActivations>): ReasonActivations {
 }
 
 const TRIAGE_ACTIONS_SET = new Set(['Delete', 'Review', 'Leave'])
+
+describe('mixActionScores', () => {
+  it('keeps a distribution and lets both the tags and the triad move it', () => {
+    const tags = { Delete: 0.8, Review: 0.1, Leave: 0.1 }
+    const choice = { Delete: 0.1, Review: 0.1, Leave: 0.8 }
+    const mixed = mixActionScores(tags, choice)
+    const sum = mixed.Delete + mixed.Review + mixed.Leave
+    expect(sum).toBeCloseTo(1, 8)
+    expect(mixed.Delete).toBeGreaterThan(mixed.Review)
+    expect(mixed.Leave).toBeGreaterThan(mixed.Review)
+    expect(mixed.Delete).toBeLessThan(tags.Delete)
+    expect(mixed.Leave).toBeLessThan(choice.Leave)
+  })
+
+  it('recomputes when only the weights change', () => {
+    const tags = activations({ spam: 0.95, person: 0.95 })
+    const jev = { Delete: 1 / 3, Review: 1 / 3, Leave: 1 / 3 }
+    const spammy = scoreActionsWithChoice(tags, settingsWith({ spam: { enabled: true, weight: 2.4 }, person: { enabled: false, weight: 0 } }), jev)
+    const personal = scoreActionsWithChoice(tags, settingsWith({ spam: { enabled: false, weight: 0 }, person: { enabled: true, weight: 2.4 } }), jev)
+    expect(spammy.recommended).toBe('Delete')
+    expect(personal.recommended).toBe('Leave')
+    expect(spammy.scores.Delete).toBeGreaterThan(personal.scores.Delete)
+  })
+})
 
 describe('softmax / confidence', () => {
   it('returns a distribution that sums to 1', () => {

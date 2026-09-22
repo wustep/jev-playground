@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { matchPerson, rankPeople, toggleIn } from './match'
+import { matchPerson, overlayLiveScores, rankPeople, sameYou, toggleIn } from './match'
 import { DEFAULT_YOU, PEOPLE } from './people'
 import type { YouProfile } from './types'
 
@@ -61,6 +61,30 @@ describe('matchPerson', () => {
       expect(person.hobbies.length).toBeGreaterThan(0)
       expect(person.lookingFor.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('overlayLiveScores', () => {
+  it('replaces fit and the structured rows and still writes a hypothesis', () => {
+    const nia = PEOPLE.find((p) => p.id === 'nia-calder')
+    expect(nia).toBeTruthy()
+    if (!nia) return
+    const live = overlayLiveScores(DEFAULT_YOU, nia, { hobbies: 0.1, lookingFor: 0.2, complement: 0.3, fit: 0.05, confidence: 0.4 })
+    expect(live.fit).toBeCloseTo(0.05)
+    expect(live.confidence).toBeCloseTo(0.4)
+    expect(live.reasons.find((reason) => reason.id === 'hobbies')?.score).toBeCloseTo(0.1)
+    expect(live.reasons.find((reason) => reason.id === 'lookingFor')?.score).toBeCloseTo(0.2)
+    expect(live.reasons.find((reason) => reason.id === 'complement')?.score).toBeCloseTo(0.3)
+    expect(live.reasons.find((reason) => reason.id === 'city')?.score).toBeGreaterThan(0.9)
+    expect(live.hypothesis.length).toBeGreaterThan(10)
+  })
+})
+
+describe('sameYou', () => {
+  it('ignores chip order and notices a real edit', () => {
+    expect(sameYou(DEFAULT_YOU, { ...DEFAULT_YOU, hobbies: [...DEFAULT_YOU.hobbies].reverse() })).toBe(true)
+    expect(sameYou(DEFAULT_YOU, { ...DEFAULT_YOU, hobbies: ['jazz'] })).toBe(false)
+    expect(sameYou(DEFAULT_YOU, { ...DEFAULT_YOU, lookingFor: ['a bandmate'] })).toBe(false)
   })
 })
 

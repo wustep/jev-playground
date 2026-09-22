@@ -1,16 +1,20 @@
 // `/inbox/` — triage a fictional inbox with a Delete / Review / Leave triad.
 //
-// Same split as music/trolley: Jev-shaped scores (closed reason tags → a
-// distribution), code owns the recommended action (argmax) and every sentence.
-// This demo stays on the client heuristic stub; no /api/jev op.
+// Same split as music/trolley: Jev scores closed reason tags and the triad;
+// code owns the recommended action (argmax of tags × weights, mixed with the
+// Choice) and every sentence. No key → the client stub. A failed ask says so
+// and shows the stub; it does not pretend the numbers came from Jev.
+// Weight edits recompute from the cached tags and do not ask again.
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { rng } from '../planner/pick'
 import { shuffleInPlace } from '../shared/jevMath'
-import { Masthead, StubChip } from '../ui/Masthead'
+import { jevChipPhase, jevStatus, type JevStatus } from '../shared/jevStatus'
+import { JevStatusChip, Masthead } from '../ui/Masthead'
 import { gmailBase64UrlToUtf8, senderName } from './gmail'
 import { cloneInbox, INBOX_SEED } from './messages'
-import { cloneSettings, DEFAULT_REASON_SETTINGS, jitterActivations, REASON_CATALOG, triageItem } from './triage'
+import { ensureInboxJudgment, initialInbox, materializeInbox, peekInbox, rememberInbox } from './play'
+import { cloneSettings, DEFAULT_REASON_SETTINGS, jitterActivations, REASON_CATALOG } from './triage'
 import { REASON_IDS, TRIAGE_ACTIONS, type InboxItem, type ReasonId, type ReasonSettings, type TriageAction, type TriageResult } from './types'
 
 const JEV_POST = 'https://typesafe.ai/blog/introducing-system-one-models-and-jev'
@@ -20,9 +24,10 @@ type Filter = 'all' | TriageAction
 
 type RowModel = {
   item: InboxItem
-  result: TriageResult
+  result: TriageResult | null
   override: TriageAction | undefined
-  shown: TriageAction
+  shown: TriageAction | null
+  via: string
 }
 
 const pct = (value: number) => `${Math.round(value * 100)}`
@@ -58,7 +63,7 @@ function InboxRow({
 }) {
   const message = row.item.message
   const unread = message.labelIds.includes('UNREAD')
-  const topReasons = row.result.reasons.filter((reason) => reason.activation > 0.18 && reason.weight > 0).slice(0, 4)
+  const topReasons = (row.result?.reasons ?? []).filter((reason) => reason.activation > 0.18 && reason.weight > 0).slice(0, 4)
   const plainPart = message.payload.parts?.find((part) => part.mimeType === 'text/plain')
   const decoded = plainPart?.body?.data ? gmailBase64UrlToUtf8(plainPart.body.data) : message.plaintextBody
 
@@ -85,16 +90,16 @@ function InboxRow({
 
       <div className="inbox-rec">
         <div className="inbox-rec-row">
-          <span className={`tag inbox-pill action-${row.shown.toLowerCase()}`}>{row.shown}</span>
-          {row.override ? (
+          {row.shown ? <span className={`tag inbox-pill action-${row.shown.toLowerCase()}`}>{row.shown}</span> : <span className="tag inbox-pill">…</span>}
+          {row.override && row.result ? (
             <span className="muted inbox-rec-note">
-              override · stub {row.result.recommended} {pct(row.result.scores[row.result.recommended])}%
+              override · {row.via} {row.result.recommended} {pct(row.result.scores[row.result.recommended])}%
             </span>
           ) : (
-            <span className="muted inbox-rec-note">{pending ? 'running…' : `${pct(row.result.choice.confidence)} certainty`}</span>
+            <span className="muted inbox-rec-note">{pending || !row.result ? 'running…' : `${pct(row.result.choice.confidence)} certainty`}</span>
           )}
         </div>
-        <ConfidenceTriad scores={row.result.scores} pending={pending} />
+        <ConfidenceTriad scores={row.result?.scores ?? { Delete: 1 / 3, Review: 1 / 3, Leave: 1 / 3 }} pending={pending || !row.result} />
       </div>
 
       {open ? (
@@ -140,14 +145,49 @@ function InboxRow({
 }
 
 export default function InboxApp() {
-  const [items, setItems] = useState<InboxItem[]>(() => cloneInbox())
-  const [settings, setSettings] = useState<ReasonSettings>(() => cloneSettings(DEFAULT_REASON_SETTINGS))
+  const boot = useMemo(() => initialInbox(), [])
+  const [items, setItems] = useState<InboxItem[]>(boot.items)
+  const [settings, setSettings] = useState<ReasonSettings>(boot.settings)
+  const [seed, setSeed] = useState(boot.seed)
   const [overrides, setOverrides] = useState<Record<string, TriageAction>>({})
   const [filter, setFilter] = useState<Filter>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [revealed, setRevealed] = useState(0)
-  const [running, setRunning] = useState(true)
-  const [seed, setSeed] = useState(1)
+  const [status, setStatus] = useState<JevStatus | null>(null)
+  const [, setEpoch] = useState(0)
+  const ranking = peekInbox(items, settings, seed, status)
+  const restored = Boolean(ranking)
+  const [revealed, setRevealed] = useState(() => (restored ? boot.items.length : 0))
+  const [running, setRunning] = useState(() => !restored)
+
+  useEffect(() => {
+    let cancelled = false
+    void jevStatus().then((next) => {
+      if (!cancelled) setStatus(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Cache hit (including a weight edit over a stored judgment) paints immediately.
+  // A miss asks once; remounts share that in-flight promise.
+  useEffect(() => {
+    const current = peekInbox(items, settings, seed, status)
+    if (current) {
+      rememberInbox(items, settings, seed, current)
+      return
+    }
+    if (!status) return
+    let cancelled = false
+    void ensureInboxJudgment(items, seed).then((judgment) => {
+      if (cancelled) return
+      rememberInbox(items, settings, seed, materializeInbox(items, settings, judgment))
+      setEpoch((n) => n + 1)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [items, settings, seed, status])
 
   useEffect(() => {
     if (!running) return
@@ -167,6 +207,7 @@ export default function InboxApp() {
 
   const reshuffle = useCallback(() => {
     const random = rng(seed * 997 + 13)
+    const nextSeed = seed + 1
     const next = shuffleInPlace(
       cloneInbox(INBOX_SEED).map((entry) => ({
         message: entry.message,
@@ -174,33 +215,38 @@ export default function InboxApp() {
       })),
       random,
     )
+    const hit = peekInbox(next, settings, nextSeed, status)
     setItems(next)
-    setSeed((n) => n + 1)
+    setSeed(nextSeed)
     setOverrides({})
     setExpanded(null)
-    setRevealed(0)
-    setRunning(true)
-  }, [seed])
+    setRevealed(hit ? next.length : 0)
+    setRunning(!hit)
+  }, [seed, settings, status])
 
+  const via = ranking?.source === 'jev' ? 'Jev' : 'stub'
   const rows: RowModel[] = useMemo(
     () =>
       items.map((item) => {
-        const result = triageItem(item, settings)
+        const result = ranking?.results[item.message.id] ?? null
         const override = overrides[item.message.id]
-        return { item, result, override, shown: override ?? result.recommended }
+        return { item, result, override, shown: override ?? result?.recommended ?? null, via }
       }),
-    [items, settings, overrides],
+    [items, ranking, overrides, via],
   )
 
+  const busy = !ranking && Boolean(status?.available)
+  const phase = jevChipPhase({ status, busy, source: ranking?.source ?? null, notice: ranking?.notice ?? null })
+
   const visible = rows.filter((row, index) => {
-    if (index >= revealed) return filter === 'all'
+    if (!row.result || index >= revealed) return filter === 'all'
     if (filter === 'all') return true
     return row.shown === filter
   })
 
   const counts = rows.reduce(
     (acc, row, index) => {
-      if (index >= revealed) return acc
+      if (index >= revealed || !row.shown || !row.result) return acc
       acc[row.shown] += 1
       return acc
     },
@@ -229,14 +275,14 @@ export default function InboxApp() {
   return (
     <div className="app inbox" style={{ '--accent': ACCENT } as CSSProperties}>
       <Masthead name="inbox">
-        <StubChip />
+        <JevStatusChip phase={phase} detail={ranking?.notice ?? status?.detail} />
       </Masthead>
 
       <section className="panel intro">
         <p className="intro-lede">
           <a href={JEV_POST}>Jev</a> is a System One model: it returns a distribution, not a paragraph. Each fictional message gets a Delete / Review / Leave
-          confidence triad, driven by closed reason tags you can toggle and reweight. Sample data uses the Gmail <code>users.messages</code> shape; the people
-          are made up.
+          confidence triad. When Jev is reachable it scores the closed reason tags and the triad; code still picks the action and applies your weights. Otherwise
+          the offline stub does the same job. Sample mail uses the Gmail <code>users.messages</code> shape; the people are made up.
         </p>
         <div className="intro-actions">
           <button type="button" className="ghost" onClick={reshuffle}>
@@ -247,6 +293,8 @@ export default function InboxApp() {
           </button>
         </div>
       </section>
+
+      {ranking?.notice ? <p className="banner warn">{ranking.notice}</p> : null}
 
       <div className="inbox-frame">
         <section className="panel inbox-list" aria-label="Inbox">
@@ -295,7 +343,7 @@ export default function InboxApp() {
             </button>
           </header>
           <p className="inbox-reasons-lede muted">
-            Closed tags with weights. Changing them recomputes the triad in code — the same composite-scoring pattern you’d use with live Jev Nouls.
+            Closed tags with weights. Changing them recomputes the triad in code from the cached tags — Jev is not asked again until you reshuffle.
           </p>
           <div className="reason-list">
             {REASON_IDS.map((id) => {

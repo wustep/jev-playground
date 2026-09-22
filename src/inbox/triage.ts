@@ -160,6 +160,52 @@ export function triageItem(item: InboxItem, settings: ReasonSettings): TriageRes
   return scoreActions(item.reasons, settings)
 }
 
+function normalizeScores(scores: ActionScores): ActionScores {
+  const sum = TRIAGE_ACTIONS.reduce((total, action) => total + Math.max(0, scores[action] ?? 0), 0)
+  if (sum <= 1e-8) return { Delete: 1 / 3, Review: 1 / 3, Leave: 1 / 3 }
+  return {
+    Delete: Math.max(0, scores.Delete) / sum,
+    Review: Math.max(0, scores.Review) / sum,
+    Leave: Math.max(0, scores.Leave) / sum,
+  }
+}
+
+/**
+ * Geometric mix of the code triad (tags × weights) and Jev’s Delete / Review /
+ * Leave Choice. Either side can move the result; a later weight edit re-mixes
+ * without asking Jev again. Reasons stay the tag list from `scoreActions`.
+ */
+export function mixActionScores(fromTags: ActionScores, fromChoice: ActionScores): ActionScores {
+  const tags = normalizeScores(fromTags)
+  const choice = normalizeScores(fromChoice)
+  const raw = TRIAGE_ACTIONS.map((action) => Math.sqrt(tags[action] * choice[action]))
+  const sum = raw.reduce((total, value) => total + value, 0)
+  if (sum <= 1e-8) return { Delete: 1 / 3, Review: 1 / 3, Leave: 1 / 3 }
+  return {
+    Delete: (raw[0] ?? 0) / sum,
+    Review: (raw[1] ?? 0) / sum,
+    Leave: (raw[2] ?? 0) / sum,
+  }
+}
+
+export function scoreActionsWithChoice(activations: ReasonActivations, settings: ReasonSettings, jevChoice: ActionScores | null): TriageResult {
+  const coded = scoreActions(activations, settings)
+  if (!jevChoice) return coded
+  const scores = mixActionScores(coded.scores, jevChoice)
+  const recommended = argmaxAction(scores)
+  return {
+    ...coded,
+    recommended,
+    scores,
+    choice: {
+      type: 'choice',
+      choice: recommended,
+      confidence: choiceConfidence([scores.Delete, scores.Review, scores.Leave]),
+      probabilities: scores,
+    },
+  }
+}
+
 export function cloneSettings(settings: ReasonSettings): ReasonSettings {
   const next = { ...DEFAULT_REASON_SETTINGS }
   for (const id of REASON_IDS) {
