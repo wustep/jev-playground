@@ -6,12 +6,15 @@ import { NO_TWIST_CHANCE, PLAIN_CHANCE, castOffline, judgeOffline, pickTraitFor,
 import { CLASSIC, COUNTS, ENTITIES, ENTITY_IDS, THEME_IDS, TRAIT_IDS, TWISTS, TWIST_IDS, parseScenario, swapTracks, traitFits, traitsFor } from './schema'
 
 describe('routes', () => {
-  it('maps the three public paths, with or without a trailing slash', () => {
+  it('maps the public paths, with or without a trailing slash', () => {
     expect(routeFor('/')).toBe('landing')
     expect(routeFor('/music')).toBe('music')
     expect(routeFor('/music/')).toBe('music')
     expect(routeFor('/trolley/')).toBe('trolley')
     expect(routeFor('/Trolley/anything')).toBe('trolley')
+    expect(routeFor('/inbox/')).toBe('inbox')
+    expect(routeFor('/match')).toBe('match')
+    expect(routeFor('/Match/anyone')).toBe('match')
     expect(routeFor('/nope')).toBe('landing')
   })
 })

@@ -7,6 +7,7 @@ import { shadowExchanges } from '../planner/HeuristicPlanner'
 import { notePhrasesCoverPlan, renderWithOptionalJevNotes } from '../render/jevNotes'
 import { secondsPerTick } from '../render/renderPlan'
 import { DebugPanel } from '../ui/DebugPanel'
+import { Masthead } from '../ui/Masthead'
 import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
@@ -679,19 +680,12 @@ export default function MusicApp() {
 
   return (
     <div className="app" style={{ '--accent': accent } as CSSProperties}>
-      <header className="masthead">
-        <div>
-          <h1>
-            <a className="home-link" href="/">Jev Playground</a> <span className="muted">/ music</span>
-          </h1>
-        </div>
-        <div className="masthead-side">
-          <label className="switch">
-            <input type="checkbox" checked={debug} onChange={(event) => toggleDebug(event.target.checked)} />
-            <span>Debug</span>
-          </label>
-        </div>
-      </header>
+      <Masthead name="music">
+        <label className="switch">
+          <input type="checkbox" checked={debug} onChange={(event) => toggleDebug(event.target.checked)} />
+          <span>Debug</span>
+        </label>
+      </Masthead>
 
       <div className="dial" role="radiogroup" aria-label="Style">
         {STYLE_IDS.map((id) => (

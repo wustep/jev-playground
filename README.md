@@ -16,8 +16,10 @@ Styles on the dial: **Johann Sebastian Bach · Ludwig van Beethoven · Frédéri
 | `/` | Landing page: links to the demos. |
 | `/music/` | The composer described below: Jev picks labels, code writes the notes. |
 | `/trolley/` | Absurd trolley problems. Put anyone or anything on either track (counts, traits, a twist), or **Randomize**; then ask what Jev would do. Jev makes typed decisions only — `trolley_cast` (Choices over closed tables, sampled by code) and `trolley_judge` (a decision Choice, difficulty and absurdity Scores, a “most people would pull” Noul). Every sentence is assembled by code (`src/trolley/describe.ts`). Clearly hypothetical; no harm is ever described. |
+| `/inbox/` | Fictional inbox triage. Sample messages use the Gmail `users.messages` shape. A client stub scores each note Delete / Review / Leave from closed reason tags you can toggle and reweight; recommended = argmax. No live Jev op. |
+| `/match/` | Fictional “nobodies” only. Jev-shaped questions over hobbies / looking-for; each candidate gets a hypothesis, fit, confidence and structured reasons. Editable “you” profile; reshuffle draws a new set. Client stub, offline. |
 
-One Vite entry; `src/main.tsx` switches on the path and lazy-loads each demo (the landing page and the trolley never download VexFlow). `vercel.json` rewrites `/music/*` and `/trolley/*` to `index.html` so direct visits and refreshes work. `?debug=1` works on both demos.
+One Vite entry; `src/main.tsx` switches on the path and lazy-loads each demo (the landing page and the trolley / inbox / match demos never download VexFlow). `vercel.json` rewrites `/music/*`, `/trolley/*`, `/inbox/*` and `/match/*` to `index.html` so direct visits and refreshes work. `?debug=1` works on the music and trolley demos.
 
 ## Run
 
@@ -25,7 +27,7 @@ One Vite entry; `src/main.tsx` switches on the path and lazy-loads each demo (th
 npm install
 npm run dev        # http://localhost:5173 — works offline with the heuristic stub
 npm run build      # tsc --noEmit && vite build   (must pass)
-npm test           # vitest: renderer invariants, Jev request shapes, proxy, MIDI round-trip
+npm test           # vitest: renderer invariants, Jev request shapes, proxy, MIDI round-trip, inbox/match stubs
 ```
 
 Node 20+.
@@ -156,10 +158,13 @@ One `AudioContext`, created on the first user gesture. Every instrument and the 
 api/jev.ts              Vercel function → server/jevHandler.ts
 server/jevHandler.ts    rate limit → validate op (allowlist) → build request → TypeSafe (key stays here)
 server/rateLimit.ts     per-IP fixed window, in memory (best-effort on serverless)
-src/main.tsx            path switch: / · /music/ · /trolley/ (lazy chunks)
+src/main.tsx            path switch: / · /music/ · /trolley/ · /inbox/ · /match/ (lazy chunks)
 src/landing/ src/shell/ landing page · route helper
 src/music/MusicApp.tsx  the composer page
 src/trolley/            schema (closed tables) · requests (typed ops) · describe (all sentences) · play (Jev + stub) · page
+src/inbox/              Gmail-shaped fictional inbox · reason weights · Delete/Review/Leave stub
+src/match/              fictional nobodies · hobbies / looking-for · fit stub
+src/shared/             small stub math (softmax, confidence) shared by inbox + match
 src/plan/               schema (enums, plan, validation) · style briefs + stub priors
 src/planner/            Planner interface · HeuristicPlanner · JevPlanner · pick policy · jev/
 src/render/             renderPlan (the seam) · harmony · melody · voiceLeading · textures/

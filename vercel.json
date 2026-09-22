@@ -4,6 +4,10 @@
     { "source": "/music", "destination": "/index.html" },
     { "source": "/music/(.*)", "destination": "/index.html" },
     { "source": "/trolley", "destination": "/index.html" },
-    { "source": "/trolley/(.*)", "destination": "/index.html" }
+    { "source": "/trolley/(.*)", "destination": "/index.html" },
+    { "source": "/inbox", "destination": "/index.html" },
+    { "source": "/inbox/(.*)", "destination": "/index.html" },
+    { "source": "/match", "destination": "/index.html" },
+    { "source": "/match/(.*)", "destination": "/index.html" }
   ]
 }
