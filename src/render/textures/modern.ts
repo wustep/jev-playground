@@ -266,7 +266,7 @@ export function lushVoicings(bar: BarContext): BarNotes {
   })
   if (shape.fills.length > 0) {
     const top = midiOf(voicing[voicing.length - 1])
-    const fills = melodyPitches(bar, shape.fills, { lo: top + 1, hi: top + 15, strongEvery: 4 })
+    const fills = melodyPitches(bar, shape.fills, { lo: top + 1, hi: top + 15, strongEvery: 4, anchored: true })
     shape.fills.forEach((slot, k) => right.push(note(slot.start, slot.dur, fills[k], velocity + 4)))
   }
 
