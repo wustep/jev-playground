@@ -113,7 +113,7 @@ export function washArpeggio(bar: BarContext): BarNotes {
 
   // …and lands on a long singing note chosen by the bar's contour.
   const peak = midiOf(rising[rising.length - 1] ?? leftPitches[leftPitches.length - 1])
-  const [landing] = melodyPitches(bar, [{ start: half, dur: half }], { lo: Math.max(64, peak - 4), hi: Math.max(76, peak + 9) })
+  const [landing] = melodyPitches(bar, [{ start: half, dur: half }], { lo: Math.max(64, peak - 4), hi: Math.max(76, peak + 9), anchored: true })
   if (busy && !bar.isLast) {
     // Busy bars spill back down instead of resting on the landing note.
     const fall = [...ladder(bar.chord.pcs, 60, midiOf(landing) - 1)].reverse().slice(0, half - 2)

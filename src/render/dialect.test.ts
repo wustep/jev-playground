@@ -95,6 +95,7 @@ describe('dialect knobs in the renderer', () => {
       breathes: true,
       arrangement: 2,
       character: 'lyrical_song',
+      tessitura: 'mid',
       chord: resolveChord(keyInfo('C_major'), 'I'),
       scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
       palette: 'diatonic',

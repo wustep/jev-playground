@@ -45,6 +45,7 @@ import { PlanValidationError, type BarRoleId, type CompositionPlan } from '../pl
 import { keyInfo, resolveChord, scaleFor, type KeyInfo, type ResolvedChord } from './harmony'
 import { midiOf, nearestIndex, ladder } from './pitch'
 import { renderPlan } from './renderPlan'
+import { guideSpelling, melodyTessitura, singingAcceptRange, type SpellingWindow } from './tessitura'
 import { scoreBarForPlan, METER_INFO, type Note, type Score, type Voice } from './score'
 
 export class JevNotesError extends Error {}
@@ -570,8 +571,8 @@ export function degreeIdForPitch(pitch: string, tonic: string, minor: boolean): 
   return names[best]
 }
 
-function stepToward(from: string, goal: string, scale: string[]): string {
-  const rungs = ladder(scale, TREBLE_LO, TREBLE_HI)
+function stepToward(from: string, goal: string, scale: string[], range: SpellingWindow): string {
+  const rungs = ladder(scale, range.lo, range.hi)
   if (rungs.length === 0) return goal
   const fromI = nearestIndex(rungs, midiOf(from))
   const goalI = nearestIndex(rungs, midiOf(goal))
@@ -579,8 +580,8 @@ function stepToward(from: string, goal: string, scale: string[]): string {
   return rungs[fromI + (goalI > fromI ? 1 : -1)]
 }
 
-function neighbourOf(goal: string, scale: string[], fromMidi: number): string {
-  const rungs = ladder(scale, TREBLE_LO, TREBLE_HI)
+function neighbourOf(goal: string, scale: string[], fromMidi: number, range: SpellingWindow): string {
+  const rungs = ladder(scale, range.lo, range.hi)
   if (rungs.length < 2) return goal
   const goalI = nearestIndex(rungs, midiOf(goal))
   const upper = Math.min(rungs.length - 1, goalI + 1)
@@ -590,10 +591,10 @@ function neighbourOf(goal: string, scale: string[], fromMidi: number): string {
   return rungs[pick === goalI ? (preferUpper ? lower : upper) : pick]
 }
 
-function nextChordTone(fromMidi: number, chord: ResolvedChord, dir: 1 | -1): string {
+function nextChordTone(fromMidi: number, chord: ResolvedChord, dir: 1 | -1, range: SpellingWindow): string {
   const tones = chord.core.length >= 3 ? chord.core : chord.pcs
-  const rungs = ladder(tones, TREBLE_LO, TREBLE_HI)
-  if (rungs.length === 0) return spellPc(chord.root, fromMidi, { lo: TREBLE_LO, hi: TREBLE_HI })
+  const rungs = ladder(tones, range.lo, range.hi)
+  if (rungs.length === 0) return spellPc(chord.root, fromMidi, range)
   const idx = nearestIndex(rungs, fromMidi)
   const stepped = Math.max(0, Math.min(rungs.length - 1, idx + dir))
   return rungs[stepped]
@@ -603,9 +604,9 @@ function pitchClassOf(pitch: string): string {
   return pitch.replace(/\d+$/, '')
 }
 
-function nearestChordTone(pitch: string, chord: ResolvedChord): string {
+function nearestChordTone(pitch: string, chord: ResolvedChord, range: SpellingWindow): string {
   const tones = chord.core.length >= 3 ? chord.core : chord.pcs
-  const rungs = ladder(tones, TREBLE_LO, TREBLE_HI)
+  const rungs = ladder(tones, range.lo, range.hi)
   if (rungs.length === 0) return pitch
   return rungs[nearestIndex(rungs, midiOf(pitch))]
 }
@@ -616,19 +617,20 @@ function guideFigurePitches(
   fromMidi: number,
   scale: string[],
   chord: ResolvedChord,
+  range: SpellingWindow,
   lastNotes?: Voice,
 ): (string | null)[] {
   const goal = goalPitch
   const lastNamed = lastNotes ? lastSoundingMidi(lastNotes) : undefined
   const previousPc = (() => {
-    if (!lastNotes) return pitchClassOf(spellPc(scale[0] ?? chord.root, fromMidi, { lo: TREBLE_LO, hi: TREBLE_HI }))
+    if (!lastNotes) return pitchClassOf(spellPc(scale[0] ?? chord.root, fromMidi, range))
     for (let i = lastNotes.length - 1; i >= 0; i--) {
       const named = lastNotes[i]?.pitches[0]
       if (named) return pitchClassOf(named)
     }
-    return pitchClassOf(spellPc(scale[0] ?? chord.root, fromMidi, { lo: TREBLE_LO, hi: TREBLE_HI }))
+    return pitchClassOf(spellPc(scale[0] ?? chord.root, fromMidi, range))
   })()
-  const previous = spellPc(previousPc, lastNamed ?? fromMidi, { lo: TREBLE_LO, hi: TREBLE_HI })
+  const previous = spellPc(previousPc, lastNamed ?? fromMidi, range)
 
   if (figure === 'motif_echo' && lastNotes && lastNotes.length > 0) {
     const last = lastSoundingMidi(lastNotes) ?? fromMidi
@@ -637,7 +639,7 @@ function guideFigurePitches(
       const sample = lastNotes[Math.min(i, lastNotes.length - 1)]
       if (!sample?.pitches[0]) return goal
       const moved = midiOf(sample.pitches[0]) + shift
-      return spellPc(sample.pitches[0].replace(/\d+$/, ''), moved, { lo: TREBLE_LO, hi: TREBLE_HI })
+      return spellPc(sample.pitches[0].replace(/\d+$/, ''), moved, range)
     })
   }
 
@@ -646,7 +648,7 @@ function guideFigurePitches(
     const out: string[] = []
     let cursor = fromMidi
     for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
-      const pitch = nextChordTone(cursor, chord, dir)
+      const pitch = nextChordTone(cursor, chord, dir, range)
       out.push(pitch)
       cursor = midiOf(pitch)
     }
@@ -655,27 +657,27 @@ function guideFigurePitches(
   }
 
   if (figure === 'neighbour') {
-    const neighbour = neighbourOf(goal, scale, fromMidi)
-    return [stepToward(previous, goal, scale), neighbour, goal, goal]
+    const neighbour = neighbourOf(goal, scale, fromMidi, range)
+    return [stepToward(previous, goal, scale, range), neighbour, goal, goal]
   }
 
   if (figure === 'leap_recover') {
     const delta = midiOf(goal) - fromMidi
     const leapMidi = fromMidi + (delta === 0 ? 7 : Math.sign(delta) * Math.max(7, Math.min(12, Math.abs(delta))))
-    const leap = spellPc(goal.replace(/\d+$/, ''), leapMidi, { lo: TREBLE_LO, hi: TREBLE_HI })
-    const recover = stepToward(leap, goal, scale)
+    const leap = spellPc(goal.replace(/\d+$/, ''), leapMidi, range)
+    const recover = stepToward(leap, goal, scale, range)
     return [previous, leap, recover, goal]
   }
 
   if (figure === 'hold_resolve') {
-    const hold = Math.abs(midiOf(previous) - midiOf(goal)) <= 2 ? previous : stepToward(previous, goal, scale)
-    return [hold, hold, stepToward(hold, goal, scale), goal]
+    const hold = Math.abs(midiOf(previous) - midiOf(goal)) <= 2 ? previous : stepToward(previous, goal, scale, range)
+    return [hold, hold, stepToward(hold, goal, scale, range), goal]
   }
 
   // step_to_goal (and motif_echo with no memory)
-  const p0 = stepToward(previous, goal, scale)
-  const p1 = stepToward(p0, goal, scale)
-  const p2 = stepToward(p1, goal, scale)
+  const p0 = stepToward(previous, goal, scale, range)
+  const p1 = stepToward(p0, goal, scale, range)
+  const p2 = stepToward(p1, goal, scale, range)
   return [p0, p1, p2, goal]
 }
 
@@ -690,19 +692,20 @@ function ornamentSourcePitches(
   chord: ResolvedChord,
   scale: string[],
   fromMidi: number,
+  range: SpellingWindow,
 ): (string | null)[] {
   const sourcePitches = source.map((note) => note.pitches[0]).filter((pitch): pitch is string => !!pitch)
   if (sourcePitches.length === 0) return slots.map(() => null)
   const out: (string | null)[] = slots.map((_, i) => sourcePitches[Math.min(i, sourcePitches.length - 1)] ?? null)
   const weak = slots.findIndex((slot, i) => i > 0 && i < slots.length - 1 && slot.start % 4 !== 0)
   if (weak > 0 && out[weak]) {
-    out[weak] = neighbourOf(out[weak]!, scale, midiOf(out[weak]!))
+    out[weak] = neighbourOf(out[weak]!, scale, midiOf(out[weak]!), range)
   }
   return out.map((pitch, i) => {
     if (!pitch) return null
     const slot = slots[i]
-    if (slot.start % 4 === 0 || slot.dur >= 4) return nearestChordTone(pitch, chord)
-    return spellPc(pitchClassOf(pitch), i === 0 ? fromMidi : midiOf(out[i - 1] ?? pitch), { lo: TREBLE_LO, hi: TREBLE_HI })
+    if (slot.start % 4 === 0 || slot.dur >= 4) return nearestChordTone(pitch, chord, range)
+    return spellPc(pitchClassOf(pitch), i === 0 ? fromMidi : midiOf(out[i - 1] ?? pitch), range)
   })
 }
 
@@ -760,14 +763,15 @@ export function realizeJevGuideChoices(
   }
   const starts = startsFromRhythm(rhythm)
   const lead = options.voiceLead ?? shouldVoiceLeadMelody(bar.role)
-  const fromMidi = options.lastSoundingMidi ?? DEFAULT_TREBLE_MIDI
-  const goalMidiTarget = lead ? fromMidi : DEFAULT_TREBLE_MIDI
+  const spelling = guideSpelling(melodyTessitura(plan))
+  const fromMidi = options.lastSoundingMidi ?? spelling.aim
+  const goalMidiTarget = lead ? fromMidi : spelling.aim
   const primaryScale = scaleAt(key, plan.palette, chord, chord2, 0, meter.splitTick)
-  const goalPitch = spellPc(goalPitchClass(chord, parsed.goal), goalMidiTarget, { lo: TREBLE_LO, hi: TREBLE_HI })
+  const goalPitch = spellPc(goalPitchClass(chord, parsed.goal), goalMidiTarget, spelling)
   const slots = spec.ticks.map((dur, i) => ({ start: starts[i], dur }))
   let pitches = returning
-    ? ornamentSourcePitches(options.sourceNotes!, slots, chord, primaryScale, fromMidi)
-    : guideFigurePitches(parsed.figure, goalPitch, fromMidi, primaryScale, chord, options.lastNotes)
+    ? ornamentSourcePitches(options.sourceNotes!, slots, chord, primaryScale, fromMidi, spelling)
+    : guideFigurePitches(parsed.figure, goalPitch, fromMidi, primaryScale, chord, spelling, options.lastNotes)
 
   const restAt = lyrical ? guideRestSlot(spec.ticks, meter.beatTicks, meter.ticksPerBar) : null
   if (restAt != null) pitches = pitches.map((pitch, i) => (i === restAt ? null : pitch))
@@ -781,9 +785,9 @@ export function realizeJevGuideChoices(
     const strong = start % meter.beatTicks === 0
     let next = pitch
     if (strong && !isChordTonePc(pitchClassOf(next), harmony)) {
-      next = nearestChordTone(next, harmony)
+      next = nearestChordTone(next, harmony, spelling)
     } else if (lead) {
-      next = spellPc(pitchClassOf(next), target, { lo: TREBLE_LO, hi: TREBLE_HI })
+      next = spellPc(pitchClassOf(next), target, spelling)
     }
     target = midiOf(next)
     return next
@@ -800,7 +804,7 @@ export function realizeJevGuideChoices(
     const start = starts[lastSounding]
     const harmony = chord2 && start >= meter.splitTick ? chord2 : chord
     const aim = lastSounding > 0 && spelled[lastSounding - 1] ? midiOf(spelled[lastSounding - 1]!) : fromMidi
-    spelled[lastSounding] = spellPc(goalPitchClass(harmony, parsed.goal), aim, { lo: TREBLE_LO, hi: TREBLE_HI })
+    spelled[lastSounding] = spellPc(goalPitchClass(harmony, parsed.goal), aim, spelling)
   }
 
   let notes: Voice = []
@@ -815,14 +819,14 @@ export function realizeJevGuideChoices(
       degrees.push('rest')
       return
     }
-    notes.push(parseScoreNote({ start, dur, pitches: [pitch], velocity }, `notes[${i}]`, meter.ticksPerBar))
+    notes.push(parseScoreNote({ start, dur, pitches: [pitch], velocity }, `notes[${i}]`, meter.ticksPerBar, spelling))
     degrees.push(degreeIdForPitch(pitch, key.tonic, key.minor))
   })
   if (restAt != null) {
     notes = vacateRestBeat(notes, starts[restAt], spec.ticks[restAt], meter.beatTicks)
   }
   if (notes.length === 0) throw new JevNotesError('Jev notes produced only rests')
-  const treble = parseScoreVoice(notes, meter.ticksPerBar)
+  const treble = parseScoreVoice(notes, meter.ticksPerBar, spelling)
   return {
     barIndex,
     voice: 'treble',
@@ -888,7 +892,7 @@ export function applyNotePhrase(score: Score, phrase: NotePhrase): Score {
   const index = phrase.barIndex + (score.introBars ?? 0)
   const bar = scoreBarForPlan(score, phrase.barIndex)
   if (!bar) throw new JevNotesError(`Jev notes: no score bar for plan bar ${phrase.barIndex + 1}`)
-  const voice = parseScoreVoice(phrase.notes, score.meter.ticksPerBar)
+  const voice = parseScoreVoice(phrase.notes, score.meter.ticksPerBar, singingAcceptRange(melodyTessitura(score.plan)))
   const sample = bar.treble[0]?.[0]?.velocity
   const treble = overlayMelodyVoice(bar.treble, voice, sample)
   return {

@@ -1,4 +1,5 @@
 import type { ArrangementId, BarPlan, BaseRoleId, CharacterId, PaletteId, PhrasingId, TextureId } from '../plan/schema'
+import type { MelodyTessitura } from './tessitura'
 import type { StyleDialect } from './dialect'
 import type { KeyInfo, ResolvedChord } from './harmony'
 import { clamp } from './pitch'
@@ -90,6 +91,11 @@ export interface BarContext {
   /** `plan.role` folded onto the seven roles the gesture tables are keyed by. */
   role: BaseRoleId
   character: CharacterId
+  /**
+   * Where the singing line sits: low (~62), mid (the texture's baked window,
+   * ~74–76), or high. Derived from the plan — see `melodyTessitura`.
+   */
+  tessitura: MelodyTessitura
   chord: ResolvedChord
   next?: ResolvedChord
   /** Melody / passing-tone pitch classes for this bar. */

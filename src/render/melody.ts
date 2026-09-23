@@ -7,6 +7,7 @@ import type { ContourId } from '../plan/schema'
 import type { BarContext, Slot } from './context'
 import { applyNonChordTones } from './dialect'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
+import { melodyWindow } from './tessitura'
 
 // ── motif memory: the same figure on a new chord ────────────────────────────
 //
@@ -99,6 +100,11 @@ export interface MelodyOptions {
   span?: number
   /** Override the planned contour (e.g. mirrored, for contrary motion). */
   contour?: ContourId
+  /**
+   * `lo`/`hi` are already in the sounding octave (a fill above a voicing, a
+   * landing near an arpeggio peak). The plan tessitura does not shift them.
+   */
+  anchored?: boolean
 }
 
 export const MIRRORED: Record<ContourId, ContourId> = {
@@ -143,7 +149,7 @@ function contourOffset(contour: ContourId, t: number, span: number, k: number): 
 
 /** One spelled pitch per slot. */
 export function melodyPitches(bar: BarContext, slots: readonly Slot[], options: MelodyOptions): string[] {
-  const { lo, hi } = options
+  const { lo, hi } = melodyWindow(options.lo, options.hi, bar.tessitura, options.anchored)
   const line = options.line ?? 'melody'
   const strongEvery = options.strongEvery ?? bar.meter.beatTicks
   const role = bar.role

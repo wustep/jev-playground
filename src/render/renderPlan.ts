@@ -18,6 +18,7 @@ import { applyEnding, applyOpening } from './framing'
 import { applyPhraseBreath, breathes, isPhraseFinalBar, resolvePhrasing } from './phrasing'
 import { clamp, midiOf } from './pitch'
 import { METER_INFO, type Bar, type Note, type Score, type TimedNote, type Voice } from './score'
+import { melodyTessitura } from './tessitura'
 import { pedalOf, TEXTURE_RENDERERS } from './textures'
 
 const DYNAMIC_VELOCITY: Record<DynamicId, number> = { pp: 36, p: 50, mp: 64, mf: 78, f: 94, ff: 110 }
@@ -175,6 +176,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   const touch = rng(seed ^ 0x51ed270b)
   const feel = FEEL[plan.character]
   const dialect = STYLE_DIALECTS[plan.style]
+  const tessitura = melodyTessitura(plan)
   const memory = newMemory()
   const chords = plan.bars.map((bar) => resolveChord(key, bar.chord))
   const seconds = plan.bars.map((bar) => (bar.chord2 ? resolveChord(key, bar.chord2) : undefined))
@@ -219,6 +221,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       texture: plan.texture,
       role: ROLE_BASE[barPlan.role],
       character: plan.character,
+      tessitura,
       palette: plan.palette,
       velocity,
       meter,
