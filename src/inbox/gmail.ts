@@ -1,5 +1,5 @@
-import { emptyActivations } from './triage'
-import type { GmailHeader, GmailMessage, InboxItem, ReasonActivations } from './types'
+import { emptyActivations } from './triage.js'
+import type { GmailHeader, GmailMessage, InboxItem, ReasonActivations } from './types.js'
 
 const YOU = 'you@example.com'
 
