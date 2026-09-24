@@ -114,8 +114,15 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
 
   // 1. The tune, whole, first.
   const melody = writeMelody(plan, views)
-  // 2. Then what holds it up, told where its floor is.
-  const accompaniment = views.map((view, index) => writeAccompaniment(plan, view, melody[index]))
+  // 2. Then what holds it up, told where its floor is — and, for a bar where
+  //    the tune is silent, where it last sang.
+  let lastSung: number | undefined
+  const accompaniment = views.map((view, index) => {
+    const bar = writeAccompaniment(plan, view, melody[index], lastSung)
+    const last = melody[index].notes[melody[index].notes.length - 1]
+    if (last) lastSung = midiOf(last.pitches[last.pitches.length - 1])
+    return bar
+  })
 
   /** Lean toward the next bar's level, lean on the metre, never play two notes identically. */
   const shape = (line: Voice, index: number): Voice => {
@@ -130,7 +137,9 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   }
 
   const bars: Bar[] = plan.bars.map((barPlan, index) => {
-    const treble = [melody[index].notes, ...accompaniment[index].treble]
+    // The treble staff is the tune's alone: `treble[0]` is the melody by
+    // construction, which is what the compare metrics read it as.
+    const treble = [melody[index].notes]
     const bass = accompaniment[index].bass
     return {
       index,

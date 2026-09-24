@@ -8,22 +8,25 @@
 // the tune sounds. Nothing may cross it. That single argument is most of
 // what "the texture supports the tune" means.
 //
-// `counterline` is the honest exception. A two-voice invention has no
-// accompaniment; it has a second tune. It is exempt from the ceiling and says
-// so, and the arranger gives it its own register instead.
+// `counterline` is the one pattern that is not support. A two-voice invention
+// has no accompaniment; it has a second tune, of equal weight and its own
+// rhythm. It still sings in a register of its own under the first voice's
+// floor, so the ceiling holds for it too — and the test checks all five.
 
 import type { AccompanimentId, CompositionPlan } from '../plan/schema'
 import { Note as TonalNote } from 'tonal'
 import { clamp, ladder, midiOf, nearestIndex } from './pitch'
-import type { Voice } from './score'
+import type { PedalId, Voice } from './score'
 import { bassFor, essentialTones, leadVoicing, lowBass, stackUp } from './voiceLeading'
 import { beatsPerBar, chordAt, note, pieceChoice, type BarView } from './voice'
 import type { MelodyBar } from './melody'
 
+/**
+ * Everything under the tune goes on the bass staff. The treble staff is the
+ * tune's alone, which is what makes `Bar.treble[0]` the melody by
+ * construction rather than by luck.
+ */
 export interface AccompanimentBar {
-  /** Voices that belong on the treble staff (inner chords, the counterline). */
-  treble: Voice[]
-  /** Voices that belong on the bass staff. */
   bass: Voice[]
 }
 
@@ -60,7 +63,7 @@ function sustained(bar: BarView, options: AccompanimentOptions): AccompanimentBa
       chordVoice.push(note(span.start, span.dur, capped, bar.velocity - 12))
     }
   }
-  return { treble: [], bass: chordVoice.length ? [bassVoice, chordVoice] : [bassVoice] }
+  return { bass: chordVoice.length ? [bassVoice, chordVoice] : [bassVoice] }
 }
 
 // ── broken ──────────────────────────────────────────────────────────────────
@@ -76,9 +79,9 @@ const BREAK_SHAPES = [
 function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   const { meter } = bar
   const top = headroom(options.ceiling)
-  // One note per half-beat in compound metres, per half-beat in simple ones:
-  // continuous under the tune without ever being faster than it can breathe.
-  const step = meter.beatTicks >= 6 ? 2 : 2
+  // An eighth-note stream in every metre — half a simple beat, a third of a
+  // compound one: continuous under the tune without outrunning it.
+  const step = 2
   const shape = BREAK_SHAPES[pieceChoice(bar.memory, bar.rand, 'break', BREAK_SHAPES.length)]
   const voice: Voice = []
   const bassVoice: Voice = []
@@ -101,7 +104,7 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     if (!pick || midiOf(pick) >= top) continue
     voice.push(note(tick, step, pick, bar.velocity - 16 + (tick % meter.beatTicks === 0 ? 5 : 0)))
   }
-  return { treble: [], bass: [bassVoice, voice].filter((v) => v.length) }
+  return { bass: [bassVoice, voice].filter((v) => v.length) }
 }
 
 // ── pulse ───────────────────────────────────────────────────────────────────
@@ -128,7 +131,7 @@ function pulse(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     // The pulse leans on the downbeat and stays even after it — that evenness is the point.
     voice.push(note(tick, Math.max(1, step - (step > 2 ? 1 : 0)), voicing, bar.velocity - (tick === 0 ? 10 : 18)))
   }
-  return { treble: [], bass: [bassVoice, voice].filter((v) => v.length) }
+  return { bass: [bassVoice, voice].filter((v) => v.length) }
 }
 
 // ── stride ──────────────────────────────────────────────────────────────────
@@ -146,7 +149,6 @@ function stride(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
       const low = bassFor(chord, bar.memory.bass, { lo: Math.min(31, top - 28), hi: Math.min(50, top - 16), allowInversion: !bar.isLast && bar.index > 0 })
       bar.memory.bass = low
       bassVoice.push(note(tick, meter.beatTicks, withOctave(low, options.density), bar.velocity))
-      if (beats <= 2) continue
       continue
     }
     if (options.density === 0 && beat % 2 === 0) continue
@@ -156,7 +158,7 @@ function stride(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     bar.memory.voicing = voicing
     chordVoice.push(note(tick, Math.max(1, meter.beatTicks - 1), voicing, bar.velocity - 16))
   }
-  return { treble: [], bass: [bassVoice, chordVoice].filter((v) => v.length) }
+  return { bass: [bassVoice, chordVoice].filter((v) => v.length) }
 }
 
 // ── counterline ─────────────────────────────────────────────────────────────
@@ -190,7 +192,7 @@ function counterline(bar: BarView, options: AccompanimentOptions, melody: Melody
   }
 
   // The subject, alone.
-  if (bar.index === 0) return { treble: [], bass: [bassUnder()] }
+  if (bar.index === 0) return { bass: [bassUnder()] }
 
   // The answer, if the bar before stated something new.
   const previous = bar.memory.melody[bar.index - 1]
@@ -211,7 +213,7 @@ function counterline(bar: BarView, options: AccompanimentOptions, melody: Melody
       })
       if (answer.length) {
         bar.memory.counterLast = midiOf(answer[answer.length - 1].pitches[0])
-        return { treble: [], bass: options.density >= 2 ? [answer, bassUnder()] : [answer] }
+        return { bass: options.density >= 2 ? [answer, bassUnder()] : [answer] }
       }
     }
   }
@@ -234,7 +236,7 @@ function counterline(bar: BarView, options: AccompanimentOptions, melody: Melody
     voice.push(note(tick, step, rungs[index], bar.velocity - 8))
   }
   bar.memory.counterLast = last
-  return { treble: [], bass: options.density >= 2 ? [voice, bassUnder()] : [voice] }
+  return { bass: options.density >= 2 ? [voice, bassUnder()] : [voice] }
 }
 
 // ── the dispatcher ──────────────────────────────────────────────────────────
@@ -248,7 +250,7 @@ const PATTERNS: Record<AccompanimentId, (bar: BarView, options: AccompanimentOpt
 }
 
 /** Sustain that suits each pattern. Not a plan field: the pattern decides. */
-export const PEDAL_FOR: Record<AccompanimentId, 'dry' | 'half' | 'full'> = {
+export const PEDAL_FOR: Record<AccompanimentId, PedalId> = {
   sustained: 'half',
   broken: 'full',
   pulse: 'half',
@@ -297,9 +299,15 @@ function withOctave(bass: string, density: number): string[] {
   return [TonalNote.transpose(bass, '-8P'), bass]
 }
 
-export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: MelodyBar): AccompanimentBar {
+/**
+ * `lastSung` is the tune's last sounding MIDI before this bar. It is passed in
+ * rather than read from `bar.memory.melodyLast`, because by the time anything
+ * is accompanied the melody pass has finished, and that field holds the
+ * piece's final note, not this bar's neighbour.
+ */
+export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: MelodyBar, lastSung: number | undefined): AccompanimentBar {
   // With no tune sounding this bar, the accompaniment keeps its own company
   // under where the tune last was, so a rest is a rest and not a hole.
-  const ceiling = melody.floor ?? (bar.memory.melodyLast ?? 72) - 2
+  const ceiling = melody.floor ?? (lastSung ?? 72) - 2
   return PATTERNS[plan.accompaniment](bar, { ceiling, density: densityFor(bar) }, melody)
 }

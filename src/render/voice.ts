@@ -4,7 +4,7 @@
 // every one of 23 textures reached into for anything it fancied; the two
 // writers here take what they need as arguments instead.
 
-import type { AccompanimentId, ContourId, MeterId, PaletteId } from '../plan/schema'
+import type { ContourId, PaletteId } from '../plan/schema'
 import type { BarPosition } from '../plan/phrase'
 import type { KeyInfo, ResolvedChord } from './harmony'
 import { clamp } from './pitch'
@@ -103,8 +103,3 @@ export const chordAt = (bar: BarView, tick: number): ResolvedChord =>
 /** Beats in a bar, counting the felt beat (a dotted quarter in compound metres). */
 export const beatsPerBar = (meter: MeterInfo) => Math.round(meter.ticksPerBar / meter.beatTicks)
 
-/** True in 6/8, 9/8 and 12/8, where the beat divides into three. */
-export const isCompound = (meter: MeterId) => meter === 'six_eight' || meter === 'nine_eight' || meter === 'twelve_eight'
-
-/** Accompaniment patterns that must stay strictly below the tune. `counterline` is a peer and is exempt. */
-export const STAYS_UNDER: ReadonlySet<AccompanimentId> = new Set<AccompanimentId>(['sustained', 'broken', 'pulse', 'stride'])

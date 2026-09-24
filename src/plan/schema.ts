@@ -92,8 +92,9 @@ export const MOTION_RATE: Record<MotionId, number> = { sustained: 0.4, walking: 
  * Five patterns, replacing twenty-three textures. Each is a *shape*, not a
  * composer: it is told the melody's floor and must stay under it, so the
  * accompaniment can never steal the ear or double the tune by accident.
- * `counterline` is the exception, and says so: there the second line is a
- * peer, and the piece is a duet rather than a tune with a backing.
+ * `counterline` is the one that is not support: the second line is a peer in
+ * weight and rhythm, and the piece is a duet rather than a tune with a
+ * backing — but it too sings under the first voice's floor.
  */
 export const ACCOMPANIMENTS = {
   sustained: 'Held chords underneath: the harmony sounds once and rings, the left hand barely moving — hymn, pad, chorale',

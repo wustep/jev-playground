@@ -84,10 +84,10 @@ function assertWellFormed(score: Score) {
 
 /**
  * The one invariant the whole rewrite turns on: nothing under the tune may
- * reach it. `counterline` is exempt and declares itself a peer, not support.
+ * reach it. That includes `counterline`: a peer in weight and rhythm, but it
+ * sings in its own register under the first voice's floor.
  */
 function assertNothingCoversTheTune(score: Score) {
-  if (score.plan.accompaniment === 'counterline') return
   score.bars.forEach((_, index) => {
     const tune = midisOf(melody(score, index))
     if (!tune.length) return
