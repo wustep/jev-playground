@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { BAR_COUNT_VALUES, FORM_IDS, KEY_IDS, STYLE_IDS } from './schema'
+import { BAR_COUNT_VALUES, FORM_IDS, KEY_IDS, STYLE_IDS, type PlanGlobals } from './schema'
 import { formSlots } from './forms'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, withPhraseNovelty } from './harmonyPhrases'
 import { STYLE_PROFILES } from './styles'
+import { buildRequest, parseOp } from '../planner/jev/requests'
 
 describe('harmony phrase catalog', () => {
   it('offers a closed, expandable list for every style, key and slot', () => {
@@ -67,4 +68,61 @@ describe('harmony phrase catalog', () => {
     expect(lyrical?.bossa_comp).toBeGreaterThan(lyrical?.chordal_melody ?? 0)
     expect(groove?.bossa_comp).toBeGreaterThan(groove?.stride_dance ?? 0)
   })
+
+  it('keeps the /api/jev phrase Choice catalog aligned with hookBars=8 layouts', () => {
+    // JevPlanner expands with resolveHookBars; the server used to omit hookBars and
+    // offered seq_tail ids (st:…) for a slot the client treated as head_tail →
+    // `jev.phrase: "st:2:1" is not one of …`.
+    const globals = {
+      character: 'lyrical_song',
+      form: 'period',
+      key: 'Db_major',
+      meter: 'twelve_eight',
+      texture: 'rolling_nocturne',
+      palette: 'chromatic_approach',
+      tempo: 'andante',
+      dynamics: 'p',
+      dynamicShape: 'waves',
+      defaultInstrument: 'grand_piano',
+      arrangement: 'lift_on_return',
+      opening: 'pickup',
+      pedal: 'full',
+      phrasing: 'breathing',
+      hookBars: '8',
+    } as const satisfies PlanGlobals
+
+    const withoutHook = formSlots('period', 16)
+    const withHook = formSlots('period', 16, 8)
+    expect(withoutHook.map((slot) => slot.build)).toContain('seq_tail')
+    expect(withHook.map((slot) => slot.build)).not.toContain('seq_tail')
+
+    const book = bookFor('chopin', globals.key)
+    for (let slotIndex = 0; slotIndex < withHook.length; slotIndex++) {
+      const prior = slotIndex * 4
+      const op = {
+        op: 'phrase' as const,
+        style: 'chopin' as const,
+        brief: true,
+        globals,
+        barCount: 16 as const,
+        slotIndex,
+        chords: Array.from({ length: prior }, () => 'i' as const),
+        contours: Array.from({ length: prior }, () => 'arch' as const),
+      }
+      expect(parseOp(op)).toMatchObject({ slotIndex })
+      const request = buildRequest(op, 'jev-latest')
+      const criteria = request.questions.phrase.criteria as Record<string, string>
+      const catalogIds = phraseOptions(book, withHook[slotIndex]).map((entry) => entry.id).sort()
+      expect(Object.keys(criteria).sort()).toEqual(catalogIds)
+
+      if (withoutHook[slotIndex].build === 'seq_tail' && withHook[slotIndex].build !== 'seq_tail') {
+        expect(phraseOptions(book, withoutHook[slotIndex]).some((entry) => entry.id.startsWith('st:'))).toBe(true)
+        expect(Object.keys(criteria).some((id) => id.startsWith('st:'))).toBe(false)
+      }
+      for (const id of Object.keys(criteria)) {
+        expect(() => expandPhrase(id, book, withHook[slotIndex])).not.toThrow()
+      }
+    }
+  })
+
 })

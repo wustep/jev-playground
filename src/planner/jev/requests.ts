@@ -81,6 +81,7 @@ import {
   OPENINGS,
   defaultPhrasing,
   defaultHookBars,
+  resolveHookBars,
   PlanValidationError,
   parseBarPlan,
   parseGlobals,
@@ -330,7 +331,9 @@ const describeChord = (chord: ChordId, chord2: ChordId | null | undefined) =>
   `${chord} — ${CHORDS[chord]}` + (chord2 ? `; second half of the bar: ${chord2} — ${CHORDS[chord2]}` : '')
 
 function phraseRequest(op: Extract<JevOp, { op: 'phrase' }>, model: string): SystemOneRequest {
-  const slots = formSlots(op.globals.form, op.barCount)
+  // Must match JevPlanner: hookBars=8 reshapes 16-bar singing forms, so the
+  // Choice catalog and the client's expandPhrase table stay the same set.
+  const slots = formSlots(op.globals.form, op.barCount, resolveHookBars(op.globals))
   const slot = slots[op.slotIndex]
   const start = op.slotIndex * 4
   const priorSlots = slots.slice(0, op.slotIndex).map((earlier, s) => ({
@@ -610,7 +613,7 @@ export function parseOp(raw: unknown): JevOp {
       if (typeof barCount !== 'number' || !(BAR_COUNT_VALUES as readonly number[]).includes(barCount)) {
         throw new PlanValidationError(`op.barCount: expected ${BAR_COUNT_VALUES.join(', ')}`)
       }
-      const slots = formSlots(globals.form, barCount as BarCount)
+      const slots = formSlots(globals.form, barCount as BarCount, resolveHookBars(globals))
       const slotIndex = obj.slotIndex
       if (typeof slotIndex !== 'number' || !Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) {
         throw new PlanValidationError('op.slotIndex: out of range')
