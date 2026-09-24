@@ -31,7 +31,7 @@ import {
   type StyleMatchScore,
 } from '../plan/schema'
 import { BARS_PER_PHRASE, barPositions, formSlots, type BarPosition, type BarRole, type PhraseSlot } from '../plan/phrase'
-import { bookFor } from '../plan/harmonyPhrases'
+import { approachesInto, bookFor, splitBarOf } from '../plan/harmonyPhrases'
 import { rootDegree } from '../render/harmony'
 import { STYLE_PROFILES, styleVocabulary, type HarmonyBook, type StylePriors, type StyleProfile, type Variant, type Weights } from '../plan/styles'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
@@ -290,12 +290,10 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], positi
   // I6/4–V), so cadences move at the pace of the repertoire, not the barline.
   const seconds: (ChordId | undefined)[] = chords.map(() => undefined)
   slots.forEach((slot, s) => {
-    if (!book.splits.length) return
-    // A half cadence splits its own bar (I6/4 | V); a phrase that closes, or runs on, splits the bar before its arrival.
-    const at = slot.end === 'half' ? s * 4 + 3 : s * 4 + 2
+    const at = splitBarOf(slot, s)
     if (at >= end) return
     const arrival = chords[at]
-    const options = book.splits.filter(([approach, target]) => target === arrival && approach !== chords[at - 1])
+    const options = approachesInto(book, chords, at)
     if (!options.length || (sample && random() >= 0.7)) return
     const [approach] = sample ? options[Math.floor(random() * options.length)] : options[0]
     candidates[at] = [...new Set([approach, ...options.map(([first]) => first), arrival])]

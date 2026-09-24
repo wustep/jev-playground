@@ -8,7 +8,7 @@
 // Imported by the /api/jev serverless chain → explicit `.js` extensions.
 
 import { CHORDS, PlanValidationError, type BarCount, type ChordId, type KeyId, type PlanGlobals, type StyleId } from './schema.js'
-import { formSlots, type PhraseEnd, type PhraseSlot } from './phrase.js'
+import { BARS_PER_PHRASE, formSlots, type PhraseEnd, type PhraseSlot } from './phrase.js'
 import { STYLE_PROFILES, type HarmonyBook } from './styles.js'
 
 export const PHRASE_ENDS: Record<PhraseEnd, string> = {
@@ -169,8 +169,22 @@ export function withPhraseNovelty(probabilities: Record<string, number>, previou
 }
 
 /**
+ * The bar where slot `slotIndex` takes two harmonies: a half cadence splits
+ * its own last bar (I6/4 | V); a phrase that closes, or runs on, splits the
+ * bar before its arrival (ii6/5–V7 | I).
+ */
+export const splitBarOf = (slot: PhraseSlot, slotIndex: number) => slotIndex * BARS_PER_PHRASE + (slot.end === 'half' ? 3 : 2)
+
+/** The book's approaches into the chord at `at` — never one that restates the bar before. */
+export function approachesInto(book: HarmonyBook, chords: readonly ChordId[], at: number): readonly (readonly [ChordId, ChordId])[] {
+  return book.splits.filter(([approach, target]) => target === chords[at] && approach !== chords[at - 1])
+}
+
+/**
  * Cadence ornament of the harmony book: the bar that arrives on a split's
- * target takes the approach in its first half. Same rule the heuristic uses.
+ * target takes the approach in its first half. The heuristic stub applies
+ * the same `splitBarOf` / `approachesInto` rule, choosing among approaches
+ * by its own sampling policy.
  */
 export function applyBookSplits(
   chords: readonly ChordId[],
@@ -179,17 +193,14 @@ export function applyBookSplits(
 ): { chords: ChordId[]; seconds: (ChordId | undefined)[] } {
   const next = [...chords]
   const seconds: (ChordId | undefined)[] = next.map(() => undefined)
-  if (!book.splits.length) return { chords: next, seconds }
   const end = next.length - 1
   slots.forEach((slot, s) => {
-    const at = slot.end === 'half' ? s * 4 + 3 : s * 4 + 2
-    if (at >= end || at < 0) return
-    const arrival = next[at]
-    const options = book.splits.filter(([approach, target]) => target === arrival && approach !== next[at - 1])
+    const at = splitBarOf(slot, s)
+    if (at >= end) return
+    const options = approachesInto(book, next, at)
     if (!options.length) return
-    const [approach] = options[0]
-    next[at] = approach
-    seconds[at] = arrival
+    seconds[at] = next[at]
+    next[at] = options[0][0]
   })
   return { chords: next, seconds }
 }
