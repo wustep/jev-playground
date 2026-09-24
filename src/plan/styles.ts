@@ -1277,7 +1277,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { sentence: 15, arch: 25, chain: 60 },
           meter: { three_four: 40, four_four: 40, six_eight: 20 },
           register: { low: 20, mid: 15, high: 65 },
-          motion: { walking: 15, flowing: 35, florid: 50 },
+          motion: { walking: 10, flowing: 30, florid: 60 },
           accompaniment: { sustained: 35, broken: 65 },
           tempo: { andante: 50, moderato: 30, adagio: 20 },
           dynamics: { p: 50, mp: 35, pp: 15 },
@@ -1285,7 +1285,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       },
       {
         name: 'singing',
-        weight: 24,
+        weight: 20,
         priors: {
           form: { period: 20, arch: 45, chain: 35 },
           register: { low: 30, mid: 70 },
@@ -1298,7 +1298,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       // The neo-soul side: a secondary flavour in his bios, mostly in production work.
       {
         name: 'groove',
-        weight: 20,
+        weight: 16,
         priors: {
           form: { period: 30, chain: 70 },
           meter: { four_four: 75, six_eight: 25 },
@@ -1310,13 +1310,18 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           dynamics: { mp: 50, p: 30, mf: 20 },
         },
       },
+      // His displacement lesson: continuous sixteenths regrouped 5+5+6 and
+      // 7+5+4, sixteen to the bar. "Wyoming" (local transcription) runs at
+      // 16.4 attacks a 4/4 bar. The one rhythmic fact from his own teaching,
+      // so it is not the rarest thing he plays.
       {
         name: 'perpetual',
-        weight: 16,
+        weight: 24,
         priors: {
           form: { arch: 30, chain: 70 },
+          meter: { four_four: 85, three_four: 15 },
           register: { mid: 20, high: 80 },
-          motion: { flowing: 25, florid: 75 },
+          motion: { flowing: 10, florid: 90 },
           accompaniment: { broken: 80, pulse: 20 },
           tempo: { moderato: 55, andante: 30, allegro: 15 },
           contour: { rise: 20, fall: 15, arch: 25, wave: 40 },
