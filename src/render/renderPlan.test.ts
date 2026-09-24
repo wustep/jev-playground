@@ -22,7 +22,7 @@ import { rng } from '../planner/pick'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { midiOf } from './pitch'
 import { renderPlan, timeline } from './renderPlan'
-import { enteringAfter, silenceUntil } from './melody'
+import { enteringAfter, fioritura, silenceUntil } from './melody'
 import { barPositions } from '../plan/phrase'
 import type { Score } from './score'
 
@@ -187,10 +187,11 @@ describe('the singing line', () => {
     expect(tail.start + tail.dur).toBe(score.meter.ticksPerBar)
   })
 
-  it('brings an earlier bar back when the form says the phrase returns', () => {
-    // period at 8 bars: bars 4-6 answer bars 0-2; bar 7 cadences fresh.
-    const score = renderPlan(
+  // period at 8 bars: bars 4-6 answer bars 0-2; bar 7 cadences fresh.
+  const period = (style: CompositionPlan['style']) =>
+    renderPlan(
       plan({
+        style,
         form: 'period',
         bars: [
           { chord: 'I', contour: 'arch' },
@@ -205,9 +206,45 @@ describe('the singing line', () => {
       }),
       3,
     )
+  const onsets = (notes: { start: number; pitches: string[] }[]) => notes.map((n) => `${n.start}:${midisOf([n])[0]}`)
+
+  it('brings an earlier bar back when the form says the phrase returns', () => {
+    const score = period('beethoven')
     const pitchesAt = (index: number) => midisOf(melody(score, index))
     expect(pitchesAt(4), 'the answer opens as the question did').toEqual(pitchesAt(0))
     expect(pitchesAt(7), 'but the cadence is written fresh, not quoted').not.toEqual(pitchesAt(3))
+  })
+
+  it('dresses the first answer where the style does, keeping every note of the tune', () => {
+    // Op. 9/2 answers its question at 12.5 attacks a bar against 7.25.
+    const score = period('chopin')
+    // Bar 7 is the climax, where the form lifts the tune a third on purpose.
+    for (const bar of [4, 5]) {
+      const question = melody(score, bar - 4)
+      const answer = melody(score, bar)
+      expect(answer.length, `bar ${bar + 1} is decorated, not cloned`).toBeGreaterThan(question.length)
+      // Every note of the question sounds again, on its own onset.
+      for (const heard of onsets(question)) expect(onsets(answer)).toContain(heard)
+    }
+  })
+})
+
+describe('fioritura', () => {
+  it('turns or runs into the next note, never striking a pitch twice', () => {
+    for (let count = 1; count <= 7; count++) {
+      for (const [from, to] of [[7, 7], [7, 8], [7, 9], [7, 4], [7, 12], [1, 0], [13, 14]]) {
+        const figure = fioritura(15, from, to, count)
+        expect(figure).toHaveLength(count)
+        const line = [from, ...figure, to]
+        for (let k = 1; k < line.length; k++) expect(line[k], `${from}→${to} in ${count}: ${line.join(' ')}`).not.toBe(line[k - 1])
+        // Away from the ends of the ladder, the last note steps into the next.
+        const edge = to === 0 || to === 14
+        if (!edge) expect(Math.abs(figure[count - 1] - to), `${from}→${to} in ${count}: ${line.join(' ')}`).toBe(1)
+        for (const rung of figure) expect(rung >= 0 && rung < 15).toBe(true)
+      }
+    }
+    // Three notes around one pitch is the textbook turn: above, on, below.
+    expect(fioritura(15, 7, 7, 3)).toEqual([8, 7, 6])
   })
 })
 

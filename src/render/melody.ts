@@ -20,7 +20,7 @@ import { REGISTER_RANGE, type CompositionPlan, type ContourId, type RegisterId }
 import { melodyRhythm } from './melodyRhythm'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 import type { Note } from './score'
-import { chordAt, note, type BarView, type Remembered, type Slot } from './voice'
+import { chordAt, note, type BarView, type Slot } from './voice'
 
 /** One finished bar of the tune. */
 export interface MelodyBar {
@@ -115,38 +115,82 @@ function transposeFigure(bar: BarView, pitches: readonly string[], semitones: nu
 }
 
 /**
- * The ornamented return: the recalled bar's arrivals land where they landed
- * before, and the slots between them are filled by step. The tune is
- * recognisable and yet has more to say — which is what a varied return is.
+ * `count` scale steps leading from rung `from` into rung `to`: a turn when
+ * there is time to spare, a run when there is not, and never a pitch struck
+ * twice. The last step sits a step from `to`, so the next note arrives rather
+ * than repeats. Returned as rung indices in [0, size).
  */
-function decorate(bar: BarView, source: Remembered, slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): string[] {
+export function fioritura(size: number, from: number, to: number, count: number): number[] {
+  const inRange = (i: number) => i >= 0 && i < size
+  const finishes = [to + 1, to - 1].filter(inRange)
+  if (!finishes.length) return Array.from({ length: count }, () => from)
+  const distance = (i: number) => Math.min(...finishes.map((f) => Math.abs(i - f)))
+  const reachable = (i: number, left: number) => distance(i) <= left && (left - distance(i)) % 2 === 0
+  const out: number[] = []
+  let at = from
+  for (let k = 0; k < count; k++) {
+    const left = count - k - 1
+    const steps = [at + 1, at - 1].filter((i) => inRange(i) && reachable(i, left))
+    let next: number
+    if (steps.length) {
+      // With time to spare a figure opens away from its goal, upper
+      // neighbour first, as a turn does; without, it heads in, closing a
+      // turn on the side it has not yet touched.
+      const spare = steps.filter((i) => left > distance(i))
+      const opened = out.length ? Math.sign(out[0] - from) : 0
+      next = spare.length
+        ? spare.sort((a, b) => Math.abs(b - to) - Math.abs(a - to) || b - a)[0]
+        : steps.sort((a, b) => distance(a) - distance(b) || Math.abs(a - to) - Math.abs(b - to) || (opened > 0 ? a - b : b - a))[0]
+    } else {
+      // No step works: leap to the nearest note from which one does.
+      let best = -1
+      for (let i = 0; i < size; i++) {
+        if (i === at || !reachable(i, left)) continue
+        if (best < 0 || Math.abs(i - at) < Math.abs(best - at) || (Math.abs(i - at) === Math.abs(best - at) && i > best)) best = i
+      }
+      // At the edge of the ladder even that can fail; then any neighbour
+      // that is neither this note nor, on the last step, the next one.
+      if (best < 0) best = [at + 1, at - 1, at + 2, at - 2].find((i) => inRange(i) && (left > 0 || i !== to)) ?? at
+      next = best
+    }
+    out.push(next)
+    at = next
+  }
+  return out
+}
+
+/**
+ * The dressed return. Every note of the tune sounds where it sounded before;
+ * the quick notes the rhythm split off behind them (see `ornamentRhythm`)
+ * turn around each note or run into the next. The tune is heard whole, and
+ * the decoration is only ever between its notes.
+ *
+ * An earlier version re-derived the weak notes by interpolating between the
+ * strong ones. That lost half the tune, and rounding small steps to no step
+ * dressed a return in pitches struck twice (E♭ E♭ F F G G).
+ */
+function dress(bar: BarView, tune: readonly string[], tuneSlots: readonly Slot[], slots: readonly Slot[], lo: number, hi: number): string[] {
   const rungs = ladder(bar.scale, lo, hi)
-  if (!rungs.length) return fitTo(source.pitches, slots.length)
-  // Where did the source bar arrive, and when?
-  const arrivals = source.slots
-    .map((slot, k) => ({ tick: slot.start, pitch: source.pitches[k] }))
-    .filter((entry, k) => entry.pitch && (k === 0 || isStrong(source.slots[k])))
-  if (!arrivals.length) return fitTo(source.pitches, slots.length)
+  if (!rungs.length || !tune.length) return fitTo(tune, slots.length)
+  const own = new Map(tuneSlots.map((slot, k) => [slot.start, k]))
   const out: string[] = []
-  for (const slot of slots) {
-    // The arrival at or before this slot, and the next one, to step between.
-    let at = 0
-    while (at + 1 < arrivals.length && arrivals[at + 1].tick <= slot.start) at++
-    const here = arrivals[at]
-    const next = arrivals[at + 1]
-    if (slot.start === here.tick || !next) {
-      out.push(here.pitch)
+  let k = 0
+  for (let i = 0; i < slots.length; ) {
+    const mine = own.get(slots[i].start)
+    if (mine !== undefined) {
+      k = mine
+      out.push(tune[k])
+      i++
       continue
     }
-    const from = nearestIndex(rungs, midiOf(here.pitch))
-    const to = nearestIndex(rungs, midiOf(next.pitch))
-    const span = Math.max(1, next.tick - here.tick)
-    const t = (slot.start - here.tick) / span
-    // Between two arrivals, walk; where they are the same note, turn around it.
-    const step = from === to ? (t < 0.5 ? 1 : -1) : Math.round((to - from) * t)
-    out.push(rungs[clamp(from + step, 0, rungs.length - 1)])
+    let end = i
+    while (end < slots.length && !own.has(slots[end].start)) end++
+    const from = nearestIndex(rungs, midiOf(tune[k]))
+    const to = nearestIndex(rungs, midiOf(tune[k + 1] ?? tune[k]))
+    out.push(...fioritura(rungs.length, from, to, end - i).map((rung) => rungs[rung]))
+    i = end
   }
-  return reconcile(bar, out, slots, isStrong, lo, hi)
+  return out
 }
 
 /**
@@ -198,19 +242,19 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
   let pitches: string[]
 
   if (source && source.pitches.length) {
+    // The tune as it comes back: the source's notes on the source's onsets,
+    // moved onto this bar's harmony — and, where the return is dressed,
+    // decorated between them.
     const related = source.chord === bar.chord.id || commonTones(source.core, bar.chord.core) >= 2
-    if (bar.position.ornamentReturn) {
-      pitches = decorate(bar, source, slots, isStrong, lo, hi)
-    } else {
-      const fitted = fitTo(source.pitches, slots.length)
-      pitches = related ? reconcile(bar, fitted, slots, isStrong, lo, hi) : transposeFigure(bar, fitted, rootShift(source.root, bar.chord.root), slots, isStrong, lo, hi)
-    }
+    const shift = rootShift(source.root, bar.chord.root)
+    let tune = related ? reconcile(bar, source.pitches, source.slots, isStrong, lo, hi) : transposeFigure(bar, source.pitches, shift, source.slots, isStrong, lo, hi)
     if (bar.position.role === 'climax') {
       // The same figure reaching a third higher — if there is room above it.
-      const lifted = transposeFigure(bar, fitTo(source.pitches, slots.length), rootShift(source.root, bar.chord.root) + 4, slots, isStrong, lo, hi)
+      const lifted = transposeFigure(bar, source.pitches, shift + 4, source.slots, isStrong, lo, hi)
       const top = (p: readonly string[]) => Math.max(...p.map(midiOf))
-      if (lifted.length && top(lifted) > top(pitches)) pitches = lifted
+      if (lifted.length && top(lifted) > top(tune)) tune = lifted
     }
+    pitches = bar.ornament ? dress(bar, tune, source.slots, slots, lo, hi) : fitTo(tune, slots.length)
   } else {
     // A fresh bar: continue from where the line left off, drifting back toward
     // the middle of the register so eight rising bars do not climb off the staff.
@@ -330,7 +374,7 @@ export function writeMelody(plan: CompositionPlan, bars: readonly BarView[]): Me
       isLast: bar.isLast,
       rand: bar.rand,
       recall: recalled?.slots,
-      ornament: bar.position.ornamentReturn,
+      ornament: bar.ornament,
     })
     const pitches = melodyPitches(bar, slots, plan.register)
     const sung = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))

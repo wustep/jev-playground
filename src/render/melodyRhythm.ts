@@ -153,10 +153,20 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
 function ornamentRhythm(recall: readonly Slot[], meter: MeterInfo, motion: MotionId, rand: () => number): Slot[] {
   // A slow line has more room to decorate; a running one already runs.
   const share = motion === 'sustained' || motion === 'walking' ? 0.75 : motion === 'flowing' ? 0.55 : 0.3
+  const eligible = (slot: Slot, k: number) => k < recall.length - 1 && slot.dur >= 2
+  const chosen = recall.map((slot, k) => eligible(slot, k) && rand() < share)
+  // A dressed return that happens to decorate nothing is a clone. Where the
+  // draw left every note plain, the longest one that can turn does.
+  if (!chosen.some(Boolean)) {
+    let longest = -1
+    recall.forEach((slot, k) => {
+      if (eligible(slot, k) && (longest < 0 || slot.dur > recall[longest].dur)) longest = k
+    })
+    if (longest >= 0) chosen[longest] = true
+  }
   const out: Slot[] = []
   recall.forEach((slot, k) => {
-    const landing = k === recall.length - 1
-    if (landing || slot.dur < 2 || rand() >= share) {
+    if (!chosen[k]) {
       out.push(slot)
       return
     }

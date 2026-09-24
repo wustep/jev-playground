@@ -80,6 +80,12 @@ export interface BarView {
   count: number
   isLast: boolean
   position: BarPosition
+  /**
+   * Dress this bar's return with fioritura rather than restate it. The form
+   * asks for it on a late return; a style that decorates its first answer
+   * too (`StyleVoice.answers`) asks for it on every return.
+   */
+  ornament: boolean
   contour: ContourId
   chord: ResolvedChord
   /** The bar's second harmony, when it has one. */

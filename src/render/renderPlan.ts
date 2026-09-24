@@ -94,23 +94,27 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     clamp(base + shapeOffset(plan.dynamicShape, index, plan.bars.length, positions[index]?.role ?? 'continuation') + (ROLE_VELOCITY[positions[index]?.role ?? 'continuation'] ?? 0), 24, 118),
   )
 
-  const views: BarView[] = plan.bars.map((barPlan, index) => ({
-    index,
-    count: plan.bars.length,
-    isLast: index === plan.bars.length - 1,
-    position: positions[index] ?? { role: 'continuation', ornamentReturn: false, phraseFinal: false, phraseEnd: 'open', phrase: 0 },
-    contour: barPlan.contour,
-    chord: chords[index],
-    chord2: seconds[index],
-    next: chords[index + 1],
-    scale: scaleFor(key, plan.palette, chords[index]),
-    palette: plan.palette,
-    key,
-    meter,
-    velocity: velocities[index],
-    rand,
-    memory,
-  }))
+  const views: BarView[] = plan.bars.map((barPlan, index) => {
+    const position = positions[index] ?? { role: 'continuation', ornamentReturn: false, phraseFinal: false, phraseEnd: 'open', phrase: 0 }
+    return {
+      index,
+      count: plan.bars.length,
+      isLast: index === plan.bars.length - 1,
+      position,
+      ornament: position.returnsFrom !== undefined && (position.ornamentReturn || voice.answers === 'dressed'),
+      contour: barPlan.contour,
+      chord: chords[index],
+      chord2: seconds[index],
+      next: chords[index + 1],
+      scale: scaleFor(key, plan.palette, chords[index]),
+      palette: plan.palette,
+      key,
+      meter,
+      velocity: velocities[index],
+      rand,
+      memory,
+    }
+  })
 
   // 1. The tune, whole, first.
   const melody = writeMelody(plan, views)
