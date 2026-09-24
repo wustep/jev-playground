@@ -290,6 +290,20 @@ function pickupInto(bar: BarView, next: BarView | undefined, notes: Note[], plan
   return out
 }
 
+/**
+ * How long a fresh statement waits after the downbeat — only where the
+ * accompaniment owns it. An invention's second voice takes beat one and the
+ * subject answers a sixteenth later; a dance bass takes beat one and the tune
+ * comes in on the off-beat. Returns keep their source's entry, so they are
+ * never shifted here.
+ */
+function enteringAfter(plan: CompositionPlan, bar: BarView): number {
+  if (bar.position.role !== 'statement' || bar.position.returnsFrom !== undefined) return 0
+  if (plan.accompaniment === 'counterline') return 1
+  if (plan.accompaniment === 'stride' && plan.motion !== 'sustained') return Math.max(1, bar.meter.beatTicks / 2)
+  return 0
+}
+
 /** Write the whole singing line, bar by bar, before anything accompanies it. */
 export function writeMelody(plan: CompositionPlan, bars: readonly BarView[]): MelodyBar[] {
   return bars.map((bar, index) => {
@@ -302,7 +316,7 @@ export function writeMelody(plan: CompositionPlan, bars: readonly BarView[]): Me
       rand: bar.rand,
       recall: recalled?.slots,
       ornament: bar.position.ornamentReturn,
-      enterLate: plan.accompaniment === 'counterline' && bar.position.role === 'statement' && bar.position.returnsFrom === undefined,
+      enterLate: enteringAfter(plan, bar),
     })
     const pitches = melodyPitches(bar, slots, plan.register)
     const sung = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))

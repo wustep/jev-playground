@@ -1,6 +1,6 @@
 # Public-domain reference MIDI
 
-Keyboard/piano encodings for the **older dials only** (Bach, Beethoven, Chopin, Debussy). These are the pieces reverse-labelled in [`docs/fable-context/REFERENCE_PLAN_GAP.md`](../../fable-context/REFERENCE_PLAN_GAP.md) and sketched as closed `CompositionPlan` JSON under [`docs/fable-context/reference-plans/`](../../fable-context/reference-plans/).
+Keyboard/piano encodings for the **classical dials only** (Bach, Beethoven, Chopin, Debussy). These are the pieces reverse-labelled in [`docs/fable-context/REFERENCE_PLAN_GAP.md`](../../fable-context/REFERENCE_PLAN_GAP.md) and sketched as closed `CompositionPlan` JSON under [`docs/fable-context/reference-plans/`](../../fable-context/reference-plans/).
 
 **Why they are here.** So the gap study can point at a real, redistributable encoding instead of “Mutopia, analysed locally, gitignored.” Living-artist dials (Glass, Zimmer, Laufey, Fox) have **JSON only** — no MIDI in this folder, no commercial transcriptions anywhere in the repo.
 
@@ -18,8 +18,26 @@ All files below were fetched from [Mutopia](https://www.mutopiaproject.org/). Th
 | [`chopin-op28-4-prelude.mid`](chopin-op28-4-prelude.mid) | Chopin, Prelude Op. 28/4 | [Chop-28-4](https://www.mutopiaproject.org/ftp/ChopinFF/O28/Chop-28-4/Chop-28-4.mid) | Public Domain | Mutopia-2016/10/28-468 |
 | [`debussy-l66-arabesque-1.mid`](debussy-l66-arabesque-1.mid) | Debussy, *Première Arabesque* L. 66 | [debussy_Arabesque_1](https://www.mutopiaproject.org/ftp/DebussyC/L66/debussy_Arabesque_1/debussy_Arabesque_1.mid) | Public Domain | Mutopia-2011/10/25-1777 |
 | [`debussy-l75-clair-de-lune.mid`](debussy-l75-clair-de-lune.mid) | Debussy, *Clair de lune* (Suite bergamasque) L. 75 | [debussy_Ste_Bergamesq_Clair](https://www.mutopiaproject.org/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.mid) | Public Domain | Mutopia-2010/12/21-1778 |
+| [`chopin-op6-1-mazurka.mid`](chopin-op6-1-mazurka.mid) | Chopin, Mazurka Op. 6/1 | [Mazurka-Op6-No1](https://www.mutopiaproject.org/ftp/ChopinFF/O6/Mazurka-Op6-No1/Mazurka-Op6-No1.mid) | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | Mutopia-2009/06/23-1687 |
+| [`beethoven-woo59-fur-elise.mid`](beethoven-woo59-fur-elise.mid) | Beethoven, *Für Elise* WoO 59 | [fur_Elise_WoO59](https://www.mutopiaproject.org/ftp/BeethovenLv/WoO59/fur_Elise_WoO59/fur_Elise_WoO59.mid) | Public Domain | Mutopia-2015/08/18-931 |
+| [`debussy-l117-prelude-4.mid`](debussy-l117-prelude-4.mid) | Debussy, Préludes I/4 *Les sons et les parfums tournent dans l'air du soir* L. 117 | [L117-prel-4](https://www.mutopiaproject.org/ftp/DebussyC/L117/L117-prel-4/L117-prel-4.mid) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | Mutopia-2015/03/25-2002 |
+
+The last three were added so the variants with no reference had one: Chopin's dances (a quarter of Chopin draws), a second lyrical Beethoven, and Debussy's slow haze. Licences were read from each piece's Mutopia info page, not from the listing.
 
 `.gitignore` ignores `docs/ref-midi/**/*.mid` except this folder. Do not add Glass / Zimmer / Laufey / Fox MIDI here.
+
+## Living artists: acquisition status
+
+No living artist's music is in this repository, and none will be. Owned or
+locally held files go in `docs/ref-midi/local/`, which is gitignored; the
+harness uses them when present and skips them when absent.
+
+| Artist | What exists | Where | Status |
+| --- | --- | --- | --- |
+| Philip Glass | Étude No. 6, notation-software MIDI, 308 bars | local only | Measured locally (top voice 65.6, 6 attacks a 3/4 bar). Its own notes record it as byte-identical to a downloaded file, so its licence is unknown: analysis only, never shipped. Official material: Dunvagen Music Publishers. |
+| Elijah Fox | "Wyoming", MuseScore export of an owned score, 18 bars | local only | Measured locally (top voice 71.4, 16.4 attacks a bar). |
+| Laufey | Owned sheet-music PDFs only (thirteen songs) | not in repo | **Gap.** No MIDI. A hand transcription of one owned score into MuseScore would fill it, local only. |
+| Hans Zimmer | Nothing | — | **Gap.** Do not source film-score MIDI from download sites; licensed piano arrangements (e.g. Hal Leonard) could be transcribed, local only. |
 
 ## Hand / staff tracks
 
@@ -39,8 +57,16 @@ note-bearing track.
 
 The split is right for the files in this folder (checked against the `.ly`
 staves in the zoom-out after #48) and would not generalise to an arbitrary
-MIDI. Chopin Op. 9/2’s upper track still includes some inner / crossing
-notes; that overstates melody attacks slightly.
+MIDI.
+
+**The melody is the top voice of the upper staff, not the whole staff.** An
+upper-staff track often carries the tune *and* an inner accompaniment — Op. 13
+II's right hand plays its murmuring sixteenths under the tune. Counting every
+note-on made that tune look like 10.9 attacks a bar at MIDI 62; its top voice
+attacks 3.2 times a bar at 66.3. So an attack counts as melody only when
+nothing higher is still sounding over it (`topVoice`). Moonlight I is the
+known exception it cannot fix: the tune does not enter until bar 5, so its
+first bars' top line is the triplet figure.
 
 **Thematic start.** `ret4` / `ret8` skip intro/prelude bars that are not the
 theme. Pickup is aligned to the first accompaniment downbeat when the melody

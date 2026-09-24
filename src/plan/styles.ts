@@ -487,7 +487,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { period: 35, arch: 65 },
           key: { Bb_major: 18, Ab_major: 14, Db_major: 12, Eb_major: 10, F_major: 8, C_major: 6, Cs_minor: 10, B_minor: 8, Fs_minor: 8, G_minor: 6 },
           meter: { three_four: 85, six_eight: 10, four_four: 5 },
-          register: { mid: 35, high: 65 },
+          register: { mid: 60, high: 40 },
           motion: { walking: 40, flowing: 45, florid: 15 },
           accompaniment: { stride: 75, broken: 25 },
           tempo: { moderato: 40, andante: 30, allegro: 25, adagio: 5 },

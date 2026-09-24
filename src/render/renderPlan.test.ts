@@ -254,25 +254,27 @@ describe('the accompaniment', () => {
 
   it('changes the accompaniment without changing the tune', () => {
     const tuneOf = (score: Score) => score.bars.map((_, i) => melody(score, i).map((n) => `${n.start}:${n.dur}:${n.pitches}`).join()).join('/')
+    const pitchesOf = (score: Score) => score.bars.flatMap((_, i) => midisOf(melody(score, i))).slice(-20)
     const tunes = new Set<string>()
+    const lines = new Set<string>()
     const parts = new Set<string>()
     for (const accompaniment of ACCOMPANIMENT_IDS as readonly AccompanimentId[]) {
       const score = renderPlan(plan({ accompaniment }), 5)
-      if (accompaniment !== 'counterline') tunes.add(tuneOf(score))
+      // Patterns that do not own the downbeat leave the tune exactly as written.
+      if (accompaniment !== 'counterline' && accompaniment !== 'stride') tunes.add(tuneOf(score))
+      lines.add(pitchesOf(score).join())
       parts.add(score.bars.map((_, i) => midisOf(under(score, i)).join()).join('/'))
     }
     expect(tunes.size, 'what holds the tune up must not change the tune').toBe(1)
-    expect(parts.size, 'but it must change what holds it up').toBe(ACCOMPANIMENT_IDS.length)
+    expect(lines.size, 'and no pattern changes what the tune sings once it is in').toBe(1)
+    expect(parts.size, 'but each must change what holds it up').toBe(ACCOMPANIMENT_IDS.length)
   })
 
-  it('lets a second voice change only where the tune enters, not what it sings', () => {
-    const supported = renderPlan(plan({ accompaniment: 'broken' }), 5)
-    const duet = renderPlan(plan({ accompaniment: 'counterline' }), 5)
-    const pitches = (score: Score) => score.bars.flatMap((_, i) => midisOf(melody(score, i)))
-    expect(melody(duet, 0)[0].start).toBe(1)
-    expect(melody(supported, 0)[0].start).toBe(0)
-    // Same line after the entry; a shaved sixteenth may drop at most the first note.
-    expect(pitches(supported).slice(-20)).toEqual(pitches(duet).slice(-20))
+  it('lets a pattern that owns the downbeat move only where a fresh statement enters', () => {
+    const entryOf = (accompaniment: AccompanimentId) => melody(renderPlan(plan({ accompaniment }), 5), 0)[0].start
+    expect(entryOf('broken')).toBe(0)
+    expect(entryOf('counterline'), 'an invention answers a sixteenth late').toBe(1)
+    expect(entryOf('stride'), 'a dance tune comes in on the off-beat').toBe(2)
   })
 })
 
