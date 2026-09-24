@@ -259,10 +259,10 @@ describe('beams, ties, and system padding', () => {
 
   it('widens the grand-staff gap when bass climbs into the treble', () => {
     const quiet = systemPadding([
-      { index: 0, plan: { chord: 'I', role: 'statement', contour: 'arch' }, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['C3'], velocity: 64 }]], dynamic: 'mf' },
+      { index: 0, plan: { chord: 'I', contour: 'arch' }, role: 'statement' as const, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['C3'], velocity: 64 }]], dynamic: 'mf' },
     ])
     const crowded = systemPadding([
-      { index: 0, plan: { chord: 'I', role: 'statement', contour: 'arch' }, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['E4', 'F#4'], velocity: 64 }]], dynamic: 'mf' },
+      { index: 0, plan: { chord: 'I', contour: 'arch' }, role: 'statement' as const, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['E4', 'F#4'], velocity: 64 }]], dynamic: 'mf' },
     ])
     expect(quiet.gap).toBe(0)
     expect(crowded.gap).toBeGreaterThan(quiet.gap)
@@ -272,7 +272,8 @@ describe('beams, ties, and system padding', () => {
 function testBar(index: number, treble: Voice[], bass: Voice[] = [whole('C3')]): Bar {
   return {
     index,
-    plan: { chord: 'i', role: 'statement', contour: 'arch' },
+    plan: { chord: 'i', contour: 'arch' },
+    role: 'statement',
     chordSymbol: 'Fm',
     treble,
     bass,
@@ -282,7 +283,7 @@ function testBar(index: number, treble: Voice[], bass: Voice[] = [whole('C3')]):
 
 function testScore(bars: Bar[]): Score {
   return {
-    plan: { version: 1 } as Score['plan'],
+    plan: { version: 2 } as unknown as Score['plan'],
     seed: 1,
     keySignature: 'C',
     meter,
@@ -290,7 +291,6 @@ function testScore(bars: Bar[]): Score {
     bars,
     pedal: 'half',
     articulation: 1,
-    introBars: 0,
     ritardando: false,
   }
 }

@@ -18,7 +18,7 @@ const SUPPORTING: ReadonlySet<AccompanimentId> = new Set<AccompanimentId>(['sust
 /** Motions whose line has room to land and breathe between phrases. */
 const BREATHING: ReadonlySet<MotionId> = new Set<MotionId>(['sustained', 'walking', 'flowing'])
 const RETURNING_FORMS: ReadonlySet<FormId> = new Set<FormId>(['period', 'sentence', 'arch'])
-const SUMMIT_SHAPES: ReadonlySet<DynamicShapeId> = new Set<DynamicShapeId>(['late_surge', 'arch'])
+const SUMMIT_SHAPES: ReadonlySet<DynamicShapeId> = new Set<DynamicShapeId>(['late_surge', 'arch', 'build_then_drop'])
 
 /** A singing line with air in it, over something that supports rather than competes. */
 export function breathCueHigh(plan: CompositionPlan): boolean {
@@ -31,21 +31,30 @@ export function returnCueHigh(plan: CompositionPlan): boolean {
   return barPositions(plan.form, plan.bars.length as BarCount).some((position) => position.returnsFrom !== undefined)
 }
 
-/** The return arrives in new clothes rather than as a literal repeat. */
+/**
+ * The return arrives in new clothes rather than as a literal repeat.
+ *
+ * Gated on there being a singing line at all: an ornamented return means
+ * nothing if no voice is the tune, and without this gate a two-voice
+ * counterpoint study in period form scored as high as an actual song.
+ */
 export function arrangementCueHigh(plan: CompositionPlan): boolean {
-  const positions = barPositions(plan.form, plan.bars.length as BarCount)
-  return positions.some((position) => position.returnsFrom !== undefined && position.ornamentReturn)
+  if (!breathCueHigh(plan)) return false
+  return barPositions(plan.form, plan.bars.length as BarCount).some((position) => position.returnsFrom !== undefined && position.ornamentReturn)
 }
 
-/** One late summit: a single climax in the last third, or a shape that peaks past the midpoint. */
+/**
+ * One late summit the listener can actually hear.
+ *
+ * Climax placement is derived now, and always lands in the last third — so
+ * "is there a late climax" no longer discriminates between plans and is not
+ * worth asking. What still varies is whether the dynamics rise to meet it.
+ */
 export function summitCueHigh(plan: CompositionPlan): boolean {
+  if (!SUMMIT_SHAPES.has(plan.dynamicShape)) return false
   const n = plan.bars.length
-  const positions = barPositions(plan.form, n as BarCount)
-  const climaxes = positions.map((position, i) => (position.role === 'climax' ? i : -1)).filter((i) => i >= 0)
-  const lastThirdStart = Math.floor((n * 2) / 3)
-  if (climaxes.length === 1 && climaxes[0] >= lastThirdStart) return true
-  if (!SUMMIT_SHAPES.has(plan.dynamicShape) || climaxes.length === 0) return false
-  return climaxes[climaxes.length - 1] > n / 2
+  const climaxes = barPositions(plan.form, n as BarCount).map((position, i) => (position.role === 'climax' ? i : -1)).filter((i) => i >= 0)
+  return climaxes.length === 1 && climaxes[0] >= Math.floor((n * 2) / 3)
 }
 
 export function songQualityCues(plan: CompositionPlan): number {

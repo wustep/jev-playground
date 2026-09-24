@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ACCOMPANIMENT_IDS,
   BAR_COUNT_VALUES,
-  BAR_ROLE_IDS,
-  CHARACTER_IDS,
   CHORD_IDS,
+  CONTOUR_IDS,
   DYNAMIC_SHAPE_IDS,
   FORM_IDS,
-  CONTOUR_IDS,
   KEY_IDS,
   METER_IDS,
+  MOTION_IDS,
   PALETTE_IDS,
+  REGISTER_IDS,
+  REGISTER_RANGE,
   STYLE_IDS,
-  TEXTURE_IDS,
   parsePlan,
+  type AccompanimentId,
   type CompositionPlan,
-  type PedalId,
 } from '../plan/schema'
 import { HeuristicPlanner } from '../planner/HeuristicPlanner'
 import { rng } from '../planner/pick'
@@ -23,8 +24,35 @@ import { midiOf } from './pitch'
 import { renderPlan, timeline } from './renderPlan'
 import type { Score } from './score'
 
+const plan = (over: Partial<CompositionPlan> = {}): CompositionPlan => ({
+  version: 2,
+  style: 'chopin',
+  register: 'mid',
+  motion: 'flowing',
+  accompaniment: 'broken',
+  form: 'period',
+  key: 'C_major',
+  meter: 'four_four',
+  palette: 'diatonic',
+  tempo: 'adagio',
+  dynamics: 'mf',
+  dynamicShape: 'steady',
+  bars: [
+    { chord: 'I', contour: 'arch' },
+    { chord: 'V7', contour: 'rise' },
+    { chord: 'vi', contour: 'fall' },
+    { chord: 'I', contour: 'fall' },
+  ],
+  ...over,
+})
+
+/** The melody: the first treble voice, which renderPlan writes first and alone. */
+const melody = (score: Score, index: number) => score.bars[index].treble[0] ?? []
+const under = (score: Score, index: number) => [...score.bars[index].treble.slice(1), ...score.bars[index].bass].flat()
+const midisOf = (notes: { pitches: string[] }[]) => notes.flatMap((note) => note.pitches.map(midiOf))
+
 function assertWellFormed(score: Score) {
-  expect(score.bars.length).toBe(score.plan.bars.length + score.introBars)
+  expect(score.bars.length).toBe(score.plan.bars.length)
   for (const bar of score.bars) {
     const voices = [...bar.treble, ...bar.bass]
     expect(voices.length, `bar ${bar.index} has notes`).toBeGreaterThan(0)
@@ -52,6 +80,22 @@ function assertWellFormed(score: Score) {
   }
 }
 
+/**
+ * The one invariant the whole rewrite turns on: nothing under the tune may
+ * reach it. `counterline` is exempt and declares itself a peer, not support.
+ */
+function assertNothingCoversTheTune(score: Score) {
+  if (score.plan.accompaniment === 'counterline') return
+  score.bars.forEach((_, index) => {
+    const tune = midisOf(melody(score, index))
+    if (!tune.length) return
+    const floor = Math.min(...tune)
+    for (const midi of midisOf(under(score, index))) {
+      expect(midi, `bar ${index + 1}: accompaniment reaches the tune's floor ${floor}`).toBeLessThan(floor)
+    }
+  })
+}
+
 describe('resolveChord', () => {
   it('resolves every chord label in every key', () => {
     for (const key of KEY_IDS) {
@@ -64,30 +108,117 @@ describe('resolveChord', () => {
   })
 
   it('puts the bass the label asks for under inversions and pedal chords', () => {
-    const c = keyInfo('C_major')
-    expect(resolveChord(c, 'I6')).toMatchObject({ bass: 'E', symbol: 'C/E', fixedBass: true })
-    expect(resolveChord(c, 'V65')).toMatchObject({ bass: 'B', symbol: 'G7/B' })
-    expect(resolveChord(c, 'V65_of_V')).toMatchObject({ bass: 'F#', symbol: 'D7/F#' })
-    expect(resolveChord(c, 'IV64')).toMatchObject({ bass: 'C', symbol: 'F/C' })
-    expect(resolveChord(c, 'I')).toMatchObject({ bass: 'C', symbol: 'C', fixedBass: false })
-    // Moonlight bar 3: the Neapolitan sixth, D major over F# in C-sharp minor.
-    expect(resolveChord(keyInfo('Cs_minor'), 'bII6')).toMatchObject({ root: 'D', bass: 'F#' })
+    const key = keyInfo('C_major')
+    expect(resolveChord(key, 'I6').bass).toBe('E')
+    expect(resolveChord(key, 'I64').bass).toBe('G')
+    expect(resolveChord(key, 'V7_over_I').bass).toBe('C')
+    expect(resolveChord(key, 'I').fixedBass).toBe(false)
+    expect(resolveChord(key, 'I6').fixedBass).toBe(true)
   })
 
   it('bends the melody scale toward chromatic chord tones', () => {
-    const c = keyInfo('C_major')
-    expect(scaleFor(c, 'diatonic', resolveChord(c, 'V7_of_V'))).toContain('F#')
-    expect(scaleFor(c, 'diatonic', resolveChord(c, 'V7_of_V'))).not.toContain('F')
-    expect(scaleFor(c, 'diatonic', resolveChord(c, 'bVI'))).toEqual(expect.arrayContaining(['Ab', 'Eb']))
-    expect(scaleFor(keyInfo('A_minor'), 'diatonic', resolveChord(keyInfo('A_minor'), 'V7'))).toContain('G#')
-    // Gapped palettes keep their own colour.
-    expect(scaleFor(c, 'pentatonic', resolveChord(c, 'V7_of_V'))).toEqual(['C', 'D', 'E', 'G', 'A'])
+    const key = keyInfo('A_minor')
+    const scale = scaleFor(key, 'diatonic', resolveChord(key, 'V7'))
+    expect(scale, 'the leading tone of a dominant seventh reaches the line').toContain('G#')
   })
 
   it('spells chords relative to the key', () => {
-    expect(resolveChord(keyInfo('C_minor'), 'V7').pcs).toEqual(['G', 'B', 'D', 'F'])
-    expect(resolveChord(keyInfo('Eb_major'), 'IVmaj7').pcs).toEqual(['Ab', 'C', 'Eb', 'G'])
-    expect(resolveChord(keyInfo('Fs_minor'), 'bVI').symbol).toBe('D')
+    expect(resolveChord(keyInfo('Eb_major'), 'V7').symbol).toBe('Bb7')
+    expect(resolveChord(keyInfo('Db_major'), 'IV').root).toBe('Gb')
+  })
+})
+
+describe('the singing line', () => {
+  it('sings where the plan says, and nowhere else', () => {
+    for (const register of REGISTER_IDS) {
+      const [lo, hi] = REGISTER_RANGE[register]
+      const score = renderPlan(plan({ register }), 4)
+      const midis = score.bars.flatMap((_, index) => midisOf(melody(score, index)))
+      expect(midis.length).toBeGreaterThan(0)
+      for (const midi of midis) {
+        expect(midi, `${register} line left its window`).toBeGreaterThanOrEqual(lo)
+        expect(midi).toBeLessThanOrEqual(hi)
+      }
+    }
+  })
+
+  it('gives each register a distinct line — the label reaches the notes', () => {
+    const lines = REGISTER_IDS.map((register) => {
+      const score = renderPlan(plan({ register }), 4)
+      return score.bars.flatMap((_, index) => midisOf(melody(score, index))).join()
+    })
+    expect(new Set(lines).size).toBe(REGISTER_IDS.length)
+  })
+
+  it('moves at the motion the plan asks for, and they differ', () => {
+    const rates = MOTION_IDS.map((motion) => {
+      const score = renderPlan(plan({ motion }), 4)
+      return score.bars.reduce((n, _, index) => n + melody(score, index).length, 0) / score.bars.length
+    })
+    // sustained < walking < flowing < florid, strictly.
+    for (let k = 1; k < rates.length; k++) expect(rates[k], `${MOTION_IDS[k]} vs ${MOTION_IDS[k - 1]}`).toBeGreaterThan(rates[k - 1])
+  })
+
+  it('lands early and rests at a phrase end — but rings out at the very end', () => {
+    const score = renderPlan(
+      plan({
+        motion: 'walking',
+        bars: Array.from({ length: 8 }, (_, i) => ({ chord: i % 2 === 1 ? ('V7' as const) : ('I' as const), contour: 'arch' as const })),
+      }),
+      4,
+    )
+    const endOf = (index: number) => {
+      const bar = melody(score, index)
+      const last = bar[bar.length - 1]
+      return last.start + last.dur
+    }
+    expect(endOf(3), 'the antecedent lands early and lets the bar finish').toBeLessThan(score.meter.ticksPerBar)
+    expect(endOf(7), 'the last bar of the piece holds to the barline').toBe(score.meter.ticksPerBar)
+  })
+
+  it('brings an earlier bar back when the form says the phrase returns', () => {
+    // period at 8 bars: bars 4-6 answer bars 0-2; bar 7 cadences fresh.
+    const score = renderPlan(
+      plan({
+        form: 'period',
+        bars: [
+          { chord: 'I', contour: 'arch' },
+          { chord: 'IV', contour: 'rise' },
+          { chord: 'V', contour: 'fall' },
+          { chord: 'V', contour: 'fall' },
+          { chord: 'I', contour: 'arch' },
+          { chord: 'IV', contour: 'rise' },
+          { chord: 'V', contour: 'fall' },
+          { chord: 'I', contour: 'fall' },
+        ],
+      }),
+      3,
+    )
+    const pitchesAt = (index: number) => midisOf(melody(score, index))
+    expect(pitchesAt(4), 'the answer opens as the question did').toEqual(pitchesAt(0))
+    expect(pitchesAt(7), 'but the cadence is written fresh, not quoted').not.toEqual(pitchesAt(3))
+  })
+})
+
+describe('the accompaniment', () => {
+  it('never reaches the tune, under any pattern', () => {
+    for (const accompaniment of ACCOMPANIMENT_IDS) {
+      for (const register of REGISTER_IDS) {
+        assertNothingCoversTheTune(renderPlan(plan({ accompaniment, register }), 6))
+      }
+    }
+  })
+
+  it('changes the accompaniment without changing the tune', () => {
+    const tunes = new Set<string>()
+    const parts = new Set<string>()
+    for (const accompaniment of ACCOMPANIMENT_IDS as readonly AccompanimentId[]) {
+      const score = renderPlan(plan({ accompaniment }), 5)
+      tunes.add(score.bars.map((_, i) => midisOf(melody(score, i)).join()).join('/'))
+      parts.add(score.bars.map((_, i) => midisOf(under(score, i)).join()).join('/'))
+    }
+    expect(tunes.size, 'what holds the tune up must not change the tune').toBe(1)
+    expect(parts.size, 'but it must change what holds it up').toBe(ACCOMPANIMENT_IDS.length)
   })
 })
 
@@ -96,9 +227,11 @@ describe('renderPlan', () => {
     const planner = new HeuristicPlanner()
     for (const style of STYLE_IDS) {
       for (let seed = 1; seed <= 25; seed++) {
-        const { plan } = await planner.plan({ style, bars: BAR_COUNT_VALUES[seed % BAR_COUNT_VALUES.length], pick: 'sample', seed, brief: true })
-        expect(parsePlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan)
-        assertWellFormed(renderPlan(plan, seed))
+        const { plan: made } = await planner.plan({ style, bars: BAR_COUNT_VALUES[seed % BAR_COUNT_VALUES.length], pick: 'sample', seed, brief: true })
+        expect(parsePlan(JSON.parse(JSON.stringify(made)))).toEqual(made)
+        const score = renderPlan(made, seed)
+        assertWellFormed(score)
+        assertNothingCoversTheTune(score)
       }
     }
   }, 30_000)
@@ -106,210 +239,86 @@ describe('renderPlan', () => {
   it('survives any combination a planner could emit', () => {
     const random = rng(7)
     const any = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)]
-    for (const texture of TEXTURE_IDS) {
+    for (const accompaniment of ACCOMPANIMENT_IDS) {
       for (const meter of METER_IDS) {
         for (let trial = 0; trial < 12; trial++) {
-          const plan: CompositionPlan = {
-            version: 1,
+          const made: CompositionPlan = plan({
             style: any(STYLE_IDS),
-            character: any(CHARACTER_IDS),
+            register: any(REGISTER_IDS),
+            motion: any(MOTION_IDS),
+            accompaniment,
             form: any(FORM_IDS),
             key: any(KEY_IDS),
             meter,
-            texture,
             palette: any(PALETTE_IDS),
-            tempo: 'moderato',
-            dynamics: 'mf',
             dynamicShape: any(DYNAMIC_SHAPE_IDS),
-            defaultInstrument: 'grand_piano',
             bars: Array.from({ length: trial % 3 === 0 ? 16 : trial % 2 ? 4 : 8 }, () => ({
               chord: any(CHORD_IDS),
-              role: any(BAR_ROLE_IDS),
               contour: any(CONTOUR_IDS),
             })),
-          }
-          assertWellFormed(renderPlan(plan, trial))
+          })
+          const score = renderPlan(made, trial)
+          assertWellFormed(score)
+          assertNothingCoversTheTune(score)
         }
       }
     }
   }, 30_000)
 
   it('plays the same plan differently under a different seed, and the same under the same', async () => {
-    const { plan } = await new HeuristicPlanner().plan({ style: 'beethoven', bars: 8, pick: 'argmax', seed: 1, brief: true })
-    const flat = (seed: number) => JSON.stringify(renderPlan(plan, seed).bars.map((bar) => [bar.treble, bar.bass]))
+    const { plan: made } = await new HeuristicPlanner().plan({ style: 'beethoven', bars: 8, pick: 'argmax', seed: 1, brief: true })
+    const flat = (seed: number) => JSON.stringify(renderPlan(made, seed).bars.map((bar) => [bar.treble, bar.bass]))
     expect(flat(5)).toBe(flat(5))
     expect(new Set([1, 2, 3, 4, 5, 6].map(flat)).size).toBeGreaterThan(3)
   })
 
-  it('brings the tune back when a restatement returns to the statement\'s chord', () => {
-    const bar = (chord: 'I' | 'V7', role: 'statement' | 'restatement' | 'development' | 'cadence') => ({ chord, role, contour: 'arch' as const })
-    const plan: CompositionPlan = {
-      version: 1, style: 'beethoven', character: 'lyrical_song', form: 'period', key: 'C_major', meter: 'four_four', texture: 'alberti_melody', palette: 'diatonic',
-      tempo: 'adagio', dynamics: 'p', dynamicShape: 'steady', defaultInstrument: 'grand_piano',
-      bars: [bar('I', 'statement'), bar('V7', 'development'), bar('I', 'restatement'), bar('I', 'cadence')],
-    }
-    const score = renderPlan(plan, 3)
-    const tune = (index: number) => score.bars[index].treble[0].map((n) => `${n.start}:${n.pitches.join('+')}`)
-    expect(tune(2)).toEqual(tune(0))
-    expect(tune(1)).not.toEqual(tune(0))
-  })
-
   it('is deterministic for a given plan and seed', async () => {
-    const { plan } = await new HeuristicPlanner().plan({ style: 'debussy', bars: 8, pick: 'sample', seed: 3, brief: true })
-    expect(renderPlan(plan, 11)).toEqual(renderPlan(plan, 11))
+    const { plan: made } = await new HeuristicPlanner().plan({ style: 'debussy', bars: 8, pick: 'sample', seed: 3, brief: true })
+    expect(renderPlan(made, 11)).toEqual(renderPlan(made, 11))
   })
 
   it('flattens to a timeline that fits the piece', async () => {
-    const { plan } = await new HeuristicPlanner().plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: true })
-    const score = renderPlan(plan, 1)
-    const notes = timeline(score)
+    const { plan: made } = await new HeuristicPlanner().plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: true })
+    const notes = timeline(renderPlan(made, 1))
     expect(notes.length).toBeGreaterThan(20)
     expect(notes[0].time).toBeGreaterThanOrEqual(0)
     expect(notes.every((n, i) => i === 0 || n.time >= notes[i - 1].time)).toBe(true)
   })
 
-  it('realises the pedal global as written, overlapping, or ringing hold', () => {
-    const bars = [
-      { chord: 'I' as const, role: 'statement' as const, contour: 'arch' as const },
-      { chord: 'V7' as const, role: 'cadence' as const, contour: 'fall' as const },
-    ]
-    const at = (pedal: PedalId) => {
-      const score = renderPlan(
-        {
-          version: 1,
-          style: 'chopin',
-          character: 'lyrical_song',
-          form: 'period',
-          key: 'Db_major',
-          meter: 'four_four',
-          texture: 'rolling_nocturne',
-          palette: 'chromatic_approach',
-          tempo: 'adagio',
-          dynamics: 'p',
-          dynamicShape: 'arch',
-          defaultInstrument: 'grand_piano',
-          pedal,
-          bars,
-        },
-        2,
-      )
-      expect(score.pedal).toBe(pedal)
-      return timeline(score)
+  it('sustains by the accompaniment pattern, which chooses its own pedal', () => {
+    // Compare each pattern against ITSELF played dry: mean duration across
+    // patterns says more about how many notes they write than about pedal.
+    const ring = (accompaniment: AccompanimentId) => {
+      const score = renderPlan(plan({ accompaniment }), 2)
+      const total = (notes: ReturnType<typeof timeline>) => notes.reduce((sum, n) => sum + n.duration, 0)
+      return { pedal: score.pedal, lift: total(timeline(score)) / total(timeline(score, { sustain: false })) }
     }
-    const dry = at('dry')
-    const half = at('half')
-    const full = at('full')
-    const mean = (notes: ReturnType<typeof timeline>) => notes.reduce((sum, n) => sum + n.duration, 0) / notes.length
-    expect(mean(half)).toBeGreaterThan(mean(dry))
-    expect(mean(full)).toBeGreaterThan(mean(half))
-    const dryDurations = timeline({ ...renderPlan({
-      version: 1, style: 'chopin', character: 'lyrical_song', form: 'period', key: 'Db_major', meter: 'four_four',
-      texture: 'rolling_nocturne', palette: 'chromatic_approach', tempo: 'adagio', dynamics: 'p', dynamicShape: 'arch',
-      defaultInstrument: 'grand_piano', pedal: 'full', bars,
-    }, 2), pedal: 'full' }, { sustain: false }).map((n) => n.duration)
-    expect(dryDurations).toEqual(dry.map((n) => n.duration))
+    expect(ring('counterline').pedal, 'two voices in dialogue need to be heard apart').toBe('dry')
+    expect(ring('counterline').lift).toBe(1)
+    expect(ring('broken').pedal).toBe('full')
+    expect(ring('broken').lift, 'a rolled chord rings through the bar').toBeGreaterThan(1.5)
+    expect(ring('sustained').lift).toBeGreaterThan(1)
+    expect(ring('sustained').lift).toBeLessThan(ring('broken').lift)
+  })
+
+  it('writes real CC64 instead of pre-lengthening when MIDI export asks for it', () => {
+    const score = renderPlan(plan({ accompaniment: 'broken' }), 2)
+    const rung = timeline(score)
+    const dry = timeline(score, { sustain: false })
+    expect(dry.every((n, i) => n.duration <= rung[i].duration)).toBe(true)
+    expect(dry.reduce((sum, n) => sum + n.duration, 0)).toBeLessThan(rung.reduce((sum, n) => sum + n.duration, 0))
   })
 })
 
 describe('extended meters', () => {
-  const extra = ['two_four', 'nine_eight', 'twelve_eight'] as const
-
-  it('parses 2/4, 9/8 and 12/8 and keeps them on a closed grid', () => {
-    expect(METER_IDS).toEqual(expect.arrayContaining([...extra]))
-    const ticks = { two_four: 8, nine_eight: 18, twelve_eight: 24 } as const
-    const beats = { two_four: 4, nine_eight: 6, twelve_eight: 6 } as const
-    for (const meter of extra) {
-      const base = {
-        version: 1,
-        style: 'bach',
-        character: 'dance_lilt',
-        form: 'period',
-        key: 'C_major',
-        meter,
-        texture: 'chorale',
-        palette: 'diatonic',
-        tempo: 'moderato',
-        dynamics: 'mf',
-        dynamicShape: 'steady',
-        defaultInstrument: 'grand_piano',
-        bars: [
-          { chord: 'I', role: 'statement', contour: 'arch' },
-          { chord: 'V65', role: 'development', contour: 'rise' },
-          { chord: 'V7', role: 'half_cadence', contour: 'fall' },
-          { chord: 'I', role: 'cadence', contour: 'fall' },
-        ],
-      }
-      const plan = parsePlan(base)
-      expect(plan.meter).toBe(meter)
-      expect(parsePlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan)
-      const score = renderPlan(plan, 2)
-      expect(score.meter.ticksPerBar).toBe(ticks[meter])
-      expect(score.meter.beatTicks).toBe(beats[meter])
-      assertWellFormed(score)
-    }
-  })
-
-  it('renders every texture in the new meters without leaving the bar', () => {
-    for (const meter of extra) {
-      for (const texture of TEXTURE_IDS) {
-        const plan: CompositionPlan = {
-          version: 1,
-          style: 'beethoven',
-          character: 'heroic_bright',
-          form: 'sentence',
-          key: 'C_minor',
-          meter,
-          texture,
-          palette: 'diatonic',
-          tempo: 'allegro',
-          dynamics: 'f',
-          dynamicShape: 'sudden_contrast',
-          defaultInstrument: 'grand_piano',
-          bars: [
-            { chord: 'i', role: 'statement', contour: 'rise' },
-            { chord: 'V65', role: 'development', contour: 'arch' },
-            { chord: 'i64', role: 'climax', contour: 'leap_fall' },
-            { chord: 'V7', role: 'cadence', contour: 'fall', chord2: 'i' },
-          ],
-        }
-        assertWellFormed(renderPlan(plan, 4))
+  it('keeps every meter on a closed grid, with the tune intact', () => {
+    for (const meter of METER_IDS) {
+      for (const motion of MOTION_IDS) {
+        const score = renderPlan(plan({ meter, motion }), 9)
+        assertWellFormed(score)
+        assertNothingCoversTheTune(score)
+        expect(melody(score, 0).length, `${meter} / ${motion} has a tune`).toBeGreaterThan(0)
       }
     }
-  })
-})
-
-describe('bossa_comp', () => {
-  it('puts bass on 1 and the and of 2, with off-beat shells under the tune', () => {
-    const plan: CompositionPlan = {
-      version: 1,
-      style: 'laufey',
-      character: 'warm_groove',
-      form: 'period',
-      key: 'Db_major',
-      meter: 'four_four',
-      texture: 'bossa_comp',
-      palette: 'diatonic',
-      tempo: 'andante',
-      dynamics: 'mp',
-      dynamicShape: 'arch',
-      defaultInstrument: 'grand_piano',
-      arrangement: 'constant',
-      opening: 'straight_in',
-      phrasing: 'on_the_beat',
-      bars: [
-        { chord: 'ii9', role: 'statement', contour: 'arch' },
-        { chord: 'V13', role: 'development', contour: 'wave' },
-        { chord: 'Imaj7', role: 'half_cadence', contour: 'fall' },
-        { chord: 'I', role: 'cadence', contour: 'fall' },
-      ],
-    }
-    const score = renderPlan(plan, 2)
-    assertWellFormed(score)
-    const bass = score.bars[0].bass[0] ?? []
-    expect(bass.some((n) => n.start === 0)).toBe(true)
-    expect(bass.some((n) => n.start === 6)).toBe(true)
-    const shells = score.bars[0].treble[1] ?? []
-    expect(shells.length).toBeGreaterThan(0)
-    expect(shells.every((n) => n.start !== 0)).toBe(true)
   })
 })

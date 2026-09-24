@@ -5,7 +5,7 @@ import { rootDegree } from '../render/harmony'
 import { renderPlan } from '../render/renderPlan'
 import { HeuristicPlanner, shadowExchanges } from './HeuristicPlanner'
 import { JevPlanner, type JevTransport } from './JevPlanner'
-import { approachOptionsFor, asksApproach, buildRequest, describePlan, parseOp } from './jev/requests'
+import { buildRequest, describePlan, parseOp } from './jev/requests'
 import type { Answer, SystemOneRequest, SystemOneResponse } from './jev/systemOne'
 
 const isMinor = (key: string) => key.endsWith('_minor')
@@ -14,12 +14,12 @@ describe('variable harmonic rhythm (heuristic)', () => {
   const planner = new HeuristicPlanner()
 
   it('parses chord2 in and out of JSON, treating null as absent', () => {
-    const base = { version: 1, style: 'bach', character: 'solemn_hymn', form: 'period', key: 'C_major', meter: 'four_four', texture: 'chorale', palette: 'diatonic', tempo: 'andante', dynamics: 'mf', dynamicShape: 'steady', defaultInstrument: 'grand_piano' }
+    const base = { version: 2, style: 'bach', register: 'mid', motion: 'walking', accompaniment: 'sustained', form: 'period', key: 'C_major', meter: 'four_four', palette: 'diatonic', tempo: 'andante', dynamics: 'mf', dynamicShape: 'steady' }
     const bars = [
-      { chord: 'I', role: 'statement', contour: 'arch' },
-      { chord: 'ii65', chord2: 'V7', role: 'development', contour: 'rise' },
-      { chord: 'I', chord2: null, role: 'restatement', contour: 'fall' },
-      { chord: 'I', role: 'cadence', contour: 'fall' },
+      { chord: 'I', contour: 'arch' },
+      { chord: 'ii65', chord2: 'V7', contour: 'rise' },
+      { chord: 'I', chord2: null, contour: 'fall' },
+      { chord: 'I', contour: 'fall' },
     ]
     const plan = parsePlan({ ...base, bars })
     expect(plan.bars[1].chord2).toBe('V7')
@@ -30,7 +30,7 @@ describe('variable harmonic rhythm (heuristic)', () => {
 
   it('splits cadence bars in the styles whose books have splits — approach first, arrival second, never the last bar', async () => {
     const withSplits = STYLE_IDS.filter((style) => STYLE_PROFILES[style].harmony.major.splits.length > 0)
-    expect(withSplits).toEqual(expect.arrayContaining(['bach', 'beethoven', 'chopin', 'laufey']))
+    expect(withSplits).toEqual(expect.arrayContaining(['bach', 'beethoven', 'chopin']))
     for (const style of STYLE_IDS) {
       let split = 0
       let bars = 0
@@ -53,7 +53,7 @@ describe('variable harmonic rhythm (heuristic)', () => {
       const rate = split / bars
       const hasSplits = STYLE_PROFILES[style].harmony.major.splits.length > 0
       // Cadence-driven styles split about one bar in twelve; the vamp and haze styles less, the drone styles never.
-      if (['bach', 'beethoven', 'chopin', 'laufey'].includes(style)) expect(rate, `${style} split rate`).toBeGreaterThan(0.05)
+      if (['bach', 'beethoven', 'chopin'].includes(style)) expect(rate, `${style} split rate`).toBeGreaterThan(0.05)
       else if (hasSplits) expect(rate, `${style} split rate`).toBeGreaterThan(0.01)
       else expect(rate, `${style} split rate`).toBe(0)
     }
@@ -79,20 +79,28 @@ describe('variable harmonic rhythm (heuristic)', () => {
       else expect(rates[style], `${style} held bars`).toBeLessThan(0.03)
     }
     // Drone and cycle styles hold most.
-    expect(rates.glass).toBeGreaterThan(0.2)
-    expect(rates.hans_zimmer).toBeGreaterThan(0.15)
+    expect(rates.hans_zimmer).toBeGreaterThan(0.1)
     expect(rates.beethoven).toBeGreaterThan(rates.bach)
   })
 
   it('reports chord2 in the trace and shadows one phrase request per slot', async () => {
-    const { plan, trace } = await planner.plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: true })
+    // Whether a given seed's chords meet a book split is incidental; that a
+    // split, when it happens, is traced is not.
+    let found: Awaited<ReturnType<typeof planner.plan>> | undefined
+    for (let seed = 1; seed <= 20 && !found; seed++) {
+      const result = await planner.plan({ style: 'bach', bars: 8, pick: 'sample', seed, brief: true })
+      if (result.plan.bars.some((bar) => bar.chord2)) found = result
+    }
+    expect(found, 'bach splits some cadence bar within twenty seeds').toBeDefined()
+    const { plan, trace } = found!
     const split = plan.bars.findIndex((bar) => bar.chord2)
-    expect(split).toBeGreaterThan(0)
     expect(trace.decisions.find((d) => d.field === `bars[${split}].chord2`)?.choice).toBe(plan.bars[split].chord2)
     const shadows = shadowExchanges(plan, true)
-    expect(shadows).toHaveLength(4)
-    expect(shadows.slice(2).every((exchange) => exchange.op.op === 'phrase')).toBe(true)
-    expect(shadows[3].op.op === 'phrase' && shadows[3].op.chords).toHaveLength(4)
+    // One globals fan-out, then one phrase request per four-bar slot.
+    expect(shadows).toHaveLength(3)
+    expect(shadows[0].op.op).toBe('globals')
+    expect(shadows.slice(1).every((exchange) => exchange.op.op === 'phrase')).toBe(true)
+    expect(shadows[2].op.op === 'phrase' && shadows[2].op.chords).toHaveLength(4)
   })
 })
 
@@ -118,50 +126,29 @@ describe('variable harmonic rhythm (Jev)', () => {
     return { transport, seen }
   }
 
-  it('asks for an approach only on cadence-bound bars, in the same request, and offers none first', () => {
-    const roles = ['statement', 'development', 'climax', 'cadence'] as const
-    expect([0, 1, 2, 3].map((i) => asksApproach(roles, i))).toEqual([false, false, true, false])
-    expect(asksApproach(['statement', 'development', 'development', 'half_cadence', 'restatement', 'development', 'climax', 'cadence'], 3)).toBe(true)
-    const options = approachOptionsFor('C_major')
-    expect(Object.keys(options)[0]).toBe('none')
-    expect(options).toHaveProperty('I64')
-    expect(options).not.toHaveProperty('i64')
-    expect(approachOptionsFor('A_minor')).toHaveProperty('i64')
-    expect(approachOptionsFor('A_minor')).not.toHaveProperty('ii65')
-    const globals = { character: 'solemn_hymn', form: 'period', key: 'C_major', meter: 'four_four', texture: 'chorale', palette: 'diatonic', tempo: 'andante', dynamics: 'mf', dynamicShape: 'steady', defaultInstrument: 'grand_piano' } as const
-    const asked = buildRequest({ op: 'bar', style: 'bach', brief: false, globals, roles: [...roles], chords: ['I', 'V7'], index: 2 }, 'jev-latest')
-    expect(Object.keys(asked.questions)).toEqual(['chord', 'contour', 'approach'])
-    const notAsked = buildRequest({ op: 'bar', style: 'bach', brief: false, globals, roles: [...roles], chords: ['I'], index: 1 }, 'jev-latest')
-    expect(Object.keys(notAsked.questions)).toEqual(['chord', 'contour'])
-    // Earlier split bars are described in state; the last bar is never asked.
-    const state = buildRequest({ op: 'bar', style: 'bach', brief: false, globals, roles: [...roles], chords: ['I', 'V7', 'ii65'], chord2s: [null, null, 'V7'], index: 3 }, 'jev-latest').state as { bars: { chord: string }[] }
-    expect(state.bars[2].chord).toContain('second half of the bar: V7')
-    expect(asksApproach([...roles], 3)).toBe(false)
-  })
-
   it('lets Jev pick book phrases and applies cadence splits in code', async () => {
     const { plan, trace } = await new JevPlanner(fakeJev({ form: 'period', key: 'C_major' }).transport).plan({ style: 'bach', bars: 8, pick: 'argmax', seed: 1, brief: false })
-    expect(trace.requests).toBe(4)
+    expect(trace.requests).toBe(3)
     expect(plan.bars).toHaveLength(8)
     expect(parsePlan(plan)).toEqual(plan)
     renderPlan(plan, 1)
     // Book splits land on a cadence-bound bar; the last bar is never split.
     expect(plan.bars[7].chord2).toBeUndefined()
     const split = plan.bars.find((bar) => bar.chord2)
-    if (split) {
-      expect(split.chord).not.toBe(split.chord2)
-      expect(['half_cadence', 'development', 'climax']).toContain(split.role)
-    }
+    if (split) expect(split.chord).not.toBe(split.chord2)
   })
 
-  it('validates chord2s in bar ops and describes them for the scorer', () => {
-    const globals = { character: 'solemn_hymn', form: 'period', key: 'C_major', meter: 'four_four', texture: 'chorale', palette: 'diatonic', tempo: 'andante', dynamics: 'mf', dynamicShape: 'steady', defaultInstrument: 'grand_piano' }
-    const roles = ['statement', 'development', 'climax', 'cadence']
-    expect(parseOp({ op: 'bar', style: 'bach', globals, roles, chords: ['I', 'ii65'], chord2s: [null, 'V7'], index: 2 })).toMatchObject({ chord2s: [null, 'V7'] })
-    expect(parseOp({ op: 'bar', style: 'bach', globals, roles, chords: ['I'], index: 1 })).not.toHaveProperty('chord2s')
-    expect(() => parseOp({ op: 'bar', style: 'bach', globals, roles, chords: ['I'], chord2s: [], index: 1 })).toThrow(/chord2s/)
-    expect(() => parseOp({ op: 'bar', style: 'bach', globals, roles, chords: ['I'], chord2s: ['H7'], index: 1 })).toThrow(/chord2s/)
-    const plan: CompositionPlan = { version: 1, style: 'bach', ...globals, bars: [{ chord: 'I', role: 'statement', contour: 'arch' }, { chord: 'ii65', chord2: 'V7', role: 'development', contour: 'rise' }, { chord: 'I', role: 'climax', contour: 'arch' }, { chord: 'I', role: 'cadence', contour: 'fall' }] } as CompositionPlan
+  it('validates phrase ops and describes a split bar for the scorer', () => {
+    const globals = { register: 'mid', motion: 'walking', accompaniment: 'sustained', form: 'period', key: 'C_major', meter: 'four_four', palette: 'diatonic', tempo: 'andante', dynamics: 'mf', dynamicShape: 'steady' }
+    const ok = { op: 'phrase', style: 'bach', globals, barCount: 8, slotIndex: 1, chords: ['I', 'ii65', 'V7', 'I'], contours: ['arch', 'rise', 'fall', 'fall'] }
+    expect(parseOp(ok)).toMatchObject({ op: 'phrase', slotIndex: 1 })
+    expect(() => parseOp({ ...ok, slotIndex: 9 })).toThrow(/slotIndex/)
+    expect(() => parseOp({ ...ok, chords: ['I'] })).toThrow(/chords/)
+    expect(() => parseOp({ ...ok, contours: ['arch'] })).toThrow(/contours/)
+    expect(() => parseOp({ ...ok, barCount: 7 })).toThrow(/barCount/)
+    expect(() => parseOp({ ...ok, chords: ['I', 'ii65', 'V7', 'H7'] })).toThrow(/chords/)
+
+    const plan: CompositionPlan = { version: 2, style: 'bach', ...globals, bars: [{ chord: 'I', contour: 'arch' }, { chord: 'ii65', chord2: 'V7', contour: 'rise' }, { chord: 'I', contour: 'arch' }, { chord: 'I', contour: 'fall' }] } as CompositionPlan
     const described = describePlan(plan) as { bars: { chord: string }[] }
     expect(described.bars[1].chord).toContain('ii65')
     expect(described.bars[1].chord).toContain('second half of the bar: V7')

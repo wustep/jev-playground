@@ -63,15 +63,14 @@ export function formSlots(form: FormId, bars: BarCount): PhraseSlot[] {
     const isLast = p === last
     switch (form) {
       case 'period': {
-        // Antecedent / consequent pairs. Every second pair departs before answering.
-        const answering = p % 2 === 1
-        const pairIndex = Math.floor(p / 2)
-        const departs = pairIndex % 2 === 1 && pairIndex > 0
-        slots.push(
-          answering
-            ? { end: isLast ? 'closed' : 'closed', build: 'head_tail', returnsFrom: departs ? undefined : p - 1, varied: pairIndex > 0 }
-            : { end: 'half', build: departs ? 'seq_tail' : 'head_tail', returnsFrom: departs ? undefined : pairIndex > 0 ? 0 : undefined, varied: true },
-        )
+        // A · A' · B · A'' in fours: question, answer, a departure, and the
+        // answer again — dressed the second time, because a return that is
+        // note-for-note identical twice is a loop, not a period.
+        const step = p % 4
+        if (step === 0) slots.push({ end: 'half', build: 'head_tail', varied: false })
+        else if (step === 1) slots.push({ end: 'closed', build: 'head_tail', returnsFrom: p - 1, varied: false })
+        else if (step === 2) slots.push({ end: 'half', build: 'seq_tail', varied: false })
+        else slots.push({ end: 'closed', build: 'head_tail', returnsFrom: p - 3, varied: true })
         break
       }
       case 'sentence': {
@@ -84,12 +83,14 @@ export function formSlots(form: FormId, bars: BarCount): PhraseSlot[] {
         break
       }
       case 'arch': {
-        // A · A' · B (departure) · A''. The return is the point, so it is literal.
-        const quarter = Math.floor((p * 4) / count)
-        if (quarter === 0) slots.push({ end: 'half', build: 'head_tail', varied: false })
-        else if (quarter === 1) slots.push({ end: 'closed', build: 'head_tail', returnsFrom: p - 1, varied: false })
-        else if (quarter === 2) slots.push({ end: 'half', build: 'seq_seq', varied: false })
-        else slots.push({ end: 'closed', build: 'head_tail', returnsFrom: 0, varied: p !== last })
+        // A · (A') · B · A''. Whatever the length, the first phrase opens it
+        // and the last brings it back ornamented — that return is the point,
+        // and an arch that never closes its arc is not one. In between, the
+        // first half restates and the second departs.
+        if (p === 0) slots.push({ end: 'half', build: 'head_tail', varied: false })
+        else if (isLast) slots.push({ end: 'closed', build: 'head_tail', returnsFrom: 0, varied: true })
+        else if (p < count / 2) slots.push({ end: 'closed', build: 'head_tail', returnsFrom: 0, varied: p > 1 })
+        else slots.push({ end: 'half', build: 'seq_seq', varied: false })
         break
       }
       case 'chain':
