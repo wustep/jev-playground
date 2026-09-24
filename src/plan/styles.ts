@@ -315,8 +315,9 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         priors: {
           form: { period: 55, sentence: 20, arch: 25 },
           key: { Ab_major: 25, Eb_major: 20, Db_major: 10, E_major: 10, F_major: 10, C_major: 10, A_major: 8, G_major: 7 },
+          // Op. 13 II: top voice at MIDI 66, ~3.2 attacks a 2/4 bar — sung, not run.
           register: { low: 80, mid: 20 },
-          motion: { flowing: 55, florid: 35, walking: 10 },
+          motion: { flowing: 60, walking: 30, florid: 10 },
           accompaniment: { broken: 80, sustained: 20 },
           tempo: { adagio: 48, andante: 30, largo: 10, larghetto: 12 },
           dynamics: { p: 50, pp: 25, f: 25 },

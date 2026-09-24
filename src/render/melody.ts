@@ -149,6 +149,34 @@ function decorate(bar: BarView, source: Remembered, slots: readonly Slot[], isSt
   return reconcile(bar, out, slots, isStrong, lo, hi)
 }
 
+/**
+ * A line may strike a pitch twice; three in a row is a line that is stuck.
+ *
+ * Recall stretches a short figure over a longer rhythm, decoration rounds a
+ * small step to no step, and a clamped contour presses on its ceiling — each
+ * of which repeated one pitch five or six times in the sample audit. Rather
+ * than patch each source, the third strike moves to the nearest neighbour,
+ * toward wherever the line goes next; on a strong slot it moves to the
+ * nearest chord tone instead, so the harmony still lands.
+ */
+function breakRepeats(bar: BarView, pitches: string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): void {
+  // The run is heard across the barline, so the previous bar's tail counts.
+  const tail = (bar.memory.melody[bar.index - 1]?.pitches ?? []).slice(-2).map(midiOf)
+  const heard = (k: number) => (k >= 0 ? midiOf(pitches[k]) : tail[tail.length + k])
+  for (let k = 0; k < pitches.length; k++) {
+    const here = midiOf(pitches[k])
+    if (here !== heard(k - 1) || here !== heard(k - 2)) continue
+    const later = pitches.slice(k + 1).map(midiOf).find((midi) => midi !== here)
+    const heading = later === undefined ? (k % 2 === 0 ? 1 : -1) : Math.sign(later - here)
+    const strong = isStrong(slots[k])
+    const rungs = strong ? ladder(chordAt(bar, slots[k].start).core, lo, hi) : ladder(bar.scale, lo, hi)
+    const at = rungs.findIndex((pitch) => midiOf(pitch) === here)
+    const around = at >= 0 ? at : nearestIndex(rungs, here)
+    const candidates = [around + heading, around - heading].filter((i) => i >= 0 && i < rungs.length && midiOf(rungs[i]) !== here)
+    if (candidates.length) pitches[k] = rungs[candidates[0]]
+  }
+}
+
 /** Chromatic lower neighbours on the weak slot before a strong one. */
 function applyChromaticApproach(bar: BarView, slots: readonly Slot[], pitches: string[], isStrong: (slot: Slot) => boolean): void {
   for (let k = 0; k < slots.length - 1; k++) {
@@ -198,14 +226,20 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
       let index = nearestIndex(rungs, desired)
       const previous = pitches[k - 1]
       if (previous && midiOf(rungs[index]) === midiOf(previous)) {
-        // Don't stutter: step on in the direction the contour is heading.
-        index = clamp(index + (desired >= previousDesired ? 1 : -1), 0, rungs.length - 1)
+        // Don't stutter: step on in the direction the contour is heading — and
+        // where the window's edge blocks that, turn around. A contour pressed
+        // against the ceiling at a climax otherwise strikes one note six times.
+        const heading = desired >= previousDesired ? 1 : -1
+        const onward = index + heading
+        index = onward >= 0 && onward < rungs.length ? onward : clamp(index - heading, 0, rungs.length - 1)
       }
       pitches.push(rungs[index])
       previousDesired = desired
     })
     if (bar.palette === 'chromatic_approach') applyChromaticApproach(bar, slots, pitches, isStrong)
   }
+
+  breakRepeats(bar, pitches, slots, isStrong, lo, hi)
 
   // Closing bars land where the ear expects: the tonic, if the chord has it.
   if ((bar.position.role === 'cadence' || bar.isLast) && pitches.length) {

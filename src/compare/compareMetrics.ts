@@ -323,7 +323,30 @@ function rowsFromEvents(
   }))
 }
 
-function skylineFromOnsets(onsets: { start: number; dur: number; midi: number }[]): SkyEvent[] {
+/**
+ * The top voice of a MIDI staff: one event per attack, and only attacks with
+ * nothing higher still sounding over them.
+ *
+ * Collapsing simultaneous notes is not enough. A Mutopia upper-staff track
+ * often carries the tune AND an inner accompaniment under it — Op. 13 II's
+ * murmuring sixteenths, Op. 27/2's triplets — and an inner note struck
+ * beneath a held melody note is not melody. Counting those made Op. 13 II
+ * look like 10.9 melody onsets a bar when the tune attacks 3.2 times, and
+ * pulled its register down toward the inner voice.
+ */
+/**
+ * The naive both-hands skyline: the top note of each attack, nothing more.
+ * Kept only for `combinedSkyline`, which exists to show how far this view
+ * drifts from the real melody — it is the measurement that lied.
+ */
+function naiveSkyline(onsets: readonly { start: number; dur: number; midi: number }[]): SkyEvent[] {
+  const events = onsets
+    .map((n) => ({ start: n.start, dur: n.dur, midi: n.midi, pc: ((n.midi % 12) + 12) % 12 }))
+    .sort((a, b) => a.start - b.start || b.midi - a.midi)
+  return events.filter((event, i) => i === 0 || events[i - 1].start !== event.start)
+}
+
+export function topVoice(onsets: readonly { start: number; dur: number; midi: number }[]): SkyEvent[] {
   const events = onsets
     .map((n) => ({ start: n.start, dur: n.dur, midi: n.midi, pc: ((n.midi % 12) + 12) % 12 }))
     .sort((a, b) => a.start - b.start || b.midi - a.midi)
@@ -331,6 +354,8 @@ function skylineFromOnsets(onsets: { start: number; dur: number; midi: number }[
   for (const event of events) {
     const last = sky[sky.length - 1]
     if (last && last.start === event.start) continue
+    const covered = events.some((other) => other.start < event.start && other.start + other.dur > event.start && other.midi > event.midi)
+    if (covered) continue
     sky.push(event)
   }
   return sky
@@ -376,6 +401,9 @@ function summarizeRows(rows: MelodyBarRow[]) {
   const bassReturn = rows.slice(8, 12).reduce((n, row) => n + (row.bassOnsets ?? 0), 0) / Math.max(1, rows.slice(8, 12).length)
   const onsetEarly = rows.slice(0, 4).reduce((n, row) => n + row.onsets, 0) / Math.max(1, Math.min(4, rows.length))
   const onsetReturn = rows.slice(8, 12).reduce((n, row) => n + row.onsets, 0) / Math.max(1, rows.slice(8, 12).length)
+  // Over every measured bar. The early figure alone swings with where the
+  // first cadence falls, which is a fact about the form, not the line.
+  const onsetMean = rows.reduce((n, row) => n + row.onsets, 0) / Math.max(1, rows.length)
   return {
     barsMeasured: rows.length,
     silentBeatPct: totalBeats ? Number((silentBeats / totalBeats).toFixed(3)) : 0,
@@ -392,6 +420,7 @@ function summarizeRows(rows: MelodyBarRow[]) {
     bassOnsetsReturn: Number(bassReturn.toFixed(2)),
     onsetDensityEarly: Number(onsetEarly.toFixed(2)),
     onsetDensityReturn: Number(onsetReturn.toFixed(2)),
+    onsetDensityMean: Number(onsetMean.toFixed(2)),
   }
 }
 
@@ -507,13 +536,15 @@ function midiBarOnsets(
   start: number,
   barsWanted: number,
   ticksPerBar: number,
+  line: (onsets: { start: number; dur: number; midi: number }[]) => SkyEvent[] = topVoice,
 ) {
   const bars = []
   for (let i = 0; i < barsWanted; i++) {
     const barStart = start + i * ticksPerBar
     const inBar = notes.filter((n) => n.ticks >= barStart && n.ticks < barStart + ticksPerBar)
     const raw = inBar.map((n) => ({ start: n.ticks - barStart, dur: n.durationTicks, midi: n.midi }))
-    bars.push({ events: skylineFromOnsets(raw), onsets: raw.length })
+    const events = line(raw)
+    bars.push({ events, onsets: events.length })
   }
   return bars
 }
@@ -551,7 +582,7 @@ export function midiMetrics(path: string, barsWanted = 16) {
   const accompBars = midiBarOnsets(hands.accompaniment?.notes ?? [], align.start, load, ticksPerBar)
   const allNotes = tracks.flatMap((track) => track.notes)
   const combinedStart = Math.min(...allNotes.map((n) => n.ticks))
-  const combinedBars = midiBarOnsets(allNotes, combinedStart, barsWanted, ticksPerBar)
+  const combinedBars = midiBarOnsets(allNotes, combinedStart, barsWanted, ticksPerBar, naiveSkyline)
 
   const melodyRows = rowsFromEvents(melodyBars, ticksPerBar, beatTicks)
   const accompRows = rowsFromEvents(accompBars, ticksPerBar, beatTicks)

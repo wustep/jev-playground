@@ -15,6 +15,7 @@ import {
   scoreMetrics,
   skyline,
   splitMidiHands,
+  topVoice,
 } from './compareMetrics'
 
 const CONTOURS: ContourId[] = ['arch', 'leap_fall', 'wave', 'rise']
@@ -181,14 +182,31 @@ describe('committed Mutopia files', () => {
     expect(midi.registerMean - midi.combinedSkyline.registerMean).toBeGreaterThan(3)
   })
 
-  it('scores Beethoven Pathétique II RH at 62 and starts the theme at bar 0', () => {
+  it('reads Pathétique II as its tune, not the sixteenth murmur under it', () => {
+    // The upper-staff track carries the melody AND an inner accompaniment.
+    // Counting every note-on made the tune look like 10.9 attacks a bar at
+    // MIDI 62; the top voice alone attacks about 3 times a bar, a fourth higher.
     const midi = midiMetrics('docs/ref-midi/public/beethoven-op13-pathetique-2.mid')
     if ('error' in midi) throw new Error(midi.error)
     expect(midi.handSplit.melodyName).toMatch(/up/i)
     expect(midi.thematicStartBar).toBe(0)
-    expect(midi.registerMean).toBe(62)
-    expect(midi.combinedSkyline.registerMean).toBe(62)
+    expect(midi.registerMean).toBe(66.3)
+    expect(midi.combinedSkyline.registerMean, 'the naive skyline is pulled down by the inner voice').toBe(62)
+    expect(midi.onsetDensityMean).toBeGreaterThan(2.5)
+    expect(midi.onsetDensityMean).toBeLessThan(4)
     expect(midi.ret8).toBeGreaterThan(0.9)
+  })
+
+  it('does not count a note struck under a held higher note as melody', () => {
+    // A held C5 with an inner line moving beneath it: one melody attack, not four.
+    const line = topVoice([
+      { start: 0, dur: 16, midi: 72 },
+      { start: 0, dur: 4, midi: 60 },
+      { start: 4, dur: 4, midi: 62 },
+      { start: 8, dur: 4, midi: 64 },
+      { start: 12, dur: 4, midi: 65 },
+    ])
+    expect(line.map((event) => event.midi)).toEqual([72])
   })
 
   it('scores Debussy Arabesque from thematic bar 2 and the upper staff', () => {

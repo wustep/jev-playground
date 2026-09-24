@@ -151,10 +151,10 @@ async function main() {
     console.log(row('', 'reg', 'onsets', 'ret4', 'brch'))
     for (const entry of perStyle) {
       const best = [...entry.generated].sort((a, b) => b.labelMatchCount - a.labelMatchCount)[0]
-      const midi = entry.referenceMidi as { registerMean?: number; onsetDensityEarly?: number; ret4?: number } | null
-      console.log(row(`${entry.style} · midi`, midi?.registerMean, midi?.onsetDensityEarly, midi?.ret4, ''))
-      console.log(row(`${entry.style} · ref plan`, entry.primary.realized.registerMean, entry.primary.realized.onsetDensityEarly, entry.primary.realized.ret4, entry.primary.realized.ceilingBreaches))
-      console.log(row(`${entry.style} · generated`, best.realized.registerMean, best.realized.onsetDensityEarly, best.realized.ret4, best.realized.ceilingBreaches))
+      const midi = entry.referenceMidi as { registerMean?: number; onsetDensityMean?: number; ret4?: number } | null
+      console.log(row(`${entry.style} · midi`, midi?.registerMean, midi?.onsetDensityMean, midi?.ret4, ''))
+      console.log(row(`${entry.style} · ref plan`, entry.primary.realized.registerMean, entry.primary.realized.onsetDensityMean, entry.primary.realized.ret4, entry.primary.realized.ceilingBreaches))
+      console.log(row(`${entry.style} · generated`, best.realized.registerMean, best.realized.onsetDensityMean, best.realized.ret4, best.realized.ceilingBreaches))
       console.log()
     }
     return

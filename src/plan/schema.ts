@@ -54,13 +54,14 @@ export const REGISTER_IDS = keysOf<RegisterId>(REGISTERS)
 /**
  * The sounding window of each register, as MIDI numbers: [floor, ceiling].
  *
- * Calibrated against the melody-track mean of the committed reference MIDI:
- * Beethoven's Op. 13 Adagio sits at 62, Bach's C major prelude figure at 69,
- * Chopin's Op. 9/2 nocturne at 76.5. Three seventeen-semitone windows a fifth
- * apart put each of those at the centre of one.
+ * Calibrated against the TOP VOICE of the committed reference MIDI: Op. 13's
+ * Adagio sings at 66, Bach's C major prelude figure at 69, Op. 9/2's nocturne
+ * at 76.5. An earlier calibration read Op. 13 at 62 — but that count included
+ * the inner sixteenths the right hand plays under the tune, and `low` was set
+ * a fourth too deep on the strength of it.
  */
 export const REGISTER_RANGE: Record<RegisterId, readonly [number, number]> = {
-  low: [54, 71],
+  low: [57, 73],
   mid: [61, 78],
   high: [68, 85],
 }
