@@ -1,6 +1,6 @@
-import type { BarCount, CompositionPlan, StyleId, StyleMatchScore } from '../plan/schema'
-import type { JevOp } from './jev/requests'
-import type { SystemOneRequest, SystemOneResponse } from './jev/systemOne'
+import type { BarCount, CompositionPlan, StyleId, StyleMatchScore } from '../plan/schema.js'
+import type { JevOp } from './jev/requests.js'
+import type { SystemOneRequest, SystemOneResponse } from './jev/systemOne.js'
 
 export interface PlanInput {
   style: StyleId

@@ -6,11 +6,11 @@ import { rng } from '../planner/pick'
 import type { Answer } from '../planner/jev/systemOne'
 import { shuffleInPlace } from '../shared/jevMath'
 import { JevRequestError, jevStatus, postJevOp, type JevStatus } from '../shared/jevStatus'
-import { overlayLiveScores, rankPeople } from './match'
-import { matchCache, matchCacheKey, shouldReuseMatch, type MatchCached } from './matchCache'
-import { DEFAULT_YOU, PEOPLE } from './people'
-import { buildMatchRequest, MATCH_SCORE_LEVELS, matchQuestionId, parseMatchOp, youToOp, type MatchOp } from './requests'
-import type { MatchResult, Person, YouProfile } from './types'
+import { overlayLiveScores, rankPeople } from './match.js'
+import { matchCache, matchCacheKey, shouldReuseMatch, type MatchCached } from './matchCache.js'
+import { DEFAULT_YOU, PEOPLE } from './people.js'
+import { buildMatchRequest, MATCH_SCORE_LEVELS, matchQuestionId, parseMatchOp, youToOp, type MatchOp } from './requests.js'
+import type { MatchResult, Person, YouProfile } from './types.js'
 
 export const MATCH_SHOW = 8
 export const MATCH_SEED = 7

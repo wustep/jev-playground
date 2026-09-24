@@ -1,4 +1,4 @@
-import type { Person, YouProfile } from './types'
+import type { Person, YouProfile } from './types.js'
 
 export const DEFAULT_YOU: YouProfile = {
   name: 'Alex Rivers',
