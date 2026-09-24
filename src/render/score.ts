@@ -1,7 +1,11 @@
 // The renderer's output: notes on a sixteenth-note grid, already split into
 // staves and voices. Sheet, playback and MIDI export all read this one shape.
 
-import type { BarPlan, CompositionPlan, DynamicId, MeterId, PedalId } from '../plan/schema'
+import type { BarPlan, CompositionPlan, DynamicId, MeterId } from '../plan/schema'
+import type { BarRole } from '../plan/phrase'
+
+/** Sustain for a piece; chosen by the accompaniment pattern, not by the plan. */
+export type PedalId = 'dry' | 'half' | 'full'
 
 /** Sixteenth notes. Every duration and onset in a Score is a whole number of ticks. */
 export const TICKS_PER_QUARTER = 4
@@ -46,6 +50,8 @@ export type Voice = Note[]
 export interface Bar {
   index: number
   plan: BarPlan
+  /** What this bar is doing, derived from the form (src/plan/phrase.ts). */
+  role: BarRole
   /** Absolute chord name in the chosen key, e.g. "Abmaj7". */
   chordSymbol: string
   /** The bar's second harmony, when the plan gave it one: its symbol and the tick it starts on. */
@@ -69,18 +75,13 @@ export interface Score {
   pedal: PedalId
   /** 0–1: how much of a short note's written length sounds (the character's touch). */
   articulation: number
-  /**
-   * Framing bars prepended by the renderer (vamp or pickup). `plan.bars`
-   * stays 4/8/16/32/64; body bar *i* is `bars[introBars + i]`.
-   */
-  introBars: number
   /** Stretch the last bar on playback so the cadence is not cut off. */
   ritardando: boolean
 }
 
-/** Body bar for plan index `i` — skips vamp/pickup framing. */
+/** The score bar for plan index `i`. One to one: the renderer prepends nothing. */
 export function scoreBarForPlan(score: Score, planIndex: number): Bar | undefined {
-  return score.bars[planIndex + (score.introBars ?? 0)]
+  return score.bars[planIndex]
 }
 
 /** A sounding note with absolute timing, for playback and MIDI export. */

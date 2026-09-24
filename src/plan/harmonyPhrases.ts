@@ -8,7 +8,7 @@
 // Imported by the /api/jev serverless chain → explicit `.js` extensions.
 
 import { CHORDS, PlanValidationError, type ChordId, type KeyId, type StyleId } from './schema.js'
-import type { PhraseEnd, PhraseSlot } from './forms.js'
+import type { PhraseEnd, PhraseSlot } from './phrase.js'
 import { STYLE_PROFILES, type HarmonyBook } from './styles.js'
 
 export const PHRASE_ENDS: Record<PhraseEnd, string> = {
