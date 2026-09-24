@@ -13,6 +13,15 @@
  * writes first and alone) against the top voice of the reference's upper
  * track. See `src/compare/compareMetrics.ts` and `docs/ref-midi/public/README.md`.
  *
+ * Where live runs go. `--live-jev` does NOT go through any deployment of this
+ * app: it calls TypeSafe directly with TYPESAFE_API_KEY (or VITE_JEV_API_KEY)
+ * from the local environment, and TYPESAFE_BASE_URL overrides TypeSafe's API
+ * URL, not the playground's. It skips live planning when no key is set. For
+ * a same-seed live A/B by ear, use production (https://jev-playground.vercel.app/music/,
+ * where the key is configured) or `npm run dev` with the key in .env.local —
+ * not a PR preview, which may be running a build without the server fix it
+ * needs. This script has no flag for routing through a deployment's /api/jev.
+ *
  * Living artists have no public-domain MIDI. Where an owned or local file sits
  * in docs/ref-midi/local/ (gitignored — see its README) it is used instead and
  * marked `local`; where there is none, the style is compared on labels alone.
