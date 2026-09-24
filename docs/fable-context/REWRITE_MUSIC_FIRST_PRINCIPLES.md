@@ -69,7 +69,7 @@ Register now tracks the references within about two semitones. Subdivision is ri
 
 This pass cut eight styles to five: Bach, Beethoven, Chopin, Debussy, Zimmer. The polish pass restored Glass, Laufey and Elijah Fox as table rows — see below.
 
-A style is now one row of five fields in `src/render/styleVoice.ts` (accent, articulation, humanize, rubato, spacing) plus its harmony book. **Nothing in that row chooses a note.** Which notes to play is the plan's job; the row is only how they are played.
+A style is now one row of four fields in `src/render/styleVoice.ts` (accent, articulation, humanize, rubato) plus its harmony book. *(This said five, with `spacing`; no pattern ever read it — see [the structure pass](#structure-pass-2026-09-24).)* **Nothing in that row chooses a note.** Which notes to play is the plan's job; the row is only how they are played.
 
 ## One path
 
@@ -135,7 +135,7 @@ Same branch. Keeps the melody-first model; adds no per-artist code.
 
 ### Artists restored
 
-Glass, Laufey and Elijah Fox are back: a `STYLE_LABELS` entry, a five-field `StyleVoice` row, a dial theme, and their harmony books and priors from `main` put through the same v1 → v2 remap. The mechanical remap got two things wrong that measurement caught: it gave Glass `chain` form (no return) for music that *is* return, and it gave Fox no `florid` at all against a local reference running 16.4 attacks a bar — which also made his most typical piece sound exactly like Chopin's. A test now requires all eight argmax plans to differ on register / motion / accompaniment. Glass's 2-against-3 lean returns as a generic `rubato` value, not per-artist code.
+Glass, Laufey and Elijah Fox are back: a `STYLE_LABELS` entry, a `StyleVoice` row, a dial theme, and their harmony books and priors from `main` put through the same v1 → v2 remap. The mechanical remap got two things wrong that measurement caught: it gave Glass `chain` form (no return) for music that *is* return, and it gave Fox no `florid` at all against a local reference running 16.4 attacks a bar — which also made his most typical piece sound exactly like Chopin's. A test now requires all eight argmax plans to differ on register / motion / accompaniment. Glass's 2-against-3 lean returns as a generic `rubato` value, not per-artist code.
 
 ### Reference coverage
 
@@ -168,3 +168,26 @@ Living artists never enter the repository. Glass's Étude No. 6 and Fox's "Wyomi
 - **Downbeats**: returns and non-statement bars still attack beat one. Ties across the barline would do more, but need cross-bar notes in the Score.
 - **No keyed A/B** against live Jev.
 
+
+---
+
+## Structure pass, 2026-09-24
+
+A code review of this branch, not a listening pass. Every change below leaves plans, Jev requests and rendered notes byte-identical across 480 heuristic plans and 192 fake-Jev plans, except the UI fix, which touches no notes.
+
+### Fixed
+
+- **The stand stayed stale after a planner switch.** The one-path commit dropped the effect that clears `plannerDirty` when a plan lands, so choosing another Planner and pressing Generate left Play and MIDI disabled. Restored in `src/music/MusicApp.tsx`.
+- **One phrase catalog.** The server built each phrase question's criteria from `formSlots` + `bookFor`, and `JevPlanner` rebuilt the same catalog on its own to validate the answer. On `main` those two drifted (#58). `slotCatalog` in `src/plan/harmonyPhrases.ts` is now the only way either side gets a slot's options. A test drives `JevPlanner` through the server's path (JSON, `parseOp`, `buildRequest`) for every style, form, length and mode, answering with the last option offered.
+- **`spacing` was never wired.** Every pattern ignored it, so the style row is the four fields that are applied. A per-style left-hand reach would be a sound change.
+- **`counterline` is not exempt from the ceiling.** Its register is capped at the tune's floor, and it never reached the tune in 17,280 sampled counterline pieces (86,400 across all five patterns, all at zero). The docs called it exempt and the ceiling test skipped it. The test now covers all five patterns.
+- **The treble staff is the tune's.** Accompaniment patterns can no longer return treble voices. None did, but one that did in a bar where the tune was silent would have become `treble[0]`, which every metric reads as the melody.
+- **A silent bar's accompaniment** read `memory.melodyLast`, which after the melody pass is always the piece's last note. `renderPlan` passes the tune's last pitch before the bar instead. It never fires in the sweep.
+- The cadence-split rule is written once (`splitBarOf`, `approachesInto`), both planners get typed globals from `parseGlobals`, and helpers orphaned by the texture and notes-mode deletions are gone.
+- A test walks the `/api/jev` music imports and fails on a relative import without `.js`.
+
+### Left for the music follow-up
+
+- The four open ear flags above: Fox density, Chopin's literal first answer, Clair de lune's register, and downbeats on returns.
+- `PhraseBuild` still names `duplicate`, `loop` and `pedal`, and the harmony books still carry `loops` and `pedals`, but no form's slots reach them. Glass's chord cycles never play. Removing them would shift the stub's random stream and its style-match vocabulary, and whether a loop form comes back is a musical call.
+- `counterline` answers whatever a phrase's first bar played, a return or a contrast bar included, while its doc says it answers a fresh statement. Which one is right is a musical call.

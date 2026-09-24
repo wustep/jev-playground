@@ -20,10 +20,12 @@ const keysOf = <K extends string>(table: OptionTable<K>) => Object.keys(table) a
 
 // ── Styles (the dial) ───────────────────────────────────────────────────────
 //
-// Five, not eight. A style earns a face by diverging on the axes below —
-// register, motion, accompaniment, palette, rubato — not by having a name.
+// Eight faces. A style earns one by diverging on the axes below — register,
+// motion, accompaniment, palette, rubato — not by having a name; a test
+// requires every style's most typical plan to differ on the first three.
 // The four with committed public-domain reference MIDI can be measured;
-// Zimmer holds the drama pole.
+// Glass and Fox only against local, uncommitted files; Laufey and Zimmer
+// not at all yet.
 
 export const STYLE_LABELS = {
   bach: 'Johann Sebastian Bach',

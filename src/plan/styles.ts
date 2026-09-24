@@ -3,17 +3,21 @@
 //  • `brief`      — optional prose handed to Jev as state (toggle in the UI).
 //                   With the brief off, Jev only sees the style's name.
 //  • `priors`     — base weights the offline HeuristicPlanner samples from.
-//  • `archetypes` — the kinds of piece this composer actually wrote, one per
-//                   character: each overrides the priors it cares about, so a
-//                   plan is coherent (a sarabande is slow AND in 3/4 AND sung)
-//                   and two generations can be genuinely different pieces.
+//  • `variants`   — the kinds of piece this composer actually wrote: each
+//                   overrides the priors it cares about, so a plan is
+//                   coherent (a sarabande is slow AND in 3/4 AND sung) and two
+//                   generations can be genuinely different pieces.
 //  • `harmony`    — a small grammar instead of whole-progression templates:
 //                   two-bar heads, travelling units and tails, verified
-//                   four-bar phrases, chord cycles, pedals and codas. Forms
-//                   (src/plan/forms.ts) say how to combine them, so eight bars
-//                   come out of hundreds of combinations, not three.
+//                   four-bar phrases and codas. The form's phrase slots
+//                   (src/plan/phrase.ts) say how to combine them, so eight
+//                   bars come out of hundreds of combinations, not three.
+//                   The books also carry chord cycles (`loops`) and `pedals`,
+//                   which no current form's slots reach.
 //
-// JevPlanner never reads priors, archetypes or harmony: it asks Jev.
+// JevPlanner never reads priors or variants: it asks Jev. It does read
+// `harmony` — each phrase Choice offers options built from the style's book
+// (src/plan/harmonyPhrases.ts).
 //
 // Where each entry comes from — score, corpus or analysis — is recorded in
 // docs/STYLE_NOTES.md. Entries for living musicians are marked there as
