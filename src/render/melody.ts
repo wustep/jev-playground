@@ -254,9 +254,43 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
   return pitches
 }
 
+/**
+ * An anacrusis into a returning phrase: one to three notes at the end of the
+ * phrase-final bar's rest, stepping up into the pitch the return begins on.
+ *
+ * Only into returns, because only there is the target already known — the
+ * source bar was written earlier in this same pass. The breath survives: at
+ * least half a beat of silence stays between the landing and the pickup, so
+ * the phrase still ends before the next one leans in.
+ */
+function pickupInto(bar: BarView, next: BarView | undefined, notes: Note[], plan: CompositionPlan): Note[] {
+  if (!next || !bar.position.phraseFinal || bar.isLast || plan.motion === 'sustained') return []
+  const source = next.position.returnsFrom === undefined ? undefined : bar.memory.melody[next.position.returnsFrom]
+  const target = source?.pitches[0]
+  if (!target || !notes.length) return []
+  const last = notes[notes.length - 1]
+  const restStart = last.start + last.dur
+  const count = plan.motion === 'walking' ? 1 : plan.motion === 'flowing' ? 2 : 3
+  const unit = plan.motion === 'walking' ? 2 : 1
+  const length = count * unit
+  const breath = Math.max(1, bar.meter.beatTicks / 2)
+  if (bar.meter.ticksPerBar - restStart < length + breath) return []
+  const [lo, hi] = REGISTER_RANGE[plan.register]
+  const rungs = ladder(bar.scale, lo - 5, hi)
+  const goal = nearestIndex(rungs, midiOf(target))
+  // Approach from below, as an upbeat does — from above only if there is no room under it.
+  const direction = goal - count >= 0 ? -1 : 1
+  const out: Note[] = []
+  for (let k = 0; k < count; k++) {
+    const rung = rungs[clamp(goal + direction * (count - k), 0, rungs.length - 1)]
+    out.push(note(bar.meter.ticksPerBar - length + k * unit, unit, rung, bar.velocity - 6))
+  }
+  return out
+}
+
 /** Write the whole singing line, bar by bar, before anything accompanies it. */
 export function writeMelody(plan: CompositionPlan, bars: readonly BarView[]): MelodyBar[] {
-  return bars.map((bar) => {
+  return bars.map((bar, index) => {
     const recalled = bar.position.returnsFrom === undefined ? undefined : bar.memory.melody[bar.position.returnsFrom]
     const slots = melodyRhythm({
       motion: plan.motion,
@@ -266,9 +300,11 @@ export function writeMelody(plan: CompositionPlan, bars: readonly BarView[]): Me
       rand: bar.rand,
       recall: recalled?.slots,
       ornament: bar.position.ornamentReturn,
+      enterLate: plan.accompaniment === 'counterline' && bar.position.role === 'statement' && bar.position.returnsFrom === undefined,
     })
     const pitches = melodyPitches(bar, slots, plan.register)
-    const notes = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))
+    const sung = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))
+    const notes = [...sung, ...pickupInto(bar, bars[index + 1], sung, plan)]
     if (pitches.length) {
       bar.memory.melodyLast = midiOf(pitches[pitches.length - 1])
       bar.memory.melody[bar.index] = {

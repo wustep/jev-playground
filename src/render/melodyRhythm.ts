@@ -13,7 +13,7 @@
 
 import { MOTION_RATE, type MotionId } from '../plan/schema'
 import type { BarPosition } from '../plan/phrase'
-import { choose, isCompound, slotsFrom, type Slot } from './voice'
+import { choose, slotsFrom, type Slot } from './voice'
 import type { MeterInfo } from './score'
 
 /**
@@ -73,6 +73,12 @@ export interface RhythmOptions {
   recall?: Slot[]
   /** Decorate the recalled rhythm instead of repeating it literally. */
   ornament?: boolean
+  /**
+   * Begin a sixteenth after the downbeat, as an invention's subject does.
+   * Only fresh statements over a second voice ask for this: there the other
+   * voice's downbeat is what the ear hears first, and the entry is the answer.
+   */
+  enterLate?: boolean
 }
 
 /**
@@ -106,6 +112,7 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   }
 
   // ── ordinary bars ────────────────────────────────────────────────────────
+  const entry = options.enterLate ? 1 : 0
   const rhythm: number[] = []
   for (let beat = 0; beat < beats; beat++) {
     const wanted = attacksForBeat(motion, beat, beats, rand)
@@ -130,29 +137,39 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
       rhythm.push(-trim)
     }
   }
-  return slotsFrom(rhythm)
+  const slots = slotsFrom(rhythm)
+  if (!entry || !slots.length || slots[0].start !== 0) return slots
+  // Shave the entry off the first note; a sixteenth-long first note goes altogether.
+  return slots[0].dur > entry ? [{ start: entry, dur: slots[0].dur - entry }, ...slots.slice(1)] : slots.slice(1)
 }
 
 /**
- * The ornamented return: keep the recalled skeleton's onsets, and fill the
- * space between them with faster notes. The strong-beat arrivals survive — so
- * the ear still hears the same tune — while the line has visibly more to say
- * the second time. This is the difference between a repeat and a variation.
+ * The ornamented return: keep the recalled skeleton's onsets, and fill a
+ * share of its notes with faster ones. The arrivals survive — so the ear still
+ * hears the same tune — while the line has visibly more to say the second
+ * time. This is the difference between a repeat and a variation.
+ *
+ * An earlier version split only notes a full beat long, which a flowing line
+ * almost never has: across 72 returning Chopin bars, the ornamented ones came
+ * back at exactly the density they left (8.75 attacks a bar, both ways). The
+ * nocturne reference goes from 7.25 attacks a bar in its opening to 10.6
+ * across the whole, most of the rise in the return. So anything an eighth or
+ * longer is eligible now, split into sixteenths behind its own arrival.
  */
 function ornamentRhythm(recall: readonly Slot[], meter: MeterInfo, motion: MotionId, rand: () => number): Slot[] {
-  const division = isCompound(meter.id) ? 2 : motion === 'sustained' || motion === 'walking' ? 2 : 1
+  // A slow line has more room to decorate; a running one already runs.
+  const share = motion === 'sustained' || motion === 'walking' ? 0.75 : motion === 'flowing' ? 0.55 : 0.3
   const out: Slot[] = []
-  for (const slot of recall) {
-    // Only long notes are worth decorating, and only sometimes.
-    if (slot.dur >= meter.beatTicks && rand() < 0.7) {
-      const pieces = Math.min(4, Math.floor(slot.dur / division))
-      if (pieces >= 2) {
-        const each = Math.floor(slot.dur / pieces)
-        for (let k = 0; k < pieces; k++) out.push({ start: slot.start + k * each, dur: k === pieces - 1 ? slot.dur - each * (pieces - 1) : each })
-        continue
-      }
+  recall.forEach((slot, k) => {
+    const landing = k === recall.length - 1
+    if (landing || slot.dur < 2 || rand() >= share) {
+      out.push(slot)
+      return
     }
-    out.push(slot)
-  }
+    // The arrival keeps its place and a little of its length; the rest turns.
+    const head = slot.dur >= meter.beatTicks ? Math.max(1, Math.floor(slot.dur / 2)) : 1
+    out.push({ start: slot.start, dur: head })
+    for (let t = slot.start + head; t < slot.start + slot.dur; t++) out.push({ start: t, dur: 1 })
+  })
   return out
 }

@@ -625,7 +625,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
       key: { Db_major: 14, Gb_major: 8, E_major: 10, B_major: 6, F_major: 8, Bb_major: 5, A_major: 5, G_major: 5, C_major: 6, D_minor: 8, Fs_minor: 8, E_minor: 6, A_minor: 5, Cs_minor: 6 },
       meter: { six_eight: 28, four_four: 28, three_four: 22, nine_eight: 22 },
       register: { mid: 40, high: 60 },
-      motion: { sustained: 26, walking: 26, flowing: 32, florid: 16 },
+      motion: { sustained: 18, walking: 30, flowing: 36, florid: 16 },
       accompaniment: { sustained: 38, broken: 42, pulse: 12, stride: 8 },
       palette: { pentatonic: 35, whole_tone: 15, modal: 20, modal_dark: 15, diatonic: 15 },
       tempo: { adagio: 30, andante: 34, largo: 12, larghetto: 10, moderato: 8, larghissimo: 4, grave: 2 },
@@ -641,7 +641,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
           form: { sentence: 50, arch: 35, chain: 15 },
           meter: { nine_eight: 32, six_eight: 28, four_four: 22, three_four: 18 },
           register: { mid: 35, high: 65 },
-          motion: { sustained: 45, walking: 35, flowing: 20 },
+          motion: { sustained: 30, walking: 45, flowing: 25 },
           accompaniment: { sustained: 60, broken: 40 },
           palette: { pentatonic: 35, whole_tone: 25, modal: 20, modal_dark: 10, diatonic: 10 },
           tempo: { adagio: 40, andante: 45, largo: 15 },
@@ -672,7 +672,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         priors: {
           form: { sentence: 30, arch: 45, chain: 25 },
           register: { low: 20, mid: 35, high: 45 },
-          motion: { sustained: 70, walking: 30 },
+          motion: { sustained: 55, walking: 45 },
           accompaniment: { sustained: 75, broken: 25 },
           palette: { modal_dark: 30, modal: 25, pentatonic: 25, diatonic: 20 },
           tempo: { largo: 50, adagio: 45, andante: 5 },
@@ -787,7 +787,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'Film-score piano and hybrid, 2000s–2020s. A slow long-note chant rides a left-hand ostinato that keeps the same figure while layers thicken and the dynamic climbs — loops of i–bVI–bVII–V or i–iv–bVI–V, or a tonic drone held across the barline; harmony never moves faster than the bar. Eight to sixteen bars vamp, add weight, surge late, then often drop to bare. Four-four pulse, piano and strings: a layered build, not cell rotation, not a 4+4 song period.',
     priors: {
-      form: { period: 8, sentence: 4, arch: 16, chain: 72 },
+      form: { period: 15, sentence: 35, arch: 30, chain: 20 },
       key: { D_minor: 14, A_minor: 12, C_minor: 12, G_minor: 10, F_minor: 8, E_minor: 6, C_major: 8, Eb_major: 8, F_major: 6, G_major: 6, D_major: 5, Ab_major: 5 },
       meter: { four_four: 70, three_four: 18, six_eight: 12 },
       register: { low: 30, mid: 48, high: 22 },
@@ -805,7 +805,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         name: 'hypnotic',
         weight: 24,
         priors: {
-          form: { chain: 100 },
+          form: { sentence: 50, arch: 30, chain: 20 },
           register: { low: 25, mid: 55, high: 20 },
           motion: { sustained: 50, walking: 35, flowing: 15 },
           accompaniment: { pulse: 80, broken: 20 },
@@ -820,7 +820,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         name: 'heroic',
         weight: 16,
         priors: {
-          form: { period: 20, sentence: 10, arch: 30, chain: 40 },
+          form: { period: 30, sentence: 25, arch: 45 },
           key: { C_major: 22, Eb_major: 18, D_major: 16, G_major: 14, F_major: 12, Ab_major: 10, A_minor: 8 },
           register: { mid: 55, high: 45 },
           motion: { sustained: 40, walking: 45, flowing: 15 },
@@ -836,7 +836,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         name: 'hymn',
         weight: 16,
         priors: {
-          form: { period: 10, arch: 30, chain: 60 },
+          form: { period: 40, arch: 40, chain: 20 },
           key: { D_minor: 20, A_minor: 16, C_minor: 14, G_minor: 12, F_minor: 10, Ab_major: 14, Eb_major: 14 },
           register: { low: 40, mid: 60 },
           motion: { sustained: 55, walking: 45 },
@@ -852,7 +852,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         name: 'still',
         weight: 16,
         priors: {
-          form: { arch: 25, chain: 75 },
+          form: { sentence: 30, arch: 50, chain: 20 },
           register: { low: 45, mid: 45, high: 10 },
           motion: { sustained: 75, walking: 25 },
           accompaniment: { sustained: 55, pulse: 25, broken: 20 },
@@ -867,7 +867,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         name: 'stormy',
         weight: 16,
         priors: {
-          form: { sentence: 10, chain: 90 },
+          form: { sentence: 55, chain: 45 },
           key: { D_minor: 22, C_minor: 20, G_minor: 16, F_minor: 14, A_minor: 12, E_minor: 10, Eb_major: 6 },
           register: { low: 20, mid: 55, high: 25 },
           motion: { walking: 40, flowing: 45, florid: 15 },
@@ -883,7 +883,7 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
         name: 'restless',
         weight: 12,
         priors: {
-          form: { chain: 100 },
+          form: { sentence: 40, chain: 60 },
           register: { mid: 50, high: 50 },
           motion: { flowing: 55, walking: 30, florid: 15 },
           accompaniment: { broken: 45, pulse: 45, sustained: 10 },

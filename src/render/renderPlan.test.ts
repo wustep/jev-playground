@@ -159,7 +159,7 @@ describe('the singing line', () => {
     for (let k = 1; k < rates.length; k++) expect(rates[k], `${MOTION_IDS[k]} vs ${MOTION_IDS[k - 1]}`).toBeGreaterThan(rates[k - 1])
   })
 
-  it('lands early and rests at a phrase end — but rings out at the very end', () => {
+  it('breathes at a phrase end, then leans into the return by step', () => {
     const score = renderPlan(
       plan({
         motion: 'walking',
@@ -167,13 +167,22 @@ describe('the singing line', () => {
       }),
       4,
     )
-    const endOf = (index: number) => {
-      const bar = melody(score, index)
-      const last = bar[bar.length - 1]
-      return last.start + last.dur
-    }
-    expect(endOf(3), 'the antecedent lands early and lets the bar finish').toBeLessThan(score.meter.ticksPerBar)
-    expect(endOf(7), 'the last bar of the piece holds to the barline').toBe(score.meter.ticksPerBar)
+    // Bar 4 closes the antecedent; bar 5 brings bar 1 back (a period).
+    const end = melody(score, 3)
+    const gaps = end.slice(1).map((n, k) => n.start - (end[k].start + end[k].dur))
+    expect(Math.max(0, ...gaps), 'a real breath: at least half a beat of silence').toBeGreaterThanOrEqual(score.meter.beatTicks / 2)
+    const pickup = end[end.length - 1]
+    expect(pickup.start + pickup.dur, 'the pickup runs into the barline').toBe(score.meter.ticksPerBar)
+    const into = midisOf([pickup])[0] - midisOf([melody(score, 4)[0]])[0]
+    expect(Math.abs(into), 'and approaches the returning tune by step').toBeLessThanOrEqual(2)
+    expect(into).not.toBe(0)
+  })
+
+  it('rings out at the very end rather than resting', () => {
+    const score = renderPlan(plan({ motion: 'walking' }), 4)
+    const last = melody(score, 3)
+    const tail = last[last.length - 1]
+    expect(tail.start + tail.dur).toBe(score.meter.ticksPerBar)
   })
 
   it('brings an earlier bar back when the form says the phrase returns', () => {
@@ -200,6 +209,40 @@ describe('the singing line', () => {
   })
 })
 
+describe('two-voice counterpoint', () => {
+  const duet = () =>
+    renderPlan(
+      plan({
+        style: 'bach',
+        accompaniment: 'counterline',
+        motion: 'flowing',
+        form: 'chain',
+        bars: Array.from({ length: 8 }, (_, i) => ({ chord: (['I', 'IV', 'V', 'I'] as const)[i % 4], contour: 'arch' as const })),
+      }),
+      3,
+    )
+
+  it('exposes the subject alone, entering just after the downbeat', () => {
+    const score = duet()
+    expect(melody(score, 0)[0].start, 'the subject enters a sixteenth late').toBe(1)
+    const second = under(score, 0)
+    expect(second.every((n) => n.start === 0 && n.dur === score.meter.ticksPerBar), 'under it, one held bass note and nothing moving').toBe(true)
+  })
+
+  it('answers the subject an octave below, in its own rhythm', () => {
+    const score = duet()
+    const subject = melody(score, 0)
+    const answer = score.bars[1].bass[0]
+    expect(answer.map((n) => n.start)).toEqual(subject.map((n) => n.start))
+    expect(answer.map((n) => n.dur)).toEqual(subject.map((n) => n.dur))
+    // Re-fitted to the new harmony on strong beats, so mostly — not always — the same notes, lower.
+    const pcs = (notes: typeof subject) => notes.map((n) => midisOf([n])[0] % 12)
+    const same = pcs(answer).filter((pc, k) => pc === pcs(subject)[k]).length
+    expect(same / subject.length).toBeGreaterThan(0.5)
+    expect(Math.max(...midisOf(answer))).toBeLessThan(Math.min(...midisOf(melody(score, 1))))
+  })
+})
+
 describe('the accompaniment', () => {
   it('never reaches the tune, under any pattern', () => {
     for (const accompaniment of ACCOMPANIMENT_IDS) {
@@ -210,15 +253,26 @@ describe('the accompaniment', () => {
   })
 
   it('changes the accompaniment without changing the tune', () => {
+    const tuneOf = (score: Score) => score.bars.map((_, i) => melody(score, i).map((n) => `${n.start}:${n.dur}:${n.pitches}`).join()).join('/')
     const tunes = new Set<string>()
     const parts = new Set<string>()
     for (const accompaniment of ACCOMPANIMENT_IDS as readonly AccompanimentId[]) {
       const score = renderPlan(plan({ accompaniment }), 5)
-      tunes.add(score.bars.map((_, i) => midisOf(melody(score, i)).join()).join('/'))
+      if (accompaniment !== 'counterline') tunes.add(tuneOf(score))
       parts.add(score.bars.map((_, i) => midisOf(under(score, i)).join()).join('/'))
     }
     expect(tunes.size, 'what holds the tune up must not change the tune').toBe(1)
     expect(parts.size, 'but it must change what holds it up').toBe(ACCOMPANIMENT_IDS.length)
+  })
+
+  it('lets a second voice change only where the tune enters, not what it sings', () => {
+    const supported = renderPlan(plan({ accompaniment: 'broken' }), 5)
+    const duet = renderPlan(plan({ accompaniment: 'counterline' }), 5)
+    const pitches = (score: Score) => score.bars.flatMap((_, i) => midisOf(melody(score, i)))
+    expect(melody(duet, 0)[0].start).toBe(1)
+    expect(melody(supported, 0)[0].start).toBe(0)
+    // Same line after the entry; a shaved sixteenth may drop at most the first note.
+    expect(pitches(supported).slice(-20)).toEqual(pitches(duet).slice(-20))
   })
 })
 

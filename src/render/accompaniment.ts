@@ -13,6 +13,7 @@
 // so, and the arranger gives it its own register instead.
 
 import type { AccompanimentId, CompositionPlan } from '../plan/schema'
+import { Note as TonalNote } from 'tonal'
 import { clamp, ladder, midiOf, nearestIndex } from './pitch'
 import type { Voice } from './score'
 import { bassFor, essentialTones, leadVoicing, lowBass, stackUp } from './voiceLeading'
@@ -54,7 +55,7 @@ function sustained(bar: BarView, options: AccompanimentOptions): AccompanimentBa
     const chord = chordAt(bar, span.start)
     const low = lowBass(chord, bar.memory.bass, 45, Math.min(33, top - 24), Math.min(52, top - 12))
     bar.memory.bass = low
-    bassVoice.push(note(span.start, span.dur, low, bar.velocity - 6))
+    bassVoice.push(note(span.start, span.dur, withOctave(low, options.density), bar.velocity - 6))
     if (options.density === 0) continue
     const size = options.density >= 3 ? 4 : options.density >= 2 ? 3 : 2
     const voicing = leadVoicing(essentialTones(chord, size), bar.memory.voicing, Math.min(top - 6, midiOf(low) + 16))
@@ -123,7 +124,7 @@ function pulse(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
       const low = lowBass(chord, previousBass, 43, Math.min(31, top - 26), Math.min(50, top - 14))
       previousBass = low
       bar.memory.bass = low
-      bassVoice.push(note(tick, bar.chord2 ? meter.splitTick : meter.ticksPerBar, low, bar.velocity - 4))
+      bassVoice.push(note(tick, bar.chord2 ? meter.splitTick : meter.ticksPerBar, withOctave(low, options.density), bar.velocity - 4))
     }
     const size = options.density >= 3 ? 3 : 2
     const voicing = leadVoicing(essentialTones(chord, size, { rootless: true }), bar.memory.voicing, top - 10).filter((pitch) => midiOf(pitch) < top)
@@ -149,7 +150,7 @@ function stride(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     if (beat === 0 || (bar.chord2 && tick === meter.splitTick)) {
       const low = bassFor(chord, bar.memory.bass, { lo: Math.min(31, top - 28), hi: Math.min(50, top - 16), allowInversion: !bar.isLast && bar.index > 0 })
       bar.memory.bass = low
-      bassVoice.push(note(tick, meter.beatTicks, low, bar.velocity))
+      bassVoice.push(note(tick, meter.beatTicks, withOctave(low, options.density), bar.velocity))
       if (beats <= 2) continue
       continue
     }
@@ -166,47 +167,79 @@ function stride(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
 // ── counterline ─────────────────────────────────────────────────────────────
 
 /**
- * Not an accompaniment: a second tune. It runs a register below the first,
- * mostly in contrary motion, on the beat subdivision the melody is not using
- * — so the two lines can be told apart by ear, which is the entire point of
- * two-voice counterpoint.
+ * Not an accompaniment: a second tune, a register below the first.
+ *
+ * Two-voice counterpoint is clear when the ear can hear that the second voice
+ * is *answering* the first, so this does what an invention does:
+ *
+ *   • The piece's first bar exposes the subject alone. The second voice
+ *     waits; a lone low tonic is all that sounds under it.
+ *   • The bar after a fresh statement answers it: the same figure, the same
+ *     rhythm, an octave lower, re-fitted to this bar's harmony — while the
+ *     tune moves on to something new above it.
+ *   • Elsewhere it runs free, mostly in contrary motion, moving where the
+ *     tune holds and holding where it moves.
+ *
+ * An earlier version only ever ran free, so an invention came out as two
+ * unrelated lines rather than a subject and its answer.
  */
 function counterline(bar: BarView, options: AccompanimentOptions, melody: MelodyBar): AccompanimentBar {
   const { meter } = bar
   const hi = Math.min(options.ceiling - 2, 67)
   const lo = hi - 19
-  // Move where the tune holds, hold where the tune moves.
-  const melodyOnsets = new Set(melody.notes.map((n) => n.start))
+  const bassUnder = (): Voice => {
+    const top = Math.max(40, lo - 5)
+    const low = lowBass(bar.chord, bar.memory.bass, top - 6, top - 12, top)
+    bar.memory.bass = low
+    return [note(0, meter.ticksPerBar, low, bar.velocity - 14)]
+  }
+
+  // The subject, alone.
+  if (bar.index === 0) return { treble: [], bass: [bassUnder()] }
+
+  // The answer, if the bar before stated something new.
+  const previous = bar.memory.melody[bar.index - 1]
+  const statedFreshly = bar.index === 1 || (bar.position.phrase > 0 && bar.index % 4 === 1)
+  if (previous && statedFreshly && previous.pitches.length > 1) {
+    const rungs = ladder(bar.scale, lo - 12, hi)
+    if (rungs.length) {
+      const answer: Voice = []
+      previous.slots.forEach((slot, k) => {
+        const chord = chordAt(bar, slot.start)
+        const strong = slot.start % meter.beatTicks === 0
+        let midi = midiOf(previous.pitches[k]) - 12
+        while (midi > hi) midi -= 12
+        while (midi < lo) midi += 12
+        const pool = strong ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
+        if (!pool.length) return
+        answer.push(note(slot.start, slot.dur, pool[nearestIndex(pool, midi)], bar.velocity - 6))
+      })
+      if (answer.length) {
+        bar.memory.counterLast = midiOf(answer[answer.length - 1].pitches[0])
+        return { treble: [], bass: options.density >= 2 ? [answer, bassUnder()] : [answer] }
+      }
+    }
+  }
+
+  // Free counterpoint.
   const step = melody.notes.length <= beatsPerBar(meter) ? Math.max(1, meter.beatTicks / 2) : meter.beatTicks
   const voice: Voice = []
-  let previous = bar.memory.counterLast ?? (lo + hi) / 2
+  let last = bar.memory.counterLast ?? (lo + hi) / 2
   for (let tick = 0; tick < meter.ticksPerBar; tick += step) {
     const chord = chordAt(bar, tick)
     const strong = tick % meter.beatTicks === 0
     const rungs = ladder(strong ? chord.core : bar.scale, lo, hi)
     if (!rungs.length) continue
     // Contrary motion against the tune's direction at this moment.
-    const above = melody.notes.filter((n) => n.start <= tick)
-    const heading = above.length >= 2 ? Math.sign(midiOf(above[above.length - 1].pitches[0]) - midiOf(above[above.length - 2].pitches[0])) : 0
-    const target = clamp(previous - heading * 2, lo, hi)
-    let index = nearestIndex(rungs, target)
-    if (midiOf(rungs[index]) === previous && rungs.length > 1) index = clamp(index + (heading >= 0 ? -1 : 1), 0, rungs.length - 1)
-    const pitch = rungs[index]
-    previous = midiOf(pitch)
-    // A held tune wants a moving line under it, and the reverse.
-    const dur = melodyOnsets.has(tick) && step > 1 ? step : step
-    voice.push(note(tick, dur, pitch, bar.velocity - 8))
+    const heard = melody.notes.filter((n) => n.start <= tick)
+    const heading = heard.length >= 2 ? Math.sign(midiOf(heard[heard.length - 1].pitches[0]) - midiOf(heard[heard.length - 2].pitches[0])) : 0
+    let index = nearestIndex(rungs, clamp(last - heading * 2, lo, hi))
+    if (midiOf(rungs[index]) === last && rungs.length > 1) index = clamp(index + (heading >= 0 ? -1 : 1), 0, rungs.length - 1)
+    last = midiOf(rungs[index])
+    voice.push(note(tick, step, rungs[index], bar.velocity - 8))
   }
-  bar.memory.counterLast = previous
-  const bassVoice: Voice = []
-  if (options.density >= 2) {
-    // A pedal note under the duet, always a full octave of room below it.
-    const top = Math.max(40, lo - 5)
-    const low = lowBass(bar.chord, bar.memory.bass, top - 6, top - 12, top)
-    bar.memory.bass = low
-    bassVoice.push(note(0, meter.ticksPerBar, low, bar.velocity - 14))
-  }
-  return { treble: [], bass: [voice, ...(bassVoice.length ? [bassVoice] : [])] }
+  bar.memory.counterLast = last
+  return { treble: [], bass: options.density >= 2 ? [voice, bassUnder()] : [voice] }
 }
 
 // ── the dispatcher ──────────────────────────────────────────────────────────
@@ -235,20 +268,38 @@ export const PEDAL_FOR: Record<AccompanimentId, 'dry' | 'half' | 'full'> = {
  * reaching for is this: thin under a first statement, full at the peak.
  */
 export function densityFor(bar: BarView): 0 | 1 | 2 | 3 {
-  switch (bar.position.role) {
-    case 'climax':
-      return 3
-    case 'cadence':
-      return bar.isLast ? 3 : 2
-    case 'half_cadence':
-      return 1
-    case 'statement':
-      return bar.position.returnsFrom === undefined ? 1 : 2
-    case 'contrast':
-      return 1
-    default:
-      return 2
-  }
+  const byRole = ((): number => {
+    switch (bar.position.role) {
+      case 'climax':
+        return 3
+      case 'cadence':
+        return bar.isLast ? 3 : 2
+      case 'half_cadence':
+        return 1
+      case 'statement':
+        return bar.position.returnsFrom === undefined ? 1 : 2
+      case 'contrast':
+        return 1
+      default:
+        return 2
+    }
+  })()
+  // Loudness fills the texture out, softness thins it. `velocity` already
+  // carries the plan's dynamic level and shape, so a crescendo builds a
+  // fuller accompaniment as well as a louder one — which is most of what a
+  // build is — without a separate label to ask for it.
+  const byLevel = bar.velocity >= 88 ? 1 : bar.velocity <= 48 ? -1 : 0
+  return Math.max(0, Math.min(3, byRole + byLevel)) as 0 | 1 | 2 | 3
+}
+
+/**
+ * The bass doubled an octave down, at full density — the weight a climax or
+ * the top of a build puts under the harmony. Skipped where the octave would
+ * fall off the bottom of the piano's useful range.
+ */
+function withOctave(bass: string, density: number): string[] {
+  if (density < 3 || midiOf(bass) - 12 < 28) return [bass]
+  return [TonalNote.transpose(bass, '-8P'), bass]
 }
 
 export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: MelodyBar, spacing: SpacingId): AccompanimentBar {
