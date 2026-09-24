@@ -27,16 +27,11 @@ export interface AccompanimentBar {
   bass: Voice[]
 }
 
-/** How wide the left hand reaches under the bass, per style. */
-export type SpacingId = 'close' | 'open' | 'tenths'
-export const SPACING_INTERVAL: Record<SpacingId, number> = { close: 3, open: 7, tenths: 16 }
-
 export interface AccompanimentOptions {
   /** Lowest MIDI the tune sounds this bar. Nothing below may reach it. */
   ceiling: number
   /** 0 bare … 3 full. Derived from the bar's role, not from a plan label. */
   density: 0 | 1 | 2 | 3
-  spacing: SpacingId
 }
 
 /** A safe top for accompaniment voices: clear of the tune by a comfortable step. */
@@ -302,9 +297,9 @@ function withOctave(bass: string, density: number): string[] {
   return [TonalNote.transpose(bass, '-8P'), bass]
 }
 
-export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: MelodyBar, spacing: SpacingId): AccompanimentBar {
+export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: MelodyBar): AccompanimentBar {
   // With no tune sounding this bar, the accompaniment keeps its own company
   // under where the tune last was, so a rest is a rest and not a hole.
   const ceiling = melody.floor ?? (bar.memory.melodyLast ?? 72) - 2
-  return PATTERNS[plan.accompaniment](bar, { ceiling, density: densityFor(bar), spacing }, melody)
+  return PATTERNS[plan.accompaniment](bar, { ceiling, density: densityFor(bar) }, melody)
 }

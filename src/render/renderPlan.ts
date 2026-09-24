@@ -115,7 +115,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   // 1. The tune, whole, first.
   const melody = writeMelody(plan, views)
   // 2. Then what holds it up, told where its floor is.
-  const accompaniment = views.map((view, index) => writeAccompaniment(plan, view, melody[index], voice.spacing))
+  const accompaniment = views.map((view, index) => writeAccompaniment(plan, view, melody[index]))
 
   /** Lean toward the next bar's level, lean on the metre, never play two notes identically. */
   const shape = (line: Voice, index: number): Voice => {
