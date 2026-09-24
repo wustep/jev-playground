@@ -303,12 +303,73 @@ describe('the accompaniment', () => {
       const score = renderPlan(made, 5)
       parts.add(score.bars.map((_, i) => midisOf(under(score, i)).join()).join('/'))
       // The tune a pattern gets is the reference tune, with at most its
-      // statements' openings silenced where that pattern owns the downbeat —
-      // notes taken away, none changed. Checked bar by bar, the whole piece.
-      const expected = reference.bars.map((bar, i) => ({ ...bar, treble: [silenceUntil(melody(reference, i), enteringAfter(made, { position: barPositions(made.form, 4)[i], meter: reference.meter }))] }))
-      expect(tuneOf(score), `${accompaniment} changed what the tune sings`).toBe(tuneOf({ ...reference, bars: expected }))
+      // statements' openings silenced, and notes held over a barline in
+      // place of the ones struck there, where that pattern owns the downbeat —
+      // notes taken away or held on, none changed. Checked bar by bar.
+      const expected = reference.bars.map((bar, i) => {
+        const heldAt = new Set(melody(score, i).filter((n) => n.tied).map((n) => n.start))
+        const entry = enteringAfter(made, { position: barPositions(made.form, 4)[i], meter: reference.meter })
+        return { ...bar, treble: [silenceUntil(melody(reference, i), entry).filter((n) => !heldAt.has(n.start))] }
+      })
+      const struck = { ...score, bars: score.bars.map((bar, i) => ({ ...bar, treble: [melody(score, i).filter((n) => !n.tied)] })) }
+      expect(tuneOf(struck), `${accompaniment} changed what the tune sings`).toBe(tuneOf({ ...reference, bars: expected }))
     }
     expect(parts.size, 'but each must change what holds it up').toBe(ACCOMPANIMENT_IDS.length)
+  })
+
+  it('holds the tune over a barline only where the accompaniment strikes it', async () => {
+    const planner = new HeuristicPlanner()
+    let held = 0
+    for (const accompaniment of ACCOMPANIMENT_IDS) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const { plan: drawn } = await planner.plan({ style: 'bach', bars: 16, pick: 'sample', seed, brief: false })
+        const made = { ...drawn, accompaniment, motion: 'flowing' as const }
+        const score = renderPlan(made, seed)
+        const positions = barPositions(made.form, 16)
+        score.bars.forEach((_, i) => {
+          const first = melody(score, i)[0]
+          if (!first?.tied) return
+          held++
+          expect(['stride', 'counterline'], `${accompaniment} owns no downbeat`).toContain(accompaniment)
+          expect(first.start).toBe(0)
+          expect(positions[i].phraseFinal || positions[i - 1].phraseFinal || positions[i].role === 'statement').toBe(false)
+          const before = melody(score, i - 1)
+          const tail = before[before.length - 1]
+          expect(tail.start + tail.dur, 'the held note rings up to the barline').toBe(score.meter.ticksPerBar)
+          expect(first.pitches, 'and it is the same note, not a new one').toEqual(tail.pitches)
+        })
+      }
+    }
+    expect(held, 'an invention and a dance do hold over barlines').toBeGreaterThan(10)
+  })
+
+  it('plays a held note once, for its whole length', () => {
+    const score = renderPlan(plan({ accompaniment: 'counterline', bars: Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V', 'I'] as const)[i % 4], contour: 'wave' as const })) }), 2)
+    const ties = score.bars.flatMap((_, i) => (melody(score, i)[0]?.tied ? [i] : []))
+    expect(ties.length).toBeGreaterThan(0)
+    const tune = timeline(score, { sustain: false }).filter((n) => n.hand === 'right')
+    const struck = score.bars.reduce((n, _, i) => n + melody(score, i).filter((note) => !note.tied).length, 0)
+    expect(tune, 'one sounding note per struck note').toHaveLength(struck)
+    for (const i of ties) {
+      const before = melody(score, i - 1)
+      const tail = before[before.length - 1]
+      const sounding = tune.filter((n) => n.bar === i - 1 && n.midi === midisOf([tail])[0]).sort((a, b) => b.time - a.time)[0]
+      expect(sounding, `bar ${i}'s held note`).toBeDefined()
+      expect(sounding!.time + sounding!.duration, 'it sounds on past the barline').toBeGreaterThan(i * score.meter.ticksPerBar * (60 / score.bpm / 4))
+    }
+  })
+
+  it('brings a return in where its statement came in', () => {
+    // An invention's subject enters a sixteenth late. Its return used to
+    // replay the rhythm from before that silence, and struck the downbeat.
+    const bars = Array.from({ length: 8 }, (_, i) => ({ chord: (['I', 'IV', 'V', 'V'] as const)[i % 4], contour: 'arch' as const }))
+    for (const accompaniment of ['counterline', 'stride'] as const) {
+      const score = renderPlan(plan({ accompaniment, bars }), 3)
+      expect(melody(score, 4)[0].start, `${accompaniment}: the answer enters with the question`).toBe(melody(score, 0)[0].start)
+      expect(melody(score, 4)[0].start).toBeGreaterThan(0)
+      const end = melody(score, 3)
+      expect(end[end.length - 1].start + end[end.length - 1].dur, 'no upbeat into a downbeat the tune does not play').toBeLessThan(score.meter.ticksPerBar)
+    }
   })
 
   it('lets a pattern that owns the downbeat move only where a fresh statement enters', () => {

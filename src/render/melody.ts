@@ -311,6 +311,8 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
  */
 function pickupInto(bar: BarView, next: BarView | undefined, notes: Note[], plan: CompositionPlan): Note[] {
   if (!next || !bar.position.phraseFinal || bar.isLast || plan.motion === 'sustained') return []
+  // An upbeat into a downbeat the tune leaves to the accompaniment leads nowhere.
+  if (enteringAfter(plan, next) > 0) return []
   const source = next.position.returnsFrom === undefined ? undefined : bar.memory.melody[next.position.returnsFrom]
   const target = source?.pitches[0]
   if (!target || !notes.length) return []
@@ -335,18 +337,63 @@ function pickupInto(bar: BarView, next: BarView | undefined, notes: Note[], plan
 }
 
 /**
- * How long a fresh statement waits after the downbeat — only where the
+ * Whether the accompaniment strikes beat one in the tune's place: an
+ * invention's second voice, a dance bass. Only there does the tune enter
+ * late or hold over the barline.
+ */
+const ownsDownbeat = (plan: CompositionPlan) => plan.accompaniment === 'counterline' || (plan.accompaniment === 'stride' && plan.motion !== 'sustained')
+
+/**
+ * How long a statement waits after the downbeat — only where the
  * accompaniment owns it. An invention's second voice takes beat one and the
  * subject answers a sixteenth later; a dance bass takes beat one and the tune
  * comes in on the off-beat. Every generated tune used to attack every
- * downbeat; a mazurka's attacks 56% of them. Returns keep their source's
- * entry, so they are never shifted here.
+ * downbeat; a mazurka's attacks 56% of them.
+ *
+ * A return enters where its statement entered. It recalls the statement's
+ * rhythm as written, before the opening was silenced, so a return that did
+ * not silence its own opening struck the downbeat its statement had left to
+ * the accompaniment.
  */
 export function enteringAfter(plan: CompositionPlan, bar: Pick<BarView, 'position' | 'meter'>): number {
-  if (bar.position.role !== 'statement' || bar.position.returnsFrom !== undefined) return 0
-  if (plan.accompaniment === 'counterline') return 1
-  if (plan.accompaniment === 'stride' && plan.motion !== 'sustained') return Math.max(1, bar.meter.beatTicks / 2)
-  return 0
+  if (bar.position.role !== 'statement' || !ownsDownbeat(plan)) return 0
+  return plan.accompaniment === 'counterline' ? 1 : Math.max(1, bar.meter.beatTicks / 2)
+}
+
+/**
+ * Chance that the tune holds over a barline the accompaniment strikes. The
+ * references hold their top voice over 7 of 15 barlines (BWV 772) and 6 of 15
+ * (Op. 6/1); the nocturne, the Adagio, Clair de lune and "Wyoming" strike
+ * every one, and there the accompaniment never owns beat one.
+ */
+const HOLD_OVER = 0.6
+
+/**
+ * Hold the tune across a barline the accompaniment strikes: the last note of
+ * one bar rings on through the first slot of the next, instead of that slot
+ * being struck. No pitch changes — the held note takes the struck note's
+ * place — and only where it belongs there: a tone of the new chord, or a
+ * suspension that steps into the note after it.
+ *
+ * Never over a breath (out of a phrase-final bar), into a landing (a
+ * phrase-final bar) or into a statement, which enters on its own.
+ */
+function holdOver(plan: CompositionPlan, bars: readonly BarView[], written: Note[][], chance: () => number): void {
+  if (!ownsDownbeat(plan)) return
+  for (let i = 1; i < bars.length; i++) {
+    const bar = bars[i]
+    if (bars[i - 1].position.phraseFinal || bar.position.phraseFinal || bar.position.role === 'statement') continue
+    const tail = written[i - 1][written[i - 1].length - 1]
+    const [head, after] = written[i]
+    if (!tail || !head || !after || tail.start + tail.dur !== bar.meter.ticksPerBar || head.start !== 0) continue
+    const held = midiOf(tail.pitches[0])
+    const chordTone = chordAt(bar, 0).core.some((pc) => TonalNote.chroma(pc) === held % 12)
+    const step = Math.abs(held - midiOf(after.pitches[0]))
+    const suspension = head.dur <= bar.meter.beatTicks && step > 0 && step <= 2
+    if (!chordTone && !suspension) continue
+    if (chance() >= HOLD_OVER) continue
+    written[i][0] = { ...head, pitches: [...tail.pitches], tied: true }
+  }
 }
 
 /**
@@ -363,9 +410,13 @@ export function silenceUntil(notes: readonly Note[], entry: number): Note[] {
   return notes.flatMap((n) => (n.start >= entry ? [n] : n.start + n.dur > entry ? [{ ...n, start: entry, dur: n.start + n.dur - entry }] : []))
 }
 
-/** Write the whole singing line, bar by bar, before anything accompanies it. */
-export function writeMelody(plan: CompositionPlan, bars: readonly BarView[]): MelodyBar[] {
-  return bars.map((bar, index) => {
+/**
+ * Write the whole singing line, bar by bar, before anything accompanies it.
+ * `hold` is a random stream of its own, so holding over a barline never
+ * reshuffles the notes themselves.
+ */
+export function writeMelody(plan: CompositionPlan, bars: readonly BarView[], hold: () => number): MelodyBar[] {
+  const written = bars.map((bar, index) => {
     const recalled = bar.position.returnsFrom === undefined ? undefined : bar.memory.melody[bar.position.returnsFrom]
     const slots = melodyRhythm({
       motion: plan.motion,
@@ -389,6 +440,8 @@ export function writeMelody(plan: CompositionPlan, bars: readonly BarView[]): Me
         slots: slots.slice(0, pitches.length).map((slot) => ({ ...slot })),
       }
     }
-    return { notes, floor: notes.length ? Math.min(...notes.flatMap((n) => n.pitches.map(midiOf))) : undefined }
+    return notes
   })
+  holdOver(plan, bars, written, hold)
+  return written.map((notes) => ({ notes, floor: notes.length ? Math.min(...notes.flatMap((n) => n.pitches.map(midiOf))) : undefined }))
 }

@@ -81,8 +81,10 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   const key = keyInfo(plan.key)
   const voice = STYLE_VOICES[plan.style]
   const rand = rng(seed ^ 0x9e3779b9)
-  // A second stream for touch, so adding expression never reshuffles the notes.
+  // A second stream for touch, so adding expression never reshuffles the notes,
+  // and a third for holding the tune over a barline.
   const touch = rng(seed ^ 0x51ed270b)
+  const hold = rng(seed ^ 0x2545f491)
   const memory = newMemory()
 
   const barCount = plan.bars.length as BarCount
@@ -117,7 +119,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
   })
 
   // 1. The tune, whole, first.
-  const melody = writeMelody(plan, views)
+  const melody = writeMelody(plan, views, hold)
   // 2. Then what holds it up, told where its floor is — and, for a bar where
   //    the tune is silent, where it last sang.
   let lastSung: number | undefined
@@ -215,12 +217,15 @@ export function timeline(score: Score, options: { sustain?: boolean } = {}): Tim
   const lastIndex = score.bars.length - 1
   const stretch = score.ritardando ? 1.28 : 1
   const out: TimedNote[] = []
+  // The note each voice last struck per pitch, and the bar it was sounding
+  // in, so a note tied over the barline lengthens it instead of striking again.
+  const ringing = new Map<string, { note: TimedNote; bar: number }>()
   for (const bar of score.bars) {
     const barStart = bar.index * score.meter.ticksPerBar * tick
     const localTick = bar.index === lastIndex ? tick * stretch : tick
     const barEnd = barStart + score.meter.ticksPerBar * localTick
-    const voices = [...bar.treble.map((line) => ['right', line] as const), ...bar.bass.map((line) => ['left', line] as const)]
-    for (const [hand, line] of voices) {
+    const voices = [...bar.treble.map((line, v) => ['right', v, line] as const), ...bar.bass.map((line, v) => ['left', v, line] as const)]
+    for (const [hand, v, line] of voices) {
       for (const n of line) {
         n.pitches.forEach((pitch, k) => {
           const time = barStart + n.start * localTick + (n.roll ? k * ROLL_SPREAD : 0) + timingOffsetSeconds(score, n.start, tick)
@@ -229,7 +234,16 @@ export function timeline(score: Score, options: { sustain?: boolean } = {}): Tim
           const written = n.dur * localTick * 0.96 * held
           const remain = barEnd - time
           const duration = pedal === 'dry' ? written : pedal === 'half' ? Math.max(written, written + Math.max(0, remain) * 0.5) : Math.max(written, remain + 0.15)
-          out.push({ midi: midiOf(pitch), time, duration, velocity: n.velocity, bar: bar.index, hand })
+          const key = `${hand}:${v}:${midiOf(pitch)}`
+          const tiedFrom = n.tied ? ringing.get(key) : undefined
+          if (tiedFrom && tiedFrom.bar === bar.index - 1) {
+            tiedFrom.note.duration = Math.max(tiedFrom.note.duration, time + duration - tiedFrom.note.time)
+            tiedFrom.bar = bar.index
+            return
+          }
+          const timed: TimedNote = { midi: midiOf(pitch), time, duration, velocity: n.velocity, bar: bar.index, hand }
+          out.push(timed)
+          ringing.set(key, { note: timed, bar: bar.index })
         })
       }
     }

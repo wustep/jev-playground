@@ -51,7 +51,7 @@ function refsFor(style: StyleId): { path: string; local: boolean }[] {
 
 /** Longest run of one melody pitch struck repeatedly — the "stuck" detector. */
 function longestRepeat(score: Score): number {
-  const line = score.bars.flatMap((bar) => melodyOfBar(bar).flat().map((note) => midiOf(note.pitches[note.pitches.length - 1])))
+  const line = score.bars.flatMap((bar) => melodyOfBar(bar).flat().filter((note) => !note.tied).map((note) => midiOf(note.pitches[note.pitches.length - 1])))
   let best = 1
   let run = 1
   for (let i = 1; i < line.length; i++) {

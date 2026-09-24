@@ -42,6 +42,11 @@ export interface Note {
   accent?: boolean
   /** Spread the chord upward on playback (harp / rolled voicing). */
   roll?: boolean
+  /**
+   * Tied over from the previous bar: the same pitches, still sounding, not
+   * struck again. Only ever the first note of a bar, and only in the melody.
+   */
+  tied?: boolean
 }
 
 /** Monophonic-in-time line: sorted, non-overlapping. Gaps are rests. */

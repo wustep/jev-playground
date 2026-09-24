@@ -559,6 +559,9 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
 
   const layout: SheetLayout = { width: cssWidth, height: Math.ceil(height * scale), scale, bars: [] }
   let lastDynamic: string | undefined
+  // The tune's last note in the bar just drawn, so a note tied over the
+  // barline can reach back to it — as two half-ties across a system break.
+  let heldOver: { note: StaveNote; system: number } | undefined
 
   let systemTop = 0
   for (let system = 0; system < systemCount; system++) {
@@ -602,6 +605,8 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       new StaveConnector(treble, bass).setType(isFinal ? 'boldDoubleRight' : 'singleRight').setContext(context).draw()
 
       const all: BuiltVoice[] = []
+      const tiedFrom = heldOver
+      heldOver = undefined
       try {
         const upper = voicesForStaff(bar.treble, 'treble', meter)
         const lower = voicesForStaff(bar.bass, 'bass', meter)
@@ -634,6 +639,19 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
             drawQuietly(() => tie.setContext(context).draw())
           }),
         )
+
+        const tune = bar.treble[0]?.length ? upper[0] : undefined
+        const first = tune?.notes[0]
+        if (tiedFrom && bar.treble[0]?.[0]?.tied && first && !first.isRest()) {
+          if (tiedFrom.system === system) {
+            drawQuietly(() => new StaveTie({ firstNote: tiedFrom.note, lastNote: first }).setContext(context).draw())
+          } else {
+            drawQuietly(() => new StaveTie({ firstNote: tiedFrom.note }).setContext(context).draw())
+            drawQuietly(() => new StaveTie({ lastNote: first }).setContext(context).draw())
+          }
+        }
+        const sung = tune?.notes.filter((n) => !n.isRest()) ?? []
+        if (sung.length) heldOver = { note: sung[sung.length - 1], system }
       } catch {
         /* staves and labels still draw; this bar's notes are skipped */
       }

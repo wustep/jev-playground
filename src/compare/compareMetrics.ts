@@ -148,7 +148,9 @@ export function skyline(voices: Voice[]): SkyEvent[] {
   const events: SkyEvent[] = []
   for (const voice of voices) {
     for (const note of voice) {
-      if (!note.pitches.length) continue
+      // A note tied over the barline is not an attack in this bar, just as a
+      // reference MIDI note held over a barline is not an event in the next.
+      if (!note.pitches.length || note.tied) continue
       const midis = note.pitches.map((p) => midiOf(p))
       const top = Math.max(...midis)
       events.push({ start: note.start, dur: note.dur, midi: top, pc: ((top % 12) + 12) % 12 })
@@ -461,7 +463,7 @@ export function scoreMetrics(score: Score) {
       const events = skyline(voices)
       return {
         events,
-        onsets: voices.reduce((n, voice) => n + voice.filter((note) => note.pitches.length).length, 0),
+        onsets: voices.reduce((n, voice) => n + voice.filter((note) => note.pitches.length && !note.tied).length, 0),
         bassOnsets: bar.bass.flat().filter((n) => n.pitches.length).length,
       }
     }),
