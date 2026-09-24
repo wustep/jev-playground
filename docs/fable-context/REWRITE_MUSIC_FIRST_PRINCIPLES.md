@@ -161,11 +161,11 @@ Living artists never enter the repository. Glass's Étude No. 6 and Fox's "Wyomi
 ### Still not done
 
 - **No listening pass this round.** Chrome and Playwright were both unavailable, so the dial and sheet were not looked at; the dial CSS is the original 8-stop grid and unchanged.
-- **Fox runs at 6.4 attacks a bar against "Wyoming"'s 16.4.** Deliberate: one 18-bar transcription shouldn't erase his slow chordal pieces.
+- **Fox runs at 6.4 attacks a bar against "Wyoming"'s 16.4.** Deliberate: one 18-bar transcription shouldn't erase his slow chordal pieces. *(Now 7.7; see [the ear pass](#ear-pass-2026-09-24).)*
 - **Bach at 8.2 vs 11–12**: the chorale and sarabande variants pull the mean down; inventions and preludes alone are at 13.
-- **Chopin's 8-bar period answers itself literally**, where Op. 9/2 dresses its very first answer. At 16 bars the dressed return arrives.
-- **Clair de lune's reference plan sings 5 semitones high** (78.9 vs 73.9); `high` is still the nearer window.
-- **Downbeats**: returns and non-statement bars still attack beat one. Ties across the barline would do more, but need cross-bar notes in the Score.
+- ~~**Chopin's 8-bar period answers itself literally**, where Op. 9/2 dresses its very first answer.~~ Fixed in [the ear pass](#ear-pass-2026-09-24).
+- ~~**Clair de lune's reference plan sings 5 semitones high** (78.9 vs 73.9).~~ Now +2.1; see [the ear pass](#ear-pass-2026-09-24).
+- ~~**Downbeats**: returns and non-statement bars still attack beat one.~~ The Score has cross-bar ties now; see [the ear pass](#ear-pass-2026-09-24).
 - **No keyed A/B** against live Jev.
 
 
@@ -188,6 +188,54 @@ A code review of this branch, not a listening pass. Every change below leaves pl
 
 ### Left for the music follow-up
 
-- The four open ear flags above: Fox density, Chopin's literal first answer, Clair de lune's register, and downbeats on returns.
+- The four open ear flags above: Fox density, Chopin's literal first answer, Clair de lune's register, and downbeats on returns. *(Taken up in the ear pass below.)*
 - `PhraseBuild` still names `duplicate`, `loop` and `pedal`, and the harmony books still carry `loops` and `pedals`, but no form's slots reach them. Glass's chord cycles never play. Removing them would shift the stub's random stream and its style-match vocabulary, and whether a loop form comes back is a musical call.
 - `counterline` answers whatever a phrase's first bar played, a return or a contrast bar included, while its doc says it answers a fresh statement. Which one is right is a musical call.
+
+---
+
+## Ear pass, 2026-09-24
+
+The four ear flags left after the polish pass, in the order the ear ranked them. Every change is a table row, the phrase model, or the Score; no per-artist code. Measured with `scripts/audit-samples.ts --seeds 24` (16 bars) and `scripts/compare-generated-vs-reference.ts --summary`. Still no listening pass.
+
+### Chopin's first answer is dressed
+
+Op. 9/2 answers its question at 12.5 attacks a bar against the question's 7.25, and its final return runs at 14.5. The generated period answered note for note: at 16 bars, 26 of 48 Chopin first answers were exact copies.
+
+- `StyleVoice` gets an `answers` column. `dressed` decorates every return; `literal` saves the decoration for the form's late return. Chopin is the one `dressed` row. It lives in the style table because dressing a reprise is a player's habit as much as a composer's. Chopin wrote extra fioriture for Op. 9/2 into his pupils' copies.
+- The dressing changed for every style. It used to re-derive the weak notes by interpolating between the strong ones. That lost half the tune, and rounding small steps to none produced pitches struck twice (E♭ E♭ F F G G). Now every note of the tune sounds on its own onset, and the quick notes split off behind it turn around it or run into the next one (`fioritura` in `src/render/melody.ts`). No pitch is ever struck twice.
+- A dressed return that the random draw left undecorated now turns its longest note, so a dressed return can't come back as a clone.
+
+Chopin returns that clone their source: 28 of 102 → 1 at 16 bars, and 8 of 54 → 1 at 8 bars. The one left is a florid bar made entirely of sixteenths, with nothing long enough to turn. Op. 9/2's reference plan: 7.75 → 9.88 attacks a bar (MIDI 10.63).
+
+### The tune holds over a barline the accompaniment strikes
+
+Measured at each barline, the references mostly strike the downbeat. The nocturne, the Adagio, Clair de lune, *Für Elise* and "Wyoming" strike 14 or 15 of 15. The exceptions are exactly the two pieces whose accompaniment owns beat one. BWV 772 holds its top voice over 7 of 15 barlines while the second voice strikes. The Op. 6/1 mazurka holds 6 of 15 over its dance bass. So this extends the rule the rewrite already had for those patterns, where a statement enters after the downbeat, instead of adding a style column.
+
+- A return enters where its statement entered. Returns recalled the rhythm from before the statement's opening was silenced, so under `counterline` and `stride` every return struck the downbeat its statement had left to the accompaniment. No upbeat now leads into a downbeat the tune doesn't play.
+- Under `counterline` or `stride`, inside a phrase, the last note of a bar may ring through the first slot of the next bar (60% of eligible barlines). It has to be a tone of the new chord, or a suspension that steps into the note after it. No pitch changes: the held note takes the struck note's place.
+- Score notes gain `tied`. `timeline()` lengthens the held note instead of striking it again, so playback and MIDI export both hold it. The sheet draws the tie, as two halves across a system break. Metrics count it as held, the way they already treated reference MIDI.
+
+| style | downbeats struck, before → after | references |
+| --- | --- | --- |
+| bach | 95% → 77% | invention 56%, prelude 0% |
+| chopin | 98% → 91% | mazurka 56%, nocturne 100%, prelude 94% |
+| laufey | 97% → 86% | — |
+| elijah_fox | 97% → 95% | "Wyoming" 94% |
+| beethoven, zimmer | 100% → 100% | Op. 13 II 100% |
+
+### The `high` register comes down two semitones
+
+Clair de lune's reference plan sang 5.4 semitones sharp. Every plan labelled `high` did the same (nocturne +1.2, Op. 28/4 +6.4, arabesque +3.9), while `mid` and `low` plans landed within about a semitone. The window was centred on the nocturne's 76.5, but a tune rendered in it sits above its centre. I swept shifts of −1 to −3, and `high` moved from [68, 85] to [66, 83]. Now the nocturne renders at −0.8, the arabesque at +1.6 and Clair de lune at +2.1. Debussy's generated mean went 74.6 → 73.2 against references at 70.8, 73.9 and 74.3, and its clair-like `hazy` variant renders at 72.5 against Clair de lune's 73.9. Its priors stay as they were.
+
+### Fox plays his sixteenths more often
+
+The rhythmic fact from his own teaching is the displacement lesson: continuous sixteenths regrouped 5+5+6 and 7+5+4, sixteen to the bar. "Wyoming" is exactly that in 4/4. His `perpetual` variant took the base metre, so more than half its pieces were in 3/4 or 6/8. As table rows, `perpetual` is now 4/4 (85%) and florid (90%) and is weighted 24 instead of 16, and `hazy` leans florid (60%). `still` and `singing` keep his slow chordal pieces.
+
+Per variant, over 200 seeds: `perpetual` 9.3 → 12.4 attacks a bar, `hazy` 7.8 → 9.2. The audit mean went 6.34 → 7.66 against 16.4. The rest of the gap is the `florid` rate itself, 3.5 a beat, which every style shares. Raising it would turn every florid line into an unbroken sixteenth wall.
+
+### Left alone
+
+- **Bach's mean density.** Where Bach has a reference, the genre matches it: preludes render 11.7 attacks a bar against WTC I/1's 12, and inventions 10.0 against BWV 772's 11.1. The mean is low because chorales (4.5) and sarabandes (5.8) move slowly, which is right for them, and none of them has a reference. Re-weighting how often Bach writes a chorale would be a guess.
+- **Fox's last 4 attacks a bar.** See above.
+- **No listening pass, no keyed A/B.**
