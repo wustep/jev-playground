@@ -28,6 +28,12 @@ function fingerprint(plan: CompositionPlan) {
   const midis = melody.flatMap((note) => note.pitches.map(midiOf))
   return {
     melody: printOf(melody),
+    /**
+     * Pitches still sounding after each bar's first half-beat: what the tune sings,
+     * independent of where a statement enters. A pattern that owns the
+     * downbeat may silence that window and nothing else.
+     */
+    sung: score.bars.flatMap((bar) => melodyOfBar(bar).flat().filter((note) => note.start + note.dur > score.meter.beatTicks / 2).flatMap((note) => note.pitches.map(midiOf))).join(),
     accompaniment: printOf(score.bars.flatMap((bar) => accompanimentOfBar(bar).flat())),
     register: midis.length ? midis.reduce((a, b) => a + b, 0) / midis.length : 0,
     onsets: melody.length / score.bars.length,
@@ -39,17 +45,19 @@ const FIELDS = { register: REGISTER_IDS, motion: MOTION_IDS, accompaniment: ACCO
 
 async function main() {
   const planner = new HeuristicPlanner()
-  // `accompaniment` is expected to score 1 distinct MELODY and 5 distinct
-  // accompaniments: changing what holds the tune up must not change the tune.
-  console.log('field          style          melodies  accomp.   register span   onsets span   breaches')
+  // `accompaniment` is expected to score ONE sung line and five distinct
+  // accompaniments: what holds the tune up must not change what it sings.
+  // Its melody count may be above one, because the two patterns that own the
+  // downbeat (`counterline`, `stride`) move where a fresh statement enters.
+  console.log('field          style          melodies  sung  accomp.   register span   onsets span   breaches')
   for (const [field, values] of Object.entries(FIELDS)) {
     for (const style of STYLE_IDS as readonly StyleId[]) {
       const { plan } = await planner.plan({ style, bars: 16, pick: 'argmax', seed: 1, brief: true })
       const results = values.map((value) => fingerprint({ ...plan, [field]: value }))
-      const count = (key: 'melody' | 'accompaniment') => `${new Set(results.map((r) => r[key])).size}/${values.length}`
+      const count = (key: 'melody' | 'sung' | 'accompaniment') => `${new Set(results.map((r) => r[key])).size}/${values.length}`
       const span = (xs: number[]) => `${Math.min(...xs).toFixed(1)}–${Math.max(...xs).toFixed(1)}`
       console.log(
-        `${field.padEnd(14)} ${style.padEnd(13)} ${count('melody').padStart(7)} ${count('accompaniment').padStart(8)}` +
+        `${field.padEnd(14)} ${style.padEnd(13)} ${count('melody').padStart(7)} ${count('sung').padStart(5)} ${count('accompaniment').padStart(8)}` +
           `   ${span(results.map((r) => r.register)).padStart(13)} ${span(results.map((r) => r.onsets)).padStart(13)} ${String(Math.max(...results.map((r) => r.breaches))).padStart(10)}`,
       )
     }

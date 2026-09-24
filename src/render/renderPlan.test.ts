@@ -22,6 +22,8 @@ import { rng } from '../planner/pick'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { midiOf } from './pitch'
 import { renderPlan, timeline } from './renderPlan'
+import { enteringAfter, silenceUntil } from './melody'
+import { barPositions } from '../plan/phrase'
 import type { Score } from './score'
 
 const plan = (over: Partial<CompositionPlan> = {}): CompositionPlan => ({
@@ -231,7 +233,10 @@ describe('two-voice counterpoint', () => {
 
   it('answers the subject an octave below, in its own rhythm', () => {
     const score = duet()
-    const subject = melody(score, 0)
+    // The answer imitates the subject as written; what is heard of it in bar 1
+    // lacks its first sixteenth, which the second voice's downbeat covers.
+    const written = renderPlan(plan({ style: 'bach', accompaniment: 'broken', motion: 'flowing', form: 'chain', bars: score.plan.bars }), 3)
+    const subject = melody(written, 0)
     const answer = score.bars[1].bass[0]
     expect(answer.map((n) => n.start)).toEqual(subject.map((n) => n.start))
     expect(answer.map((n) => n.dur)).toEqual(subject.map((n) => n.dur))
@@ -254,19 +259,18 @@ describe('the accompaniment', () => {
 
   it('changes the accompaniment without changing the tune', () => {
     const tuneOf = (score: Score) => score.bars.map((_, i) => melody(score, i).map((n) => `${n.start}:${n.dur}:${n.pitches}`).join()).join('/')
-    const pitchesOf = (score: Score) => score.bars.flatMap((_, i) => midisOf(melody(score, i))).slice(-20)
-    const tunes = new Set<string>()
-    const lines = new Set<string>()
+    const reference = renderPlan(plan({ accompaniment: 'broken' }), 5)
     const parts = new Set<string>()
     for (const accompaniment of ACCOMPANIMENT_IDS as readonly AccompanimentId[]) {
-      const score = renderPlan(plan({ accompaniment }), 5)
-      // Patterns that do not own the downbeat leave the tune exactly as written.
-      if (accompaniment !== 'counterline' && accompaniment !== 'stride') tunes.add(tuneOf(score))
-      lines.add(pitchesOf(score).join())
+      const made = plan({ accompaniment })
+      const score = renderPlan(made, 5)
       parts.add(score.bars.map((_, i) => midisOf(under(score, i)).join()).join('/'))
+      // The tune a pattern gets is the reference tune, with at most its
+      // statements' openings silenced where that pattern owns the downbeat —
+      // notes taken away, none changed. Checked bar by bar, the whole piece.
+      const expected = reference.bars.map((bar, i) => ({ ...bar, treble: [silenceUntil(melody(reference, i), enteringAfter(made, { position: barPositions(made.form, 4)[i], meter: reference.meter }))] }))
+      expect(tuneOf(score), `${accompaniment} changed what the tune sings`).toBe(tuneOf({ ...reference, bars: expected }))
     }
-    expect(tunes.size, 'what holds the tune up must not change the tune').toBe(1)
-    expect(lines.size, 'and no pattern changes what the tune sings once it is in').toBe(1)
     expect(parts.size, 'but each must change what holds it up').toBe(ACCOMPANIMENT_IDS.length)
   })
 

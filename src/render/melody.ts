@@ -294,14 +294,29 @@ function pickupInto(bar: BarView, next: BarView | undefined, notes: Note[], plan
  * How long a fresh statement waits after the downbeat — only where the
  * accompaniment owns it. An invention's second voice takes beat one and the
  * subject answers a sixteenth later; a dance bass takes beat one and the tune
- * comes in on the off-beat. Returns keep their source's entry, so they are
- * never shifted here.
+ * comes in on the off-beat. Every generated tune used to attack every
+ * downbeat; a mazurka's attacks 56% of them. Returns keep their source's
+ * entry, so they are never shifted here.
  */
-function enteringAfter(plan: CompositionPlan, bar: BarView): number {
+export function enteringAfter(plan: CompositionPlan, bar: Pick<BarView, 'position' | 'meter'>): number {
   if (bar.position.role !== 'statement' || bar.position.returnsFrom !== undefined) return 0
   if (plan.accompaniment === 'counterline') return 1
   if (plan.accompaniment === 'stride' && plan.motion !== 'sustained') return Math.max(1, bar.meter.beatTicks / 2)
   return 0
+}
+
+/**
+ * Silence a bar's opening until `entry`: notes that end before it go, the one
+ * sounding across it is shaved to start there, and nothing else changes.
+ *
+ * Applied AFTER the tune is written and remembered, never before. Shifting
+ * the rhythm first moved the contour, which moved every later bar that
+ * recalled this one — so a late entry quietly rewrote the whole tune. Done
+ * last, it only takes notes away.
+ */
+export function silenceUntil(notes: readonly Note[], entry: number): Note[] {
+  if (!entry) return [...notes]
+  return notes.flatMap((n) => (n.start >= entry ? [n] : n.start + n.dur > entry ? [{ ...n, start: entry, dur: n.start + n.dur - entry }] : []))
 }
 
 /** Write the whole singing line, bar by bar, before anything accompanies it. */
@@ -316,11 +331,10 @@ export function writeMelody(plan: CompositionPlan, bars: readonly BarView[]): Me
       rand: bar.rand,
       recall: recalled?.slots,
       ornament: bar.position.ornamentReturn,
-      enterLate: enteringAfter(plan, bar),
     })
     const pitches = melodyPitches(bar, slots, plan.register)
     const sung = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))
-    const notes = [...sung, ...pickupInto(bar, bars[index + 1], sung, plan)]
+    const notes = silenceUntil([...sung, ...pickupInto(bar, bars[index + 1], sung, plan)], enteringAfter(plan, bar))
     if (pitches.length) {
       bar.memory.melodyLast = midiOf(pitches[pitches.length - 1])
       bar.memory.melody[bar.index] = {

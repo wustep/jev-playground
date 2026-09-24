@@ -73,13 +73,6 @@ export interface RhythmOptions {
   recall?: Slot[]
   /** Decorate the recalled rhythm instead of repeating it literally. */
   ornament?: boolean
-  /**
-   * Ticks to wait after the downbeat before the tune enters. Asked for only
-   * where something else owns the downbeat: an invention's second voice (a
-   * sixteenth), or a dance bass on beat one (half a beat). Every generated
-   * tune used to attack every downbeat; a mazurka's attacks 56% of them.
-   */
-  enterLate?: number
 }
 
 /**
@@ -117,7 +110,6 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   }
 
   // ── ordinary bars ────────────────────────────────────────────────────────
-  const entry = options.enterLate ?? 0
   const rhythm: number[] = []
   for (let beat = 0; beat < beats; beat++) {
     const wanted = attacksForBeat(motion, beat, beats, rand)
@@ -142,11 +134,7 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
       rhythm.push(-trim)
     }
   }
-  const slots = slotsFrom(rhythm)
-  if (!entry) return slots
-  // Silence until the entry: notes that end before it go, the one sounding
-  // across it is shaved to start there, and the rest are untouched.
-  return slots.flatMap((slot) => (slot.start >= entry ? [slot] : slot.start + slot.dur > entry ? [{ start: entry, dur: slot.start + slot.dur - entry }] : []))
+  return slotsFrom(rhythm)
 }
 
 /**
