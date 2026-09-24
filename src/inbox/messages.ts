@@ -1,5 +1,5 @@
-import { item } from './gmail'
-import type { InboxItem } from './types'
+import { item } from './gmail.js'
+import type { InboxItem } from './types.js'
 
 /**
  * Fictional inbox. Schema is Gmail `users.messages`; people, brands, and

@@ -4,8 +4,8 @@
 
 import type { Answer } from '../planner/jev/systemOne'
 import { JevRequestError, jevStatus, postJevOp, type JevStatus } from '../shared/jevStatus'
-import { cloneInbox } from './messages'
-import { clamp01, cloneSettings, DEFAULT_REASON_SETTINGS, emptyActivations, scoreActionsWithChoice } from './triage'
+import { cloneInbox } from './messages.js'
+import { clamp01, cloneSettings, DEFAULT_REASON_SETTINGS, emptyActivations, scoreActionsWithChoice } from './triage.js'
 import {
   inboxCache,
   inboxCacheKey,
@@ -16,9 +16,9 @@ import {
   type InboxCached,
   type InboxJudgment,
   type InboxLatest,
-} from './inboxCache'
-import { buildInboxRequest, inboxActionQuestionId, inboxReasonQuestionId, parseInboxOp, type InboxOp } from './requests'
-import { REASON_IDS, TRIAGE_ACTIONS, type ActionScores, type InboxItem, type ReasonActivations, type ReasonSettings } from './types'
+} from './inboxCache.js'
+import { buildInboxRequest, inboxActionQuestionId, inboxReasonQuestionId, parseInboxOp, type InboxOp } from './requests.js'
+import { REASON_IDS, TRIAGE_ACTIONS, type ActionScores, type InboxItem, type ReasonActivations, type ReasonSettings } from './types.js'
 
 export function stubJudgment(items: readonly InboxItem[], notice: string | null): InboxJudgment {
   const activations: Record<string, ReasonActivations> = {}

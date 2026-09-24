@@ -1,7 +1,7 @@
 // Shared "distribution → decision" policy. Both planners hand code a
 // probability map; code (not the model) decides how adventurous to be.
 
-import type { Decision, PlanInput } from './Planner'
+import type { Decision, PlanInput } from './Planner.js'
 
 /** Small, fast, seedable PRNG (mulberry32). Returns floats in [0, 1). */
 export function rng(seed: number): () => number {

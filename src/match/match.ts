@@ -1,5 +1,5 @@
 import { choiceConfidence, clamp01, softmax } from '../shared/jevMath'
-import type { Hobby, LookingFor, MatchDimensionId, MatchReason, MatchResult, Person, YouProfile } from './types'
+import type { Hobby, LookingFor, MatchDimensionId, MatchReason, MatchResult, Person, YouProfile } from './types.js'
 
 const BAY = new Set(['Oakland', 'Berkeley', 'San Francisco'])
 

@@ -9,9 +9,9 @@
 // mid-request does not send a second one. Same shape as src/music/styleCache.ts.
 
 import type { JevStatus } from '../shared/jevStatus'
-import { INBOX_SEED } from './messages'
-import { cloneSettings, DEFAULT_REASON_SETTINGS, emptyActivations } from './triage'
-import { REASON_IDS, type ActionScores, type InboxItem, type ReasonActivations, type ReasonSettings, type TriageResult } from './types'
+import { INBOX_SEED } from './messages.js'
+import { cloneSettings, DEFAULT_REASON_SETTINGS, emptyActivations } from './triage.js'
+import { REASON_IDS, type ActionScores, type InboxItem, type ReasonActivations, type ReasonSettings, type TriageResult } from './types.js'
 
 export interface InboxJudgment {
   source: 'jev' | 'stub'

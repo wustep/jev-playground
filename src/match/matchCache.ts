@@ -9,7 +9,7 @@
 // src/music/styleCache.ts.
 
 import type { JevStatus } from '../shared/jevStatus'
-import type { MatchResult, YouProfile } from './types'
+import type { MatchResult, YouProfile } from './types.js'
 
 export interface MatchCached {
   source: 'jev' | 'stub'

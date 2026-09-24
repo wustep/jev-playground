@@ -10,7 +10,7 @@ import {
   type ReasonSettings,
   type TriageAction,
   type TriageResult,
-} from './types'
+} from './types.js'
 
 export { choiceConfidence, clamp01, softmax } from '../shared/jevMath'
 
