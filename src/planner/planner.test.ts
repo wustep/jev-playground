@@ -112,7 +112,10 @@ describe('JevPlanner', () => {
       ['beethoven', 'Ludwig van Beethoven', 'sforzando'],
       ['chopin', 'Frédéric Chopin', 'fioritura'],
       ['debussy', 'Claude Debussy', 'never V7–I'],
+      ['glass', 'Philip Glass', 'minimalism'],
       ['hans_zimmer', 'Hans Zimmer', 'i–bVI–bVII–V'],
+      ['laufey', 'Laufey', 'vocal-range'],
+      ['elijah_fox', 'Elijah Fox', '5+5+6'],
     ] as const) {
       const on = buildRequest({ op: 'globals', style, brief: true }, 'jev-latest')
       const off = buildRequest({ op: 'globals', style, brief: false }, 'jev-latest')
@@ -150,7 +153,7 @@ describe('JevPlanner', () => {
     ]
     const criteria = JSON.stringify(requests.flatMap((request) => Object.values(request.questions).map((q) => [q.criteria, q.instructions])))
     const chords = JSON.stringify([chordOptionsFor('C_major'), chordOptionsFor('C_minor')])
-    for (const name of ['Bach', 'Beethoven', 'Debussy', 'Chopin', 'Zimmer', 'Satie', 'Reich']) {
+    for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Laufey', 'Fox', 'Chopin', 'Zimmer', 'Satie', 'Reich']) {
       expect(criteria).not.toContain(name)
       expect(chords).not.toContain(name)
     }
@@ -250,6 +253,20 @@ describe('HeuristicPlanner', () => {
     expect(share('chopin', 'high')).toBeGreaterThan(share('chopin', 'low'))
     expect(share('beethoven', 'low')).toBeGreaterThan(share('chopin', 'low'))
     expect(share('bach', 'mid')).toBeGreaterThan(0.5)
+  })
+
+  it('gives every dial face its own sound on argmax, not just its own name', async () => {
+    // Style as constraint, not costume: the most typical piece of each style
+    // must differ from every other's on the three fields that decide what a
+    // listener hears — where the tune sings, how it moves, what holds it up.
+    const planner = new HeuristicPlanner()
+    const sounds = new Map<string, string>()
+    for (const style of STYLE_IDS) {
+      const { plan } = await planner.plan({ style, bars: 16, pick: 'argmax', seed: 1, brief: true })
+      const sound = `${plan.register}/${plan.motion}/${plan.accompaniment}`
+      expect(sounds.get(sound), `${style} sounds like ${sounds.get(sound)}: ${sound}`).toBeUndefined()
+      sounds.set(sound, style)
+    }
   })
 
   it('gives Chopin a nocturne on argmax: high, flowing, over a broken left hand', async () => {

@@ -783,6 +783,152 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   },
 
   // ────────────────────────────────────────────────────────────────────────────
+  glass: {
+    brief:
+      'American minimalism, c. 1980. A small cell changes a little each pass — a note added, the figure rotated to start one note later — over a two-to-eight-chord cycle related by thirds and common tones; the next pass takes a new inversion (new bass), and about every eight bars a different cycle takes over. Rocking thirds and two-against-three over a slow bass; pieces stop on a low tonic or tonic 6/4 rather than cadence. Terraced blocks, mostly minor: a process of rotation and addition, not the same ostinato getting louder, not colour-planing haze.',
+    priors: {
+      form: { period: 25, sentence: 45, arch: 20, chain: 10 },
+      key: { F_minor: 16, A_minor: 14, D_minor: 12, G_minor: 12, C_minor: 10, E_minor: 10, C_major: 8, F_major: 8, A_major: 4, Eb_major: 3, Ab_major: 3 },
+      meter: { four_four: 45, six_eight: 30, three_four: 25 },
+      register: { low: 40, mid: 50, high: 10 },
+      motion: { sustained: 30, flowing: 60, florid: 10 },
+      accompaniment: { broken: 50, pulse: 45, counterline: 5 },
+      palette: { diatonic: 70, modal: 20, modal_dark: 10 },
+      tempo: { moderato: 36, allegro: 22, andante: 24, adagio: 10, vivace: 6, larghetto: 2 },
+      dynamics: { mp: 40, mf: 30, p: 25, f: 5 },
+      dynamicShape: { terraced: 35, steady: 30, waves: 15, build_then_drop: 20 },
+      contour: { rise: 22, fall: 16, arch: 16, wave: 46 },
+    },
+    variants: [
+      {
+        name: 'hypnotic',
+        weight: 34,
+        priors: {
+          form: { sentence: 60, period: 30, chain: 10 },
+          register: { low: 45, mid: 45, high: 10 },
+          motion: { sustained: 18, flowing: 70, florid: 12 },
+          accompaniment: { broken: 55, pulse: 45 },
+          tempo: { moderato: 45, allegro: 40, andante: 15 },
+          dynamicShape: { terraced: 35, steady: 35, waves: 15, build_then_drop: 15 },
+        },
+      },
+      // Metamorphosis: a rocking accompaniment under a slow bare melody.
+      {
+        name: 'still',
+        weight: 26,
+        priors: {
+          form: { arch: 50, sentence: 30, chain: 20 },
+          register: { low: 55, mid: 45 },
+          motion: { sustained: 75, flowing: 25 },
+          accompaniment: { pulse: 100 },
+          tempo: { andante: 50, adagio: 35, largo: 15 },
+          dynamics: { p: 50, mp: 35, pp: 15 },
+          contour: { rise: 20, fall: 30, arch: 15, wave: 35 },
+        },
+      },
+      // Mad Rush's fast sections.
+      {
+        name: 'perpetual',
+        weight: 16,
+        priors: {
+          form: { sentence: 50, period: 30, chain: 20 },
+          register: { low: 30, mid: 55, high: 15 },
+          motion: { flowing: 75, florid: 25 },
+          accompaniment: { broken: 45, pulse: 30, counterline: 25 },
+          tempo: { allegro: 55, presto: 25, moderato: 20 },
+          dynamics: { mf: 45, f: 35, mp: 20 },
+        },
+      },
+      {
+        name: 'hymn',
+        weight: 14,
+        priors: {
+          form: { period: 50, arch: 30, sentence: 20 },
+          register: { low: 20, mid: 80 },
+          motion: { sustained: 45, walking: 25, flowing: 30 },
+          accompaniment: { sustained: 45, pulse: 55 },
+          tempo: { adagio: 50, largo: 30, andante: 20 },
+        },
+      },
+      {
+        name: 'restless',
+        weight: 10,
+        priors: {
+          form: { sentence: 60, chain: 40 },
+          register: { low: 30, mid: 70 },
+          motion: { sustained: 45, flowing: 55 },
+          accompaniment: { pulse: 100 },
+          tempo: { allegro: 60, presto: 40 },
+          dynamics: { f: 50, mf: 50 },
+        },
+      },
+    ],
+    holds: true,
+    harmony: {
+      minor: {
+        heads: [['i', 'bVI'], ['i', 'i'], ['i', 'bIII'], ['i64', 'IV7'], ['bVI', 'i64']],
+        seqs: [['bVI', 'bIII'], ['bVII', 'bIII'], ['bVI', 'bVII'], ['v6', 'bVI'], ['bIII', 'V']],
+        tails: {
+          // "Lands on tonic six-four chords"; the tonic left to resonate.
+          closed: [['V', 'i'], ['bVII', 'i'], ['bVI', 'i64'], ['V7', 'i64']],
+          half: [['bIII', 'V'], ['bVII', 'V7'], ['bVI', 'V']],
+          open: [['bVI', 'bVII'], ['bIII', 'v6'], ['IV7', 'bVII']],
+        },
+        phrases: {
+          closed: [],
+          // Étude No. 17 and the Tirol Concerto chaconne: every phrase runs from i to V.
+          half: [['i', 'bVI', 'bIII', 'V'], ['i', 'bVI', 'bVII', 'V7'], ['i', 'bIII', 'V', 'V7']],
+          // "Opening", first loop.
+          open: [['i', 'i', 'bVII', 'bVImaj7']],
+        },
+        loops: [
+          ['i', 'bVI', 'bIII', 'V'],
+          ['bVI', 'i64', 'i64', 'bVI', 'bVII', 'bVI', 'i64', 'i64'], // Mad Rush, the bass chant
+          ['bVI', 'i64'], // Mad Rush: the bass rocks a semitone while two notes hold
+          ['i', 'bVI', 'bVII', 'V7'],
+          ['i', 'bIII', 'V', 'V7'],
+          ['i', 'i', 'bVII', 'bVImaj7'],
+          ['i64', 'IV7', 'bVII', 'v6', 'i64', 'IV7', 'bVII', 'bVII'], // "Opening", second loop (Dorian IV)
+          ['IV64', 'IV64', 'bIII', 'bIII6'], // "Opening", third loop
+          ['i', 'bVII', 'bIII'], // Einstein on the Beach: three chords
+          ['Imaj7', 'i7'], // The Hours: the third flips, two notes hold
+        ],
+        pedals: [['i', 'bVII_over_I', 'i', 'bVII_over_I']],
+        codas: [['i', 'bVI', 'i64', 'i'], ['bVI', 'i64', 'bVI', 'i']],
+        finals: ['i', 'i', 'i64', 'IV64'],
+        splits: [], // one chord a bar (or two bars) — no pre-dominants, no intra-bar cadence,
+        surprises: ['v6', 'I', 'III', 'IV7', 'bVII'], // the "loop breaker" bar
+        subs: { i: ['i64', 'i6'], bVI: ['bVImaj7'], bIII: ['bIII6'], V: ['V6', 'V7'], bVII: ['bVII_over_I'], IV7: ['IV64'] },
+      },
+      major: {
+        heads: [['I', 'iii64'], ['I', 'vi'], ['I', 'I'], ['Imaj7', 'i7']],
+        seqs: [['vi', 'V'], ['iii64', 'vi'], ['bIII', 'IV'], ['vi', 'iii']],
+        tails: {
+          closed: [['V', 'I'], ['IV64', 'I'], ['vi', 'I6']],
+          half: [['vi', 'V'], ['IV', 'V']],
+          open: [['iii', 'vi'], ['bVII', 'IV']],
+        },
+        phrases: { closed: [], half: [], open: [] },
+        loops: [
+          ['I', 'iii64'], // Mad Rush in F: F major against A minor over E
+          ['vi', 'V', 'I'],
+          ['ii', 'V7', 'I64', 'vi', 'ii', 'V7', 'I64', 'I6'], // "Opening" read in the major: deceptive first ending
+          ['V7_of_IV', 'bII7'], // Modern Love Waltz: two sevenths a semitone apart
+          ['Imaj7', 'i7'],
+          ['bIII', 'IV', 'V'], // Étude No. 16: rising parallel majors
+          ['I', 'IV64', 'I', 'V7_over_I'],
+        ],
+        pedals: [['I', 'IV64', 'I', 'bVII_over_I']],
+        codas: [['I', 'iii64', 'I', 'I'], ['vi', 'V', 'I64', 'I']],
+        finals: ['I', 'I', 'I64', 'I6'],
+        splits: [],
+        surprises: ['i', 'bVI', 'bVII', 'III', 'iii64'],
+        subs: { I: ['I64', 'I6'], vi: ['vi6'], V: ['V6'], IV: ['IV64'], iii: ['iii64'] },
+      },
+    },
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
   hans_zimmer: {
     brief:
       'Film-score piano and hybrid, 2000s–2020s. A slow long-note chant rides a left-hand ostinato that keeps the same figure while layers thicken and the dynamic climbs — loops of i–bVI–bVII–V or i–iv–bVI–V, or a tonic drone held across the barline; harmony never moves faster than the bar. Eight to sixteen bars vamp, add weight, surge late, then often drop to bare. Four-four pulse, piano and strings: a layered build, not cell rotation, not a 4+4 song period.',
@@ -960,6 +1106,282 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
   },
 
   // ────────────────────────────────────────────────────────────────────────────
+  laufey: {
+    brief:
+      'Jazz-pop singer-songwriter piano, 2020s. A vocal-range hook in even four-bar phrases (period, returning A, or vamp-and-tag) over a bossa-nova comp (bass on 1 and the and of 2, shells on partido-alto), mid-register close voicings, or a soft stride — not a wide nocturne arpeggio and not sixteenths grouped 5+5+6. Harmony is song-form jazz: I–vi–ii–V, inverted ii–V–I, a ii9–V13 hook, major sevenths, and borrowed-iv phrases (I–V7/IV–vi7–iv6); no dense modern-jazz stacks, no planing, no drone-loop build. Intimate, unhurried, mostly major; acoustic piano first.',
+    priors: {
+      form: { period: 48, arch: 26, chain: 26 },
+      key: { F_major: 12, Bb_major: 11, Eb_major: 10, C_major: 10, Ab_major: 8, G_major: 7, A_major: 6, D_major: 5, D_minor: 8, A_minor: 7, C_minor: 6, F_minor: 5, G_minor: 5 },
+      meter: { four_four: 62, three_four: 26, six_eight: 12 },
+      register: { low: 18, mid: 60, high: 22 },
+      motion: { sustained: 12, walking: 74, flowing: 14 },
+      accompaniment: { sustained: 30, broken: 22, pulse: 4, stride: 38, counterline: 6 },
+      palette: { diatonic: 50, chromatic_approach: 32, modal: 10, blues: 8 },
+      tempo: { andante: 34, adagio: 24, moderato: 20, largo: 6, larghetto: 8, allegro: 4, grave: 2, vivace: 2 },
+      dynamics: { p: 42, mp: 32, pp: 16, mf: 10 },
+      dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 12, terraced: 8 },
+      contour: { rise: 14, fall: 20, arch: 26, dip: 10, wave: 22, leap_fall: 8 },
+    },
+    variants: [
+      // Standards-shaped songs: a sung tune over piano accompaniment.
+      {
+        name: 'singing',
+        weight: 32,
+        priors: {
+          form: { period: 50, arch: 35, chain: 15 },
+          register: { low: 28, mid: 72 },
+          motion: { sustained: 14, walking: 86 },
+          accompaniment: { sustained: 42, broken: 20, stride: 38 },
+          meter: { four_four: 60, three_four: 30, six_eight: 10 },
+          tempo: { adagio: 40, andante: 45, largo: 15 },
+          dynamics: { p: 50, mp: 35, pp: 15 },
+          dynamicShape: { arch: 45, waves: 30, steady: 25 },
+          contour: { rise: 12, fall: 25, arch: 35, dip: 8, wave: 20 },
+        },
+      },
+      // Light swing and bossa-adjacent groove; still a song, not a vamp miniature.
+      {
+        name: 'groove',
+        weight: 28,
+        priors: {
+          form: { period: 55, chain: 45 },
+          meter: { four_four: 80, six_eight: 20 },
+          register: { mid: 78, high: 22 },
+          motion: { sustained: 18, walking: 82 },
+          accompaniment: { sustained: 18, broken: 15, stride: 67 },
+          palette: { diatonic: 40, chromatic_approach: 35, blues: 15, modal: 10 },
+          tempo: { andante: 45, moderato: 40, adagio: 15 },
+          dynamics: { mp: 50, p: 30, mf: 20 },
+          contour: { rise: 16, fall: 14, arch: 22, dip: 6, wave: 24, leap_fall: 18 },
+        },
+      },
+      {
+        name: 'hazy',
+        weight: 18,
+        priors: {
+          form: { period: 20, arch: 45, chain: 35 },
+          register: { low: 35, mid: 55, high: 10 },
+          motion: { sustained: 35, walking: 30, flowing: 35 },
+          accompaniment: { sustained: 50, broken: 35, pulse: 15 },
+          tempo: { adagio: 50, andante: 35, largo: 15 },
+          dynamics: { p: 45, pp: 35, mp: 20 },
+          palette: { diatonic: 40, chromatic_approach: 30, modal: 30 },
+          contour: { fall: 24, arch: 28, dip: 12, wave: 36 },
+        },
+      },
+      {
+        name: 'witty',
+        weight: 14,
+        priors: {
+          form: { period: 70, chain: 30 },
+          meter: { four_four: 55, three_four: 35, six_eight: 10 },
+          register: { mid: 35, high: 65 },
+          motion: { walking: 60, flowing: 40 },
+          accompaniment: { broken: 20, stride: 65, counterline: 15 },
+          tempo: { moderato: 50, allegro: 35, andante: 15 },
+          dynamics: { mp: 45, mf: 35, p: 20 },
+          dynamicShape: { terraced: 40, waves: 30, sudden_contrast: 30 },
+          contour: { rise: 18, fall: 18, arch: 18, wave: 22, leap_fall: 24 },
+        },
+      },
+      {
+        name: 'still',
+        weight: 8,
+        priors: {
+          form: { period: 25, arch: 40, chain: 35 },
+          register: { low: 45, mid: 55 },
+          motion: { sustained: 35, walking: 25, flowing: 40 },
+          accompaniment: { sustained: 25, broken: 40, pulse: 35 },
+          tempo: { largo: 50, adagio: 50 },
+          dynamics: { pp: 55, p: 45 },
+          dynamicShape: { steady: 40, arch: 35, decrescendo: 25 },
+          contour: { rise: 10, fall: 25, arch: 30, wave: 35 },
+        },
+      },
+    ],
+    holds: true,
+    harmony: {
+      major: {
+        // Song-form jazz-pop: I–vi–ii–V, inverted ii–V–I, borrowed-iv language, ii9–V13 hook. No I–V–vi–IV.
+        heads: [['ii9', 'V13'], ['I', 'V7_of_IV'], ['vi7', 'iv6'], ['Imaj7', 'vi7'], ['I', 'I6'], ['Imaj7', 'ii7'], ['I', 'vi'], ['I6', 'ii65'], ['Imaj7', 'iii7'], ['I', 'V65'], ['Imaj7', 'IVmaj7'], ['vi7', 'ii7']],
+        seqs: [['ii9', 'V13'], ['V7_of_IV', 'iv6'], ['ii7', 'V7'], ['vi7', 'ii7'], ['iii7', 'vi7'], ['V7_of_ii', 'ii7'], ['V7_of_vi', 'vi7'], ['IVmaj7', 'iii7'], ['ii65', 'V7'], ['V43', 'I6'], ['V7_of_V', 'V7'], ['iii7', 'V7_of_ii']],
+        tails: {
+          closed: [['V13', 'Imaj7'], ['V7', 'I'], ['V65', 'I'], ['V7', 'Imaj7'], ['V43', 'I'], ['IVmaj7', 'I']],
+          half: [['ii9', 'V13'], ['ii7', 'V7'], ['ii65', 'V'], ['IVmaj7', 'V7'], ['vi7', 'V'], ['V7_of_V', 'V']],
+          open: [['vi7', 'iv6'], ['V7', 'vi'], ['V42', 'I6'], ['IVmaj7', 'iii7'], ['vi7', 'ii7'], ['V7_of_IV', 'IV']],
+        },
+        phrases: {
+          // Borrowed-iv language (katiekeyboard family) and the ii9–V13–I hook first so argmax/sample actually emit them.
+          closed: [['I', 'V7_of_IV', 'vi7', 'iv6'], ['ii9', 'V13', 'Imaj7', 'I'], ['I', 'Imaj7', 'IVmaj7', 'iv'], ['ii7', 'V7', 'Imaj7', 'I'], ['I6', 'ii65', 'V7', 'I'], ['V43', 'I6', 'V7', 'I'], ['ii65', 'I64', 'V7', 'I'], ['vi7', 'ii7', 'V7', 'Imaj7']],
+          half: [['Imaj7', 'vi7', 'ii9', 'V13'], ['I', 'V7_of_IV', 'vi7', 'iv6'], ['Imaj7', 'vi7', 'ii7', 'V7'], ['I', 'I6', 'ii65', 'V'], ['Imaj7', 'iii7', 'ii7', 'V7'], ['I', 'V7_of_vi', 'vi7', 'V7_of_ii']],
+          open: [['I', 'Imaj7', 'IVmaj7', 'iv'], ['Imaj7', 'vi7', 'IVmaj7', 'iii7'], ['I', 'V65', 'I6', 'IV'], ['Imaj7', 'iii7', 'vi7', 'ii7'], ['vi7', 'ii7', 'V7', 'vi7']],
+        },
+        loops: [['ii9', 'V13', 'Imaj7', 'I'], ['I', 'V7_of_IV', 'vi7', 'iv6'], ['Imaj7', 'vi7', 'ii7', 'V7'], ['I', 'I6', 'ii65', 'V7'], ['ii7', 'V7'], ['Imaj7', 'iii7'], ['I6', 'ii65', 'V43', 'I'], ['Imaj7', 'vi7']],
+        pedals: [['I', 'IV64', 'I', 'IV64'], ['V7sus4', 'V7', 'V7sus4', 'V7']],
+        codas: [['ii9', 'V13', 'Imaj7', 'I6_9'], ['ii7', 'V7', 'Imaj7', 'I6_9'], ['IVmaj7', 'I64', 'V7', 'I'], ['vi7', 'ii7', 'V7', 'Imaj7']],
+        finals: ['I', 'Imaj7', 'I6_9', 'Iadd9'],
+        splits: [['ii9', 'V13'], ['ii7', 'V7'], ['ii65', 'V'], ['ii7', 'V65'], ['IVmaj7', 'V7'], ['vi7', 'V7']], // ii–V (and ii9–V13) in one bar,
+        surprises: ['bII7', 'iv', 'V7_of_vi', 'sharp_i_dim7', 'bVIImaj7'],
+        subs: { Imaj7: ['I', 'I6', 'Iadd9'], I: ['I6', 'Imaj7'], vi7: ['vi', 'vi6'], ii7: ['ii65', 'ii9'], V7: ['V65', 'V43', 'V7sus4', 'V13'], IVmaj7: ['IV', 'IV6'], iv: ['iv6', 'iv_add6'] },
+      },
+      minor: {
+        heads: [['i', 'iv7'], ['i7', 'ii_half_dim7'], ['i', 'V65'], ['i', 'i42'], ['i6', 'iv'], ['i7', 'iv7']],
+        seqs: [['ii_half_dim7', 'V7'], ['iv7', 'V7'], ['i7', 'iv7'], ['V7_of_IV', 'iv'], ['ii_half_dim65', 'V7b9'], ['iv6', 'V']],
+        tails: {
+          closed: [['V7', 'i'], ['V65', 'i'], ['V7b9', 'i'], ['iv7', 'i']],
+          half: [['ii_half_dim7', 'V7'], ['iv7', 'V'], ['i64', 'V'], ['ii_half_dim65', 'V7b9']],
+          open: [['V7', 'bVI'], ['V42', 'i6'], ['iv7', 'ii_half_dim7'], ['i7', 'iv7']],
+        },
+        phrases: {
+          closed: [['i7', 'ii_half_dim7', 'V7', 'i'], ['i', 'iv7', 'V7', 'i'], ['ii_half_dim65', 'i64', 'V7b9', 'i']],
+          half: [['i', 'i42', 'ii_half_dim7', 'V7'], ['i7', 'iv7', 'ii_half_dim7', 'V7']],
+          open: [['i7', 'iv7', 'i7', 'iv7'], ['i', 'V65', 'iv', 'bVI']],
+        },
+        loops: [['i7', 'iv7'], ['i', 'V65', 'i', 'V7'], ['ii_half_dim7', 'V7'], ['i7', 'ii_half_dim7', 'V7', 'i']],
+        pedals: [['i', 'iv64', 'i', 'iv64'], ['V7sus4', 'V7', 'V7sus4', 'V7b9']],
+        codas: [['iv7', 'V7', 'i', 'i'], ['ii_half_dim7', 'V7b9', 'i', 'i7']],
+        finals: ['i', 'i7', 'i_add9', 'I'],
+        splits: [['ii_half_dim7', 'V7'], ['iv7', 'V7'], ['i64', 'V7'], ['ii_half_dim65', 'V7b9'], ['ii_half_dim7', 'V65']],
+        surprises: ['bII6', 'I', 'bVImaj7', 'iv_add6'],
+        subs: { i: ['i7', 'i6'], i7: ['i9', 'i'], iv7: ['iv', 'iv6'], V7: ['V65', 'V7b9'], ii_half_dim7: ['ii_half_dim65'] },
+      },
+    },
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  elijah_fox: {
+    brief:
+      'Jazz-trained pianist-producer, 2020s: solo-piano miniatures, not sung song forms. Continuous sixteenths whose accents fall in uneven groups (5+5+6, 7+5+4); modal mixture as the hook — bVImaj7 set against IVmaj7, maj7(#5) against add6 — with sliding inner voices and endings left hanging on colour chords (maj7#11, 6/9). Short vamps are varied, not spun into an additive process and not a clear vocal hook over stride; no parallel planing or whole-tone veils; soft, unhurried, piano or Wurlitzer.',
+    priors: {
+      form: { period: 10, sentence: 30, arch: 30, chain: 30 },
+      key: { C_major: 12, Db_major: 10, D_major: 10, E_major: 10, B_major: 8, Ab_major: 8, Eb_major: 8, F_major: 6, G_major: 5, Fs_minor: 10, C_minor: 6, F_minor: 4, Cs_minor: 3 },
+      meter: { three_four: 35, four_four: 45, six_eight: 20 },
+      register: { low: 10, mid: 50, high: 40 },
+      motion: { sustained: 15, walking: 20, flowing: 35, florid: 30 },
+      accompaniment: { sustained: 40, broken: 40, pulse: 16, stride: 4 },
+      palette: { pentatonic: 35, diatonic: 20, blues: 15, chromatic_approach: 15, modal: 15 },
+      tempo: { andante: 36, adagio: 26, moderato: 22, largo: 4, larghetto: 8, grave: 2, vivace: 2 },
+      dynamics: { p: 45, mp: 35, pp: 15, mf: 5 },
+      dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 20 },
+      contour: { rise: 14, fall: 20, arch: 22, dip: 8, wave: 28, leap_fall: 8 },
+    },
+    variants: [
+      {
+        name: 'hazy',
+        weight: 28,
+        priors: {
+          form: { sentence: 15, arch: 25, chain: 60 },
+          meter: { three_four: 40, four_four: 40, six_eight: 20 },
+          register: { low: 20, mid: 15, high: 65 },
+          motion: { walking: 15, flowing: 35, florid: 50 },
+          accompaniment: { sustained: 35, broken: 65 },
+          tempo: { andante: 50, moderato: 30, adagio: 20 },
+          dynamics: { p: 50, mp: 35, pp: 15 },
+        },
+      },
+      {
+        name: 'singing',
+        weight: 24,
+        priors: {
+          form: { period: 20, arch: 45, chain: 35 },
+          register: { low: 30, mid: 70 },
+          motion: { walking: 50, flowing: 35, sustained: 15 },
+          accompaniment: { sustained: 75, pulse: 25 },
+          tempo: { adagio: 45, andante: 45, largo: 10 },
+          contour: { rise: 13, fall: 25, arch: 32, dip: 10, wave: 20 },
+        },
+      },
+      // The neo-soul side: a secondary flavour in his bios, mostly in production work.
+      {
+        name: 'groove',
+        weight: 20,
+        priors: {
+          form: { period: 30, chain: 70 },
+          meter: { four_four: 75, six_eight: 25 },
+          register: { mid: 80, high: 20 },
+          motion: { walking: 45, flowing: 35, florid: 20 },
+          accompaniment: { sustained: 35, pulse: 20, stride: 45 },
+          palette: { pentatonic: 40, blues: 35, chromatic_approach: 25 },
+          tempo: { andante: 50, moderato: 40, adagio: 10 },
+          dynamics: { mp: 50, p: 30, mf: 20 },
+        },
+      },
+      {
+        name: 'perpetual',
+        weight: 16,
+        priors: {
+          form: { arch: 30, chain: 70 },
+          register: { mid: 20, high: 80 },
+          motion: { flowing: 25, florid: 75 },
+          accompaniment: { broken: 80, pulse: 20 },
+          tempo: { moderato: 55, andante: 30, allegro: 15 },
+          contour: { rise: 20, fall: 15, arch: 25, wave: 40 },
+        },
+      },
+      // The ambient keyboard records.
+      {
+        name: 'still',
+        weight: 12,
+        priors: {
+          form: { sentence: 30, chain: 70 },
+          register: { low: 40, mid: 30, high: 30 },
+          motion: { sustained: 70, flowing: 30 },
+          accompaniment: { sustained: 30, broken: 30, pulse: 40 },
+          tempo: { largo: 45, adagio: 55 },
+          dynamics: { pp: 55, p: 45 },
+          dynamicShape: { steady: 35, arch: 35, decrescendo: 30 },
+        },
+      },
+    ],
+    holds: true,
+    harmony: {
+      major: {
+        heads: [['bVImaj7', 'IVmaj7'], ['Imaj7s5', 'IVadd6'], ['Imaj9', 'vi9'], ['Imaj9', 'IVmaj9'], ['iii7', 'V7_of_ii'], ['Imaj9', 'bVImaj7'], ['Imaj7', 'sharp_i_dim7'], ['IVmaj9', 'iv_add6'], ['I', 'V7_of_IV']],
+        seqs: [['iii7', 'V7_of_ii'], ['ii9', 'V13'], ['iv7', 'iii7'], ['biii7', 'ii7'], ['sharp_i_dim7', 'ii9'], ['V7_of_vi', 'vi11'], ['sharp_iv_half_dim7', 'IV7'], ['bVII7', 'ii7']],
+        tails: {
+          closed: [['V13', 'Imaj9'], ['bVII9', 'Imaj9'], ['bII7', 'Imaj9'], ['iv_add6', 'Imaj9'], ['V9sus4', 'I6_9'], ['bVII9', 'Iadd9']],
+          half: [['ii9', 'V13'], ['vi9', 'V9sus4'], ['ii9', 'V7alt'], ['ii9', 'bII7'], ['vi11', 'V9sus4'], ['iv_add6', 'bVII9']],
+          open: [['iii9', 'vi9'], ['IVmaj9', 'iii9'], ['sharp_iv_half_dim7', 'biii7'], ['bVImaj7', 'IVmaj7']],
+        },
+        phrases: {
+          closed: [['ii9', 'V13', 'Imaj9', 'I6_9'], ['IVmaj9', 'iv_add6', 'bVII9', 'Imaj9'], ['Imaj9', 'bVImaj7', 'bVII9', 'Iadd9']],
+          half: [['Imaj9', 'vi9', 'ii9', 'V13'], ['iii7', 'V7_of_ii', 'ii9', 'V9sus4'], ['Imaj9', 'IVmaj9', 'iv_add6', 'bVII9'], ['Imaj7', 'sharp_i_dim7', 'ii9', 'V13']],
+          // From his own lesson on "City in the Sky": bVImaj7 against IVmaj7 (C Aeolian against C Ionian),
+          // Cmaj7(#5) with F6, and the closing vi – V – #ivø7 – biii walk. The last two are generic idiom.
+          open: [['bVImaj7', 'IVmaj7', 'bVImaj7', 'IVmaj7'], ['Imaj7s5', 'IVadd6', 'Imaj7s5', 'IVadd6'], ['vi7', 'V', 'sharp_iv_half_dim7', 'biii7'], ['sharp_iv_half_dim7', 'IV7', 'bVII7', 'ii7'], ['iv7', 'iii7', 'biii7', 'ii7']],
+        },
+        loops: [['bVImaj7', 'IVmaj7'], ['Imaj7s5', 'IVadd6'], ['Imaj7s11', 'bVIImaj7'], ['Imaj9', 'IVmaj9'], ['Imaj9', 'vi9', 'ii9', 'V13']],
+        pedals: [['V9sus4', 'V13', 'V9sus4', 'V7alt']],
+        codas: [['ii9', 'bII7', 'Imaj9', 'Imaj7s11'], ['IVmaj9', 'iv_add6', 'Imaj9', 'I6_9'], ['bVImaj7', 'bVII9', 'Imaj9', 'Imaj7s11']],
+        finals: ['Imaj7s11', 'I6_9', 'Imaj9', 'Iadd9', 'V9sus4'],
+        splits: [['ii9', 'V13'], ['ii9', 'V7alt'], ['vi9', 'V9sus4'], ['ii9', 'bII7'], ['iv_add6', 'bVII9']], // ii–V colour squeezed into one bar before a held tonic,
+        surprises: ['bVImaj7', 'Imaj7s5', 'bII7', 'iv_add6', 'bVImaj9', 'III'],
+        subs: { Imaj9: ['Imaj7', 'I6_9', 'Iadd9'], IVmaj9: ['IVmaj7', 'IVadd6'], V13: ['V9sus4', 'V7alt', 'bII7'], ii9: ['ii7', 'IVmaj9'], vi9: ['vi11', 'vi7'], bVImaj7: ['bVImaj9'] },
+      },
+      minor: {
+        heads: [['i9', 'bVImaj9'], ['i', 'i_maj7'], ['i9', 'i42'], ['ii_half_dim7', 'V7b9'], ['iv9', 'i9'], ['i11', 'iv9']],
+        seqs: [['i7', 'i_add6'], ['iv9', 'bVII9'], ['bIIImaj7', 'bVImaj7'], ['ii_half_dim7', 'V7alt'], ['bVImaj7', 'bVII']],
+        tails: {
+          closed: [['V7alt', 'i9'], ['bII7', 'i9'], ['bVII9', 'i11'], ['V7b9', 'i_add6']],
+          half: [['ii_half_dim7', 'V7alt'], ['bVImaj7', 'V7sus4'], ['bVImaj9', 'V7alt']],
+          open: [['bIIImaj7', 'bVImaj7'], ['iv9', 'bVII9'], ['bVImaj7', 'bVII']],
+        },
+        phrases: {
+          closed: [['ii_half_dim7', 'V7b9', 'i9', 'i_add6'], ['bVImaj7', 'bVII', 'i11', 'i11']],
+          half: [['i9', 'bVImaj9', 'ii_half_dim7', 'V7alt'], ['i9', 'i42', 'bVImaj7', 'V7sus4']],
+          // A line cliché; minor-ninth chords a fifth apart (after his displacement lesson over F–9 and C–9).
+          open: [['i', 'i_maj7', 'i7', 'i_add6'], ['iv9', 'i9', 'iv9', 'i9'], ['iv9', 'bVII9', 'bIIImaj7', 'bVImaj7']],
+        },
+        loops: [['iv9', 'i9'], ['i11', 'iv9'], ['i9', 'IV7'], ['i9', 'bVImaj9']],
+        pedals: [['V7sus4', 'V7alt', 'V7sus4', 'V7b9']],
+        codas: [['bVImaj7', 'bVII', 'i11', 'i_add6'], ['ii_half_dim7', 'bII7', 'i9', 'i9']],
+        finals: ['i9', 'i11', 'i_add6', 'i_add9'],
+        splits: [['ii_half_dim7', 'V7alt'], ['bVImaj7', 'V7sus4'], ['bVImaj9', 'V7alt'], ['ii_half_dim7', 'bII7']],
+        surprises: ['bIImaj7', 'IV7', 'I', 'bVImaj9', 'bII7'],
+        subs: { i9: ['i11', 'i_add9', 'i7'], iv9: ['iv7'], bVImaj9: ['bVImaj7'], V7alt: ['V7b9', 'bII7'] },
+      },
+    },
+  },
 }
 
 /** Every chord a style's harmony book can produce — its vocabulary, for the stub style-match. */

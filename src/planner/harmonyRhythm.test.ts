@@ -30,7 +30,7 @@ describe('variable harmonic rhythm (heuristic)', () => {
 
   it('splits cadence bars in the styles whose books have splits — approach first, arrival second, never the last bar', async () => {
     const withSplits = STYLE_IDS.filter((style) => STYLE_PROFILES[style].harmony.major.splits.length > 0)
-    expect(withSplits).toEqual(expect.arrayContaining(['bach', 'beethoven', 'chopin']))
+    expect(withSplits).toEqual(expect.arrayContaining(['bach', 'beethoven', 'chopin', 'laufey']))
     for (const style of STYLE_IDS) {
       let split = 0
       let bars = 0
@@ -53,7 +53,7 @@ describe('variable harmonic rhythm (heuristic)', () => {
       const rate = split / bars
       const hasSplits = STYLE_PROFILES[style].harmony.major.splits.length > 0
       // Cadence-driven styles split about one bar in twelve; the vamp and haze styles less, the drone styles never.
-      if (['bach', 'beethoven', 'chopin'].includes(style)) expect(rate, `${style} split rate`).toBeGreaterThan(0.05)
+      if (['bach', 'beethoven', 'chopin', 'laufey'].includes(style)) expect(rate, `${style} split rate`).toBeGreaterThan(0.05)
       else if (hasSplits) expect(rate, `${style} split rate`).toBeGreaterThan(0.01)
       else expect(rate, `${style} split rate`).toBe(0)
     }
@@ -79,6 +79,7 @@ describe('variable harmonic rhythm (heuristic)', () => {
       else expect(rates[style], `${style} held bars`).toBeLessThan(0.03)
     }
     // Drone and cycle styles hold most.
+    expect(rates.glass).toBeGreaterThan(0.1)
     expect(rates.hans_zimmer).toBeGreaterThan(0.1)
     expect(rates.beethoven).toBeGreaterThan(rates.bach)
   })

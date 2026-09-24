@@ -10,11 +10,14 @@
  *   npx --yes tsx scripts/compare-generated-vs-reference.ts --live-jev --live-styles chopin,beethoven
  *
  * Metrics read the melody voice directly (`Bar.treble[0]`, which the renderer
- * writes first and alone) against the Mutopia right-hand track. There is no
- * longer a "which voice is the tune" heuristic to be wrong about. See
- * `src/compare/compareMetrics.ts` and `docs/ref-midi/public/README.md`.
+ * writes first and alone) against the top voice of the reference's upper
+ * track. See `src/compare/compareMetrics.ts` and `docs/ref-midi/public/README.md`.
+ *
+ * Living artists have no public-domain MIDI. Where an owned or local file sits
+ * in docs/ref-midi/local/ (gitignored — see its README) it is used instead and
+ * marked `local`; where there is none, the style is compared on labels alone.
  */
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 import { GLOBAL_FIELD_IDS, parsePlan, type BarCount, type CompositionPlan, type StyleId } from '../src/plan/schema'
 import { barPositions } from '../src/plan/phrase'
@@ -31,13 +34,32 @@ interface RefFile {
   plan: unknown
 }
 
-/** The piece each style is measured against. */
+/** The reference plan each style is measured against. */
 const PRIMARY: Record<StyleId, string> = {
   bach: 'bach-bwv846-prelude',
   beethoven: 'beethoven-op13-pathetique-ii',
   chopin: 'chopin-op9-2-nocturne',
   debussy: 'debussy-l75-clair-de-lune',
+  glass: 'glass-glassworks-opening',
   hans_zimmer: 'zimmer-time',
+  laufey: 'laufey-from-the-start',
+  elijah_fox: 'fox-displacement-lesson',
+}
+
+/**
+ * A local MIDI to measure against when the reference plan names none. Not the
+ * same piece as the plan — Étude No. 6 is not Glassworks — so it is reported
+ * as the style's measured line, not as the plan's realisation.
+ */
+const LOCAL_MIDI: Partial<Record<StyleId, string>> = {
+  glass: 'docs/ref-midi/local/glass-etude-6.mid',
+  elijah_fox: 'docs/ref-midi/local/fox-wyoming.mid',
+}
+
+function referenceMidi(style: StyleId, planMidi: string | undefined): { path: string; local: boolean } | null {
+  if (planMidi && existsSync(planMidi)) return { path: planMidi, local: false }
+  const local = LOCAL_MIDI[style]
+  return local && existsSync(local) ? { path: local, local: true } : null
 }
 
 const DEFAULT_SEEDS = [1, 7, 42]
@@ -102,7 +124,8 @@ async function main() {
   for (const style of styles) {
     const primary = byId.get(PRIMARY[style])
     if (!primary) continue
-    const midi = primary.file.midi ? midiMetrics(primary.file.midi) : null
+    const source = referenceMidi(style, primary.file.midi)
+    const midi = source ? { ...midiMetrics(source.path), local: source.local } : null
     const generated = []
     for (const pick of ['argmax', 'sample'] as const) {
       for (const seed of pick === 'argmax' ? [1] : seeds) {
@@ -152,7 +175,8 @@ async function main() {
     for (const entry of perStyle) {
       const best = [...entry.generated].sort((a, b) => b.labelMatchCount - a.labelMatchCount)[0]
       const midi = entry.referenceMidi as { registerMean?: number; onsetDensityMean?: number; ret4?: number } | null
-      console.log(row(`${entry.style} · midi`, midi?.registerMean, midi?.onsetDensityMean, midi?.ret4, ''))
+      const midiLabel = (entry.referenceMidi as { local?: boolean } | null)?.local ? 'local midi' : 'midi'
+      console.log(row(`${entry.style} · ${midiLabel}`, midi?.registerMean, midi?.onsetDensityMean, midi?.ret4, ''))
       console.log(row(`${entry.style} · ref plan`, entry.primary.realized.registerMean, entry.primary.realized.onsetDensityMean, entry.primary.realized.ret4, entry.primary.realized.ceilingBreaches))
       console.log(row(`${entry.style} · generated`, best.realized.registerMean, best.realized.onsetDensityMean, best.realized.ret4, best.realized.ceilingBreaches))
       console.log()

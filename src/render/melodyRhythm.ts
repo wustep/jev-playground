@@ -97,7 +97,11 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   if (options.recall) return options.ornament ? ornamentRhythm(options.recall, meter, motion, rand) : options.recall
 
   // ── the landing ──────────────────────────────────────────────────────────
-  if (position.phraseFinal) {
+  // Only a cadence breathes. An `open` phrase end is the form saying the
+  // thought runs on, so the line runs on with it: a spun-out prelude, a Glass
+  // cycle or a displaced-sixteenth vamp has no business stopping every four
+  // bars. The last bar always lands, whatever its phrase says.
+  if (position.phraseFinal && (position.phraseEnd !== 'open' || isLast)) {
     // Closed phrases land on the downbeat and hold; half cadences get a beat
     // of approach first, so the pause sounds like a question and not a stop.
     const approach = position.phraseEnd === 'half' && beats > 2 && motion !== 'sustained'

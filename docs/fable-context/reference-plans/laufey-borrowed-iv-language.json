@@ -1,0 +1,58 @@
+{
+  "id": "laufey-borrowed-iv-language",
+  "piece": "Laufey harmonic language — borrowed minor iv (not From the Start)",
+  "whyHere": "Published analysis of her language (I–I7–vi7–iv6 and kin). Our major book still has iv only under surprises.",
+  "evidence": "analysis",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. Not a transcription of one song. katiekeyboard: I–I7–vi7–iv6 / I–Imaj7–IVmaj7–iv. V7_of_IV stands in for I7 (tonic as dominant toward IV).",
+  "plan": {
+    "version": 2,
+    "style": "laufey",
+    "register": "mid",
+    "motion": "walking",
+    "accompaniment": "sustained",
+    "form": "period",
+    "key": "Db_major",
+    "meter": "four_four",
+    "palette": "chromatic_approach",
+    "tempo": "adagio",
+    "dynamics": "p",
+    "dynamicShape": "arch",
+    "bars": [
+      {
+        "chord": "I",
+        "contour": "arch"
+      },
+      {
+        "chord": "V7_of_IV",
+        "contour": "wave"
+      },
+      {
+        "chord": "vi7",
+        "contour": "fall"
+      },
+      {
+        "chord": "iv6",
+        "contour": "dip"
+      },
+      {
+        "chord": "Imaj7",
+        "contour": "arch"
+      },
+      {
+        "chord": "IVmaj7",
+        "contour": "wave"
+      },
+      {
+        "chord": "iv",
+        "contour": "arch"
+      },
+      {
+        "chord": "I",
+        "contour": "fall"
+      }
+    ]
+  }
+}

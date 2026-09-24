@@ -20,7 +20,7 @@ describe('harmony phrase catalog', () => {
               for (const option of options) {
                 expect(option.chords).toHaveLength(4)
                 expect(expandPhrase(option.id, book, slot)).toEqual(option.chords)
-                expect(option.label).not.toMatch(/Bach|Beethoven|Chopin|Debussy|Zimmer/)
+                expect(option.label).not.toMatch(/Bach|Beethoven|Chopin|Debussy|Glass|Zimmer|Laufey|Fox/)
               }
             }
           }
@@ -49,6 +49,14 @@ describe('harmony phrase catalog', () => {
     const raw = Object.fromEntries(options.map((option) => [option.id, 1 / options.length]))
     const adjusted = withPhraseNovelty(raw, [...first.chords], options)
     expect(adjusted[first.id]).toBeLessThan(raw[first.id])
+  })
+
+  it('keeps Laufey\'s borrowed-iv and ii9–V13 language in her major book', () => {
+    const book = STYLE_PROFILES.laufey.harmony.major
+    const phrases = [...book.phrases.closed, ...book.phrases.half, ...book.phrases.open]
+    expect(phrases.some((phrase) => phrase.includes('V7_of_IV') && phrase.includes('iv6'))).toBe(true)
+    expect(phrases.some((phrase) => phrase.includes('ii9') && phrase.includes('V13'))).toBe(true)
+    expect(book.splits.some((pair) => pair[0] === 'ii9' && pair[1] === 'V13')).toBe(true)
   })
 
   it('gives every style a harmony book that agrees with its own vocabulary', () => {

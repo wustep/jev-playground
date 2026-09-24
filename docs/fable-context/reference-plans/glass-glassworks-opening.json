@@ -1,0 +1,58 @@
+{
+  "id": "glass-glassworks-opening",
+  "piece": "Philip Glass, Glassworks: Opening",
+  "whyHere": "Keyboard-accessible loop: three 4-bar groups × 4, 3:2, F minor.",
+  "evidence": "inferred",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. Chords are inferred from published loop descriptions (Wikipedia ABC:||ABC; Wu thesis; Hooktheory user tab). Honest closed stand-in is the book's verified i–bVI–bIII–V cycle, not a score RN.",
+  "plan": {
+    "version": 2,
+    "style": "glass",
+    "register": "mid",
+    "motion": "flowing",
+    "accompaniment": "broken",
+    "form": "sentence",
+    "key": "F_minor",
+    "meter": "four_four",
+    "palette": "diatonic",
+    "tempo": "moderato",
+    "dynamics": "mp",
+    "dynamicShape": "terraced",
+    "bars": [
+      {
+        "chord": "i",
+        "contour": "wave"
+      },
+      {
+        "chord": "i",
+        "contour": "wave"
+      },
+      {
+        "chord": "bVI",
+        "contour": "wave"
+      },
+      {
+        "chord": "bVI",
+        "contour": "wave"
+      },
+      {
+        "chord": "bIII",
+        "contour": "wave"
+      },
+      {
+        "chord": "bIII",
+        "contour": "wave"
+      },
+      {
+        "chord": "V",
+        "contour": "wave"
+      },
+      {
+        "chord": "v",
+        "contour": "wave"
+      }
+    ]
+  }
+}

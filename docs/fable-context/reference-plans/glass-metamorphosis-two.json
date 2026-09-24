@@ -1,0 +1,58 @@
+{
+  "id": "glass-metamorphosis-two",
+  "piece": "Philip Glass, Metamorphosis Two",
+  "whyHere": "Quiet oscillation → fast four-note arpeggios → quiet (published program notes).",
+  "evidence": "inferred",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. Exact chords are not encoded (STYLE_NOTES: not verifiable without scores). Harmony here is a book-legal stand-in so parsePlan works — not a claim about the piece's RN. Key not claimed.",
+  "plan": {
+    "version": 2,
+    "style": "glass",
+    "register": "mid",
+    "motion": "sustained",
+    "accompaniment": "pulse",
+    "form": "arch",
+    "key": "A_minor",
+    "meter": "four_four",
+    "palette": "diatonic",
+    "tempo": "andante",
+    "dynamics": "p",
+    "dynamicShape": "arch",
+    "bars": [
+      {
+        "chord": "i",
+        "contour": "wave"
+      },
+      {
+        "chord": "i",
+        "contour": "wave"
+      },
+      {
+        "chord": "bVI",
+        "contour": "wave"
+      },
+      {
+        "chord": "bVI",
+        "contour": "wave"
+      },
+      {
+        "chord": "i",
+        "contour": "rise"
+      },
+      {
+        "chord": "i",
+        "contour": "wave"
+      },
+      {
+        "chord": "bVI",
+        "contour": "fall"
+      },
+      {
+        "chord": "i64",
+        "contour": "wave"
+      }
+    ]
+  }
+}

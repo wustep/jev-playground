@@ -30,7 +30,10 @@ export const STYLE_LABELS = {
   beethoven: 'Ludwig van Beethoven',
   chopin: 'Frédéric Chopin',
   debussy: 'Claude Debussy',
+  glass: 'Philip Glass',
   hans_zimmer: 'Hans Zimmer',
+  laufey: 'Laufey',
+  elijah_fox: 'Elijah Fox',
 } as const
 export type StyleId = keyof typeof STYLE_LABELS
 export const STYLE_IDS = keysOf<StyleId>(STYLE_LABELS)

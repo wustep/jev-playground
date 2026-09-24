@@ -1,0 +1,59 @@
+{
+  "id": "fox-city-in-the-sky",
+  "piece": "Elijah Fox, City in the Sky (lesson reduction)",
+  "whyHere": "Modal mixture as the hook — his own teaching, not a shop-score transcription.",
+  "evidence": "own_words",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. Shop scores exist; contents not seen (STYLE_NOTES). Flypaper/Soundfly: Abmaj7 (bVI) against Fmaj7 (IV), then Cmaj7(#5) with F6, close vi–V–#ivø7–biii–ii.",
+  "plan": {
+    "version": 2,
+    "style": "elijah_fox",
+    "register": "mid",
+    "motion": "walking",
+    "accompaniment": "sustained",
+    "form": "chain",
+    "key": "C_major",
+    "meter": "four_four",
+    "palette": "modal",
+    "tempo": "andante",
+    "dynamics": "p",
+    "dynamicShape": "arch",
+    "bars": [
+      {
+        "chord": "bVImaj7",
+        "contour": "arch"
+      },
+      {
+        "chord": "IVmaj7",
+        "contour": "wave"
+      },
+      {
+        "chord": "bVImaj7",
+        "contour": "arch"
+      },
+      {
+        "chord": "IVmaj7",
+        "contour": "wave"
+      },
+      {
+        "chord": "Imaj7s5",
+        "contour": "wave"
+      },
+      {
+        "chord": "IVadd6",
+        "contour": "dip"
+      },
+      {
+        "chord": "vi",
+        "contour": "fall",
+        "chord2": "V"
+      },
+      {
+        "chord": "sharp_iv_half_dim7",
+        "contour": "fall"
+      }
+    ]
+  }
+}

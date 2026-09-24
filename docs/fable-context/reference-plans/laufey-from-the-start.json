@@ -1,0 +1,62 @@
+{
+  "id": "laufey-from-the-start",
+  "piece": "Laufey, From the Start — piano-reduction sketch",
+  "whyHere": "Song-shaped jazz-pop piano: bossa feel, D-flat, ii–V–I colour, intro.",
+  "evidence": "inferred",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. Not read from commercial sheet. Hooktheory + Song Exploder (her own words: bossa nova records) + lesson sources describing Ebm9–Ab13–Dbmaj7 as ii9–V13–Imaj7. This song is not claimed to use borrowed iv.",
+  "plan": {
+    "version": 2,
+    "style": "laufey",
+    "register": "mid",
+    "motion": "walking",
+    "accompaniment": "stride",
+    "form": "period",
+    "key": "Db_major",
+    "meter": "four_four",
+    "palette": "diatonic",
+    "tempo": "andante",
+    "dynamics": "mp",
+    "dynamicShape": "arch",
+    "bars": [
+      {
+        "chord": "ii9",
+        "contour": "arch",
+        "chord2": "V13"
+      },
+      {
+        "chord": "Imaj7",
+        "contour": "fall"
+      },
+      {
+        "chord": "ii9",
+        "contour": "wave",
+        "chord2": "V13"
+      },
+      {
+        "chord": "Imaj7",
+        "contour": "dip"
+      },
+      {
+        "chord": "ii9",
+        "contour": "arch",
+        "chord2": "V13"
+      },
+      {
+        "chord": "Imaj7",
+        "contour": "fall"
+      },
+      {
+        "chord": "ii9",
+        "contour": "arch",
+        "chord2": "V13"
+      },
+      {
+        "chord": "Imaj7",
+        "contour": "fall"
+      }
+    ]
+  }
+}

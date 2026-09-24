@@ -160,8 +160,10 @@ function decorate(bar: BarView, source: Remembered, slots: readonly Slot[], isSt
  * nearest chord tone instead, so the harmony still lands.
  */
 function breakRepeats(bar: BarView, pitches: string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): void {
-  // The run is heard across the barline, so the previous bar's tail counts.
-  const tail = (bar.memory.melody[bar.index - 1]?.pitches ?? []).slice(-2).map(midiOf)
+  // The run is heard across barlines, so the last two notes before this bar
+  // count — reaching back past a one-note cadence bar if need be.
+  const tail: number[] = []
+  for (let b = bar.index - 1; b >= 0 && tail.length < 2; b--) tail.unshift(...(bar.memory.melody[b]?.pitches ?? []).map(midiOf).slice(-(2 - tail.length)))
   const heard = (k: number) => (k >= 0 ? midiOf(pitches[k]) : tail[tail.length + k])
   for (let k = 0; k < pitches.length; k++) {
     const here = midiOf(pitches[k])

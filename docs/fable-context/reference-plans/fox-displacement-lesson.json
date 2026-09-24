@@ -1,0 +1,58 @@
+{
+  "id": "fox-displacement-lesson",
+  "piece": "Elijah Fox, displacement lesson (5+5+6 / 7+5+4)",
+  "whyHere": "Uneven accent groupings over minor-ninth vamps — encoded as displaced_arpeggio.",
+  "evidence": "own_words",
+  "midi": null,
+  "midiSource": null,
+  "midiLicense": null,
+  "notes": "NO MIDI. His syllabus regroups continuous sixteenths over F–9 and C–9. Groupings live in texture prose, not a plan field.",
+  "plan": {
+    "version": 2,
+    "style": "elijah_fox",
+    "register": "mid",
+    "motion": "florid",
+    "accompaniment": "broken",
+    "form": "chain",
+    "key": "C_major",
+    "meter": "four_four",
+    "palette": "pentatonic",
+    "tempo": "andante",
+    "dynamics": "p",
+    "dynamicShape": "waves",
+    "bars": [
+      {
+        "chord": "i9",
+        "contour": "wave"
+      },
+      {
+        "chord": "i9",
+        "contour": "wave"
+      },
+      {
+        "chord": "iv9",
+        "contour": "arch"
+      },
+      {
+        "chord": "iv9",
+        "contour": "wave"
+      },
+      {
+        "chord": "i9",
+        "contour": "rise"
+      },
+      {
+        "chord": "iv9",
+        "contour": "arch"
+      },
+      {
+        "chord": "i9",
+        "contour": "fall"
+      },
+      {
+        "chord": "i_add9",
+        "contour": "wave"
+      }
+    ]
+  }
+}
