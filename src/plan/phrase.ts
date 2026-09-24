@@ -15,7 +15,14 @@ import type { BarCount, FormId } from './schema.js'
 /** How a four-bar phrase finishes. Drives both harmony choice and the melody's breath. */
 export type PhraseEnd = 'open' | 'half' | 'closed'
 
-/** How a phrase's four bars are built out of the style's harmony book. */
+/**
+ * How a phrase's four bars are built out of the style's harmony book.
+ *
+ * `formSlots` emits only five of these. `duplicate`, `loop` and `pedal` served
+ * the loop and ostinato forms that the rewrite folded into these four; the
+ * harmony books still carry `loops` and `pedals`, and whether a loop form
+ * comes back is a musical call, so the builds stay until it is made.
+ */
 export type PhraseBuild = 'head_tail' | 'head_seq' | 'seq_tail' | 'seq_seq' | 'duplicate' | 'loop' | 'pedal' | 'coda'
 
 export interface PhraseSlot {
@@ -48,7 +55,8 @@ export interface BarPosition {
   phrase: number
 }
 
-const BARS_PER_PHRASE = 4
+/** Every form is built in four-bar phrases; a phrase Choice is four chords. */
+export const BARS_PER_PHRASE = 4
 
 /**
  * The phrase layout of a form at a given length. Everything is generated from
@@ -126,7 +134,7 @@ export function barPositions(form: FormId, bars: BarCount): BarPosition[] {
     if (phraseFinal) role = slot.end === 'half' ? 'half_cadence' : slot.end === 'closed' ? 'cadence' : 'continuation'
     else if (phrase === climaxPhrase && within === 2) role = 'climax'
     else if (slot.build === 'seq_seq' || slot.build === 'seq_tail') role = within === 0 ? 'contrast' : 'sequence'
-    else if (within === 0) role = source === undefined ? 'statement' : 'statement'
+    else if (within === 0) role = 'statement'
     else role = 'continuation'
     out.push({ role, returnsFrom, ornamentReturn: slot.varied, phraseFinal, phraseEnd: slot.end, phrase })
   }

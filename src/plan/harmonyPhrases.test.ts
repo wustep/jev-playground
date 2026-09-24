@@ -19,7 +19,7 @@ describe('harmony phrase catalog', () => {
               expect(ids.size).toBe(options.length)
               for (const option of options) {
                 expect(option.chords).toHaveLength(4)
-                expect(expandPhrase(option.id, book, slot)).toEqual(option.chords)
+                expect(expandPhrase(option.id, options)).toEqual(option.chords)
                 expect(option.label).not.toMatch(/Bach|Beethoven|Chopin|Debussy|Glass|Zimmer|Laufey|Fox/)
               }
             }

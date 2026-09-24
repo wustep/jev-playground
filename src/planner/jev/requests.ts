@@ -25,8 +25,8 @@
 //  • Choice criteria are the enum descriptions from schema.ts; Score levels
 //    describe standalone situations because the model never sees the ordering.
 
-import { formSlots, barPositions, type BarRole } from '../../plan/phrase.js'
-import { bookFor, phraseCriteria, PHRASE_ENDS, slotContourQuestionId } from '../../plan/harmonyPhrases.js'
+import { BARS_PER_PHRASE, formSlots, barPositions, type BarRole } from '../../plan/phrase.js'
+import { phraseCriteria, PHRASE_ENDS, slotCatalog, slotContourQuestionId } from '../../plan/harmonyPhrases.js'
 import {
   ACCOMPANIMENTS,
   BAR_COUNT_VALUES,
@@ -169,16 +169,16 @@ const ROLE_WORDS: Record<BarRole, string> = {
 }
 
 function phraseRequest(op: Extract<JevOp, { op: 'phrase' }>, model: string): SystemOneRequest {
+  const { slot, options } = slotCatalog(op.style, op.globals, op.barCount, op.slotIndex)
   const slots = formSlots(op.globals.form, op.barCount)
   const positions = barPositions(op.globals.form, op.barCount)
-  const slot = slots[op.slotIndex]
-  const start = op.slotIndex * 4
+  const start = op.slotIndex * BARS_PER_PHRASE
   const roleAt = (bar: number) => positions[bar]?.role ?? 'continuation'
   const priorSlots = slots.slice(0, op.slotIndex).map((earlier, s) => ({
     slot: s + 1,
     how_it_ends: PHRASE_ENDS[earlier.end],
     bars: [0, 1, 2, 3].map((k) => {
-      const bar = s * 4 + k
+      const bar = s * BARS_PER_PHRASE + k
       return {
         bar: bar + 1,
         role: `${roleAt(bar)} — ${ROLE_WORDS[roleAt(bar)]}`,
@@ -204,7 +204,7 @@ function phraseRequest(op: Extract<JevOp, { op: 'phrase' }>, model: string): Sys
   const questions: Record<string, Question> = {
     phrase: choice(
       'Which four-bar harmonic phrase should occupy `current_slot` so the progression in `phrases_so_far` continues in this style? Options are stock openings, travelling units, cadences and verified phrases from the style book, described functionally. Match the close described in `current_slot.how_it_ends`. Do not name composers.',
-      phraseCriteria(bookFor(op.style, op.globals.key), slot),
+      phraseCriteria(options),
     ),
   }
   for (let k = 0; k < 4; k++) {
@@ -315,8 +315,8 @@ export function parseOp(raw: unknown): JevOp {
       }
       const chords = Array.isArray(obj.chords) ? obj.chords : []
       const contours = Array.isArray(obj.contours) ? obj.contours : []
-      if (chords.length !== slotIndex * 4) throw new PlanValidationError('op.chords: expected one chord per earlier bar')
-      if (contours.length !== slotIndex * 4) throw new PlanValidationError('op.contours: expected one contour per earlier bar')
+      if (chords.length !== slotIndex * BARS_PER_PHRASE) throw new PlanValidationError('op.chords: expected one chord per earlier bar')
+      if (contours.length !== slotIndex * BARS_PER_PHRASE) throw new PlanValidationError('op.contours: expected one contour per earlier bar')
       return {
         op: 'phrase',
         style: parseStyle(obj.style),

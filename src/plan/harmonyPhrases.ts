@@ -1,14 +1,14 @@
 // Closed catalog of 4-bar harmony phrases, built from a style's HarmonyBook.
 //
-// Jev picks one option per form slot (src/plan/forms.ts). Code expands the id
+// Jev picks one option per form slot (src/plan/phrase.ts). Code expands the id
 // into four roman numerals and then applies the book's cadence splits — so the
 // live planner asks ~4× fewer chord questions than a per-bar Choice, while
 // staying inside the same vocabulary the HeuristicPlanner already uses.
 //
 // Imported by the /api/jev serverless chain → explicit `.js` extensions.
 
-import { CHORDS, PlanValidationError, type ChordId, type KeyId, type StyleId } from './schema.js'
-import type { PhraseEnd, PhraseSlot } from './phrase.js'
+import { CHORDS, PlanValidationError, type BarCount, type ChordId, type KeyId, type PlanGlobals, type StyleId } from './schema.js'
+import { formSlots, type PhraseEnd, type PhraseSlot } from './phrase.js'
 import { STYLE_PROFILES, type HarmonyBook } from './styles.js'
 
 export const PHRASE_ENDS: Record<PhraseEnd, string> = {
@@ -119,12 +119,36 @@ export function phraseOptions(book: HarmonyBook, slot: PhraseSlot): PhraseOption
   return [option('cd:0', [tonic, tonic, tonic, tonic], slot.end)]
 }
 
-export function phraseCriteria(book: HarmonyBook, slot: PhraseSlot): Record<string, string> {
-  return Object.fromEntries(phraseOptions(book, slot).map((entry) => [entry.id, entry.label]))
+/**
+ * The phrase Choice for one form slot of one piece: the slot, the book it
+ * draws on, and the options on offer.
+ *
+ * Both ends of /api/jev go through this one function. The server turns it
+ * into the question's criteria; JevPlanner validates and expands Jev's answer
+ * against it. They used to derive the slot separately, and on `main` that
+ * drifted (#58): the server offered one layout's ids, the client checked
+ * another's, and a valid live answer was rejected as unknown.
+ */
+export interface SlotCatalog {
+  slot: PhraseSlot
+  book: HarmonyBook
+  options: PhraseOption[]
 }
 
-export function expandPhrase(id: string, book: HarmonyBook, slot: PhraseSlot): readonly [ChordId, ChordId, ChordId, ChordId] {
-  const found = phraseOptions(book, slot).find((entry) => entry.id === id)
+export function slotCatalog(style: StyleId, globals: Pick<PlanGlobals, 'form' | 'key'>, barCount: BarCount, slotIndex: number): SlotCatalog {
+  const slot = formSlots(globals.form, barCount)[slotIndex]
+  if (!slot) throw new PlanValidationError(`phrase: slot ${slotIndex} is out of range for ${barCount} bars of ${globals.form}`)
+  const book = bookFor(style, globals.key)
+  return { slot, book, options: phraseOptions(book, slot) }
+}
+
+/** Option id → description: the Choice criteria, and the table an answer is checked against. */
+export function phraseCriteria(options: readonly PhraseOption[]): Record<string, string> {
+  return Object.fromEntries(options.map((entry) => [entry.id, entry.label]))
+}
+
+export function expandPhrase(id: string, options: readonly PhraseOption[]): readonly [ChordId, ChordId, ChordId, ChordId] {
+  const found = options.find((entry) => entry.id === id)
   if (!found) throw new PlanValidationError(`phrase: unknown option "${id}" for this slot`)
   return found.chords
 }

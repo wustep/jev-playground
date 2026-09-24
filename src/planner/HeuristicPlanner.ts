@@ -19,19 +19,19 @@ import {
   CONTOUR_IDS,
   GLOBAL_FIELDS,
   GLOBAL_FIELD_IDS,
+  parseGlobals,
   type BarCount,
   type BarPlan,
   type ChordId,
   type CompositionPlan,
   type ContourId,
-  type FormId,
   type GlobalField,
   type MatchLevel,
-  type PlanGlobals,
   type StyleId,
   type StyleMatchScore,
 } from '../plan/schema'
-import { barPositions, formSlots, type BarPosition, type BarRole, type PhraseSlot } from '../plan/phrase'
+import { BARS_PER_PHRASE, barPositions, formSlots, type BarPosition, type BarRole, type PhraseSlot } from '../plan/phrase'
+import { bookFor } from '../plan/harmonyPhrases'
 import { rootDegree } from '../render/harmony'
 import { STYLE_PROFILES, styleVocabulary, type HarmonyBook, type StylePriors, type StyleProfile, type Variant, type Weights } from '../plan/styles'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
@@ -47,21 +47,21 @@ const unsent = (label: string, op: JevOp): Exchange => ({ label, op, request: bu
 export function shadowExchanges(plan: CompositionPlan, brief: boolean): Exchange[] {
   const { version: _version, style, bars, ...globals } = plan
   const barCount = bars.length as BarCount
-  const slotCount = Math.max(1, barCount / 4)
   return [
     unsent('globals', { op: 'globals', style, brief }),
-    ...Array.from({ length: slotCount }, (_, slotIndex) =>
-      unsent(`phrase ${slotIndex + 1}`, {
+    ...formSlots(plan.form, barCount).map((_, slotIndex) => {
+      const before = bars.slice(0, slotIndex * BARS_PER_PHRASE)
+      return unsent(`phrase ${slotIndex + 1}`, {
         op: 'phrase',
         style,
         brief,
         globals,
         barCount,
         slotIndex,
-        chords: bars.slice(0, slotIndex * 4).map((bar) => bar.chord),
-        contours: bars.slice(0, slotIndex * 4).map((bar) => bar.contour),
-      }),
-    ),
+        chords: before.map((bar) => bar.chord),
+        contours: before.map((bar) => bar.contour),
+      })
+    }),
   ]
 }
 
@@ -85,8 +85,6 @@ const CONTOUR_BY_ROLE: Partial<Record<BarRole, Weights<ContourId>>> = {
   sequence: { rise: 1.4, wave: 1.4, arch: 1.2 },
   continuation: { wave: 1.3, arch: 1.2 },
 }
-
-export const isMinorKey = (key: string) => key.endsWith('_minor')
 
 /** The priors in force for one variant: the style's base, overridden field by field. */
 export function effectivePriors(profile: StyleProfile, variant: Variant | undefined): StylePriors {
@@ -352,21 +350,22 @@ export class HeuristicPlanner implements Planner {
 
     // 2 ─ globals. Register, motion and accompaniment come first because they
     //     decide the most about what the piece will sound like.
-    const globals = {} as Record<GlobalField, string>
+    const picked = {} as Record<GlobalField, string>
     for (const field of GLOBAL_FIELD_IDS) {
       const weights = priors[field] as Weights<string>
       const probabilities = withFloor(Object.keys(GLOBAL_FIELDS[field]), weights)
-      globals[field] = pickFrom(probabilities, input.pick, random, authored(weights))
-      emit(decision(field, globals[field], probabilities))
+      picked[field] = pickFrom(probabilities, input.pick, random, authored(weights))
+      emit(decision(field, picked[field], probabilities))
     }
+    // Drawn from each field's own table, so this only hands them back typed.
+    const globals = parseGlobals(picked, 'stub')
 
     const barCount: BarCount = input.bars
 
     // 3 ─ bars: the form says how to assemble the harmony; one contour each
-    const form = globals.form as FormId
-    const slots = formSlots(form, barCount)
-    const positions = barPositions(form, barCount)
-    const book = profile.harmony[isMinorKey(globals.key) ? 'minor' : 'major']
+    const slots = formSlots(globals.form, barCount)
+    const positions = barPositions(globals.form, barCount)
+    const book = bookFor(input.style, globals.key)
     let harmony = assembleHarmony(book, slots, positions, profile.holds, sample, random)
     for (let attempt = 0; sample && attempt < 8 && hasPopLoop(harmony.chords); attempt++) {
       harmony = assembleHarmony(book, slots, positions, profile.holds, sample, random)
@@ -403,7 +402,7 @@ export class HeuristicPlanner implements Planner {
       emit(decision(`bars[${i}].contour`, contour, contourProbabilities))
     }
 
-    const plan: CompositionPlan = { version: 2, style: input.style, ...(globals as PlanGlobals), bars }
+    const plan: CompositionPlan = { version: 2, style: input.style, ...globals, bars }
     const exchanges = shadowExchanges(plan, input.brief)
     return {
       plan,

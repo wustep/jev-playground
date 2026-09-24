@@ -106,6 +106,42 @@ describe('JevPlanner', () => {
     expect(top).toBeCloseTo(0.8)
   })
 
+  it('accepts any phrase the server offers, for every style, form, length and mode', async () => {
+    // What /api/jev actually does with an op: it arrives as JSON, is re-parsed
+    // against the enums, and the question is rebuilt server-side. Jev then
+    // answers with the LAST option offered, not the first, so a catalog that
+    // matched only at its head would still fail here. #58 was this class of
+    // bug on `main`: the server offered ids the client then rejected.
+    const server: JevTransport = async (op) => {
+      const request = buildRequest(parseOp(JSON.parse(JSON.stringify(op))), 'jev-latest')
+      const answers: Record<string, Answer> = {}
+      for (const [id, question] of Object.entries(request.questions)) {
+        if (question.type !== 'choice') continue
+        const options = Object.keys(question.criteria)
+        const favourite = options[options.length - 1]
+        answers[id] = { type: 'choice', choice: favourite, confidence: 1, probabilities: Object.fromEntries(options.map((option) => [option, option === favourite ? 1 : 0])) }
+      }
+      return { model: 'jev-test', answers, usage: { input_tokens: 0, output_tokens: 0 } }
+    }
+    for (const style of STYLE_IDS) {
+      for (const form of FORM_IDS) {
+        for (const key of ['C_major', 'A_minor'] as const) {
+          for (const bars of BAR_COUNT_VALUES) {
+            const forced: JevTransport = async (op, signal) => {
+              const response = await server(op, signal)
+              if (op.op !== 'globals') return response
+              const pin = (value: string) => ({ type: 'choice' as const, choice: value, confidence: 1, probabilities: { [value]: 1 } })
+              return { ...response, answers: { ...response.answers, form: pin(form), key: pin(key) } }
+            }
+            const { plan } = await new JevPlanner(forced).plan({ style, bars, pick: 'sample', seed: bars, brief: false })
+            expect(parsePlan(plan), `${style} ${form} ${key} ${bars}`).toEqual(plan)
+            expect(plan.form).toBe(form)
+          }
+        }
+      }
+    }
+  }, 60_000)
+
   it('hands every style brief to Jev when asked', () => {
     for (const [style, name, snippet] of [
       ['bach', 'Johann Sebastian Bach', 'ii4/2'],

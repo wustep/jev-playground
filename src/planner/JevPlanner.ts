@@ -22,22 +22,20 @@ import {
   GLOBAL_FIELDS,
   GLOBAL_FIELD_IDS,
   MATCH_LEVELS,
+  parseGlobals,
   parseOption,
   type BarCount,
   type BarPlan,
   type ChordId,
   type ContourId,
-  type FormId,
   type CompositionPlan,
   type GlobalField,
-  type KeyId,
   type OptionTable,
-  type PlanGlobals,
   type StyleId,
   type StyleMatchScore,
 } from '../plan/schema'
-import { barPositions, formSlots } from '../plan/phrase'
-import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
+import { BARS_PER_PHRASE, barPositions, formSlots } from '../plan/phrase'
+import { bookFor, expandPhrase, finishPhraseHarmony, phraseCriteria, slotCatalog, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
 import { normalize, pickFrom, rng } from './pick'
 import { buildRequest, scoreQuestionId, SONG_SCORE_QUESTION_ID, type JevOp } from './jev/requests'
@@ -134,48 +132,48 @@ export class JevPlanner implements Planner {
     //     `character` instead, and a sweep of all twelve of its values found
     //     one melody outcome per style — so it is not asked any more.
     const answers = await ask('globals', { op: 'globals', style: input.style, brief: input.brief })
-    const globals = {} as Record<GlobalField, string>
+    const picked = {} as Record<GlobalField, string>
     for (const field of GLOBAL_FIELD_IDS) {
-      globals[field] = decide(answers, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
+      picked[field] = decide(answers, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
     }
+    // Each answer was checked against its table as it was drawn; this hands
+    // them back typed, so nothing below needs a cast.
+    const globals = parseGlobals(picked, 'jev')
     const barCount: BarCount = input.bars
-    const form = globals.form as FormId
     // Roles are the form, expanded by code: coherent by construction, and no
     // longer a plan field a hand edit could set against the form it came from.
-    const positions = barPositions(form, barCount)
+    const positions = barPositions(globals.form, barCount)
 
     // 2 ─ one HarmonyBook phrase per 4-bar slot. Cadence splits are applied in
     // code from the book's `splits` list (no extra approach Choice).
-    const slots = formSlots(form, barCount)
-    const book = bookFor(input.style, globals.key as KeyId)
+    const slots = formSlots(globals.form, barCount)
     const pickedChords: ChordId[] = []
     const contours: ContourId[] = []
     for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
-      const slot = slots[slotIndex]
       const slotAnswers = await ask(`phrase ${slotIndex + 1}`, {
         op: 'phrase',
         style: input.style,
         brief: input.brief,
-        globals: globals as PlanGlobals,
+        globals,
         barCount,
         slotIndex,
         chords: [...pickedChords],
         contours: [...contours],
       })
-      const catalog = phraseOptions(book, slot)
-      const table = Object.fromEntries(catalog.map((entry) => [entry.id, entry.label]))
+      // The same catalog the server built this question's criteria from.
+      const { options } = slotCatalog(input.style, globals, barCount, slotIndex)
       const isLast = slotIndex === slots.length - 1
       const phraseId = decide(
         slotAnswers,
         'phrase',
         `slots[${slotIndex}].phrase`,
-        table,
-        isLast ? undefined : (given) => withPhraseNovelty(given, pickedChords, catalog),
+        phraseCriteria(options),
+        isLast ? undefined : (given) => withPhraseNovelty(given, pickedChords, options),
         isLast ? 'argmax' : input.pick,
       )
-      pickedChords.push(...expandPhrase(phraseId, book, slot))
-      for (let k = 0; k < 4; k++) {
-        const bar = slotIndex * 4 + k
+      pickedChords.push(...expandPhrase(phraseId, options))
+      for (let k = 0; k < BARS_PER_PHRASE; k++) {
+        const bar = slotIndex * BARS_PER_PHRASE + k
         const source = positions[bar]?.returnsFrom
         if (source === undefined || contours[source] === undefined) {
           contours.push(decide(slotAnswers, slotContourQuestionId(k), `bars[${bar}].contour`, CONTOURS))
@@ -187,7 +185,7 @@ export class JevPlanner implements Planner {
         decisions.push({ field: `bars[${bar}].contour`, choice: contour, confidence: 1, probabilities: normalize(Object.fromEntries(CONTOUR_IDS.map((id) => [id, id === contour ? 1 : 0]))) })
       }
     }
-    const harmony = finishPhraseHarmony(pickedChords, slots, book)
+    const harmony = finishPhraseHarmony(pickedChords, slots, bookFor(input.style, globals.key))
     const bars: BarPlan[] = Array.from({ length: barCount }, (_, i) => {
       const chord = harmony.chords[i]
       const chord2 = harmony.seconds[i]
@@ -199,7 +197,7 @@ export class JevPlanner implements Planner {
       return chord2 ? { chord, chord2, contour } : { chord, contour }
     })
 
-    const plan: CompositionPlan = { version: 2, style: input.style, ...(globals as PlanGlobals), bars }
+    const plan: CompositionPlan = { version: 2, style: input.style, ...globals, bars }
     return {
       plan,
       trace: {
