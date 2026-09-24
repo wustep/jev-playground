@@ -7,68 +7,51 @@
   "midiSource": "https://www.mutopiaproject.org/ftp/ChopinFF/O9/chopin_nocturne_op9_n2/chopin_nocturne_op9_n2.mid",
   "midiLicense": "CC BY-SA 3.0 (Mutopia-2014/12/18-1590)",
   "notes": "First 8 bars in 4-bar units. Arrangement is constant for this page (LH never breaks). twelve_eight exists on the schema but is missing from Chopin priors.",
-  "_stretch": [
-    "proposed phrasing: upbeat",
-    "ornament / fioritura on varied return (no turn figure)",
-    "cross-bar ties",
-    "rubato (leave out \u2014 audio is mechanical on purpose)"
-  ],
   "plan": {
-    "version": 1,
+    "version": 2,
     "style": "chopin",
-    "character": "lyrical_song",
+    "register": "high",
+    "motion": "flowing",
+    "accompaniment": "broken",
     "form": "period",
     "key": "Eb_major",
     "meter": "twelve_eight",
-    "texture": "rolling_nocturne",
     "palette": "chromatic_approach",
     "tempo": "andante",
     "dynamics": "p",
     "dynamicShape": "arch",
-    "defaultInstrument": "grand_piano",
-    "arrangement": "constant",
-    "opening": "pickup",
-    "pedal": "full",
     "bars": [
       {
         "chord": "I",
-        "role": "statement",
         "contour": "arch"
       },
       {
         "chord": "V65",
-        "role": "development",
         "contour": "wave"
       },
       {
         "chord": "I6",
-        "role": "development",
         "contour": "leap_fall"
       },
       {
         "chord": "V7",
-        "role": "half_cadence",
         "contour": "fall"
       },
       {
         "chord": "I",
-        "role": "restatement",
         "contour": "arch"
       },
       {
         "chord": "V65",
-        "role": "development",
         "contour": "wave"
       },
       {
         "chord": "I64",
-        "role": "climax",
         "contour": "arch",
         "chord2": "V7"
       },
       {
         "chord": "I",
-        "role": "cadence",
         "contour": "fall"
       }
     ]

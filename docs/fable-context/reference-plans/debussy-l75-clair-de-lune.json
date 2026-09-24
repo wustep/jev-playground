@@ -1,73 +1,56 @@
 {
   "id": "debussy-l75-clair-de-lune",
   "piece": "Debussy, Clair de lune (Suite bergamasque), L. 75",
-  "whyHere": "Arch, I6 opening, later ii9 pedal, fade, no V\u2013I close.",
+  "whyHere": "Arch, I6 opening, later ii9 pedal, fade, no V–I close.",
   "evidence": "score",
   "midi": "docs/ref-midi/public/debussy-l75-clair-de-lune.mid",
   "midiSource": "https://www.mutopiaproject.org/ftp/DebussyC/L75/debussy_Ste_Bergamesq_Clair/debussy_Ste_Bergamesq_Clair.mid",
   "midiLicense": "Public Domain (Mutopia-2010/12/21-1778)",
-  "notes": "8-bar opening sketch (I6, no root in the bass). The four-bar ii9 pedal and I\u2013iii\u2013bIII6\u2013I close are later; named in _stretch rather than forced into these 8 bars.",
-  "_stretch": [
-    "proposed phrasing: long_breathed",
-    "cross-bar ties (FIDELITY: 69% of downbeats tied)",
-    "ending/morendo (dynamics stop at pp)",
-    "later: ii9\u00d74 pedal slot; close I, iii, bIII6, I"
-  ],
+  "notes": "8-bar opening sketch (I6, no root in the bass). The four-bar ii9 pedal and I–iii–bIII6–I close are later; named in _stretch rather than forced into these 8 bars.",
   "plan": {
-    "version": 1,
+    "version": 2,
     "style": "debussy",
-    "character": "dreamy_haze",
-    "form": "arch_return",
+    "register": "high",
+    "motion": "flowing",
+    "accompaniment": "broken",
+    "form": "arch",
     "key": "Db_major",
     "meter": "nine_eight",
-    "texture": "wash_arpeggio",
     "palette": "pentatonic",
     "tempo": "andante",
     "dynamics": "pp",
     "dynamicShape": "arch",
-    "defaultInstrument": "grand_piano",
-    "arrangement": "lift_on_return",
-    "opening": "straight_in",
-    "pedal": "full",
     "bars": [
       {
         "chord": "I6",
-        "role": "statement",
         "contour": "arch"
       },
       {
         "chord": "I6",
-        "role": "restatement",
         "contour": "wave"
       },
       {
         "chord": "vi",
-        "role": "development",
         "contour": "fall"
       },
       {
         "chord": "V43",
-        "role": "half_cadence",
         "contour": "dip"
       },
       {
         "chord": "I6",
-        "role": "restatement",
         "contour": "arch"
       },
       {
         "chord": "iii",
-        "role": "contrast",
         "contour": "fall"
       },
       {
         "chord": "bIII6",
-        "role": "dissolve",
         "contour": "fall"
       },
       {
         "chord": "I",
-        "role": "cadence",
         "contour": "fall"
       }
     ]

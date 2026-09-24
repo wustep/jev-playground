@@ -51,11 +51,18 @@ export const REGISTERS = {
 export type RegisterId = keyof typeof REGISTERS
 export const REGISTER_IDS = keysOf<RegisterId>(REGISTERS)
 
-/** The sounding window of each register, as MIDI numbers: [floor, ceiling]. */
+/**
+ * The sounding window of each register, as MIDI numbers: [floor, ceiling].
+ *
+ * Calibrated against the melody-track mean of the committed reference MIDI:
+ * Beethoven's Op. 13 Adagio sits at 62, Bach's C major prelude figure at 69,
+ * Chopin's Op. 9/2 nocturne at 76.5. Three seventeen-semitone windows a fifth
+ * apart put each of those at the centre of one.
+ */
 export const REGISTER_RANGE: Record<RegisterId, readonly [number, number]> = {
-  low: [55, 72],
-  mid: [62, 79],
-  high: [69, 88],
+  low: [54, 71],
+  mid: [61, 78],
+  high: [68, 85],
 }
 
 /**
