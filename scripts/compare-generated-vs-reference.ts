@@ -28,7 +28,7 @@
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 
-import { GLOBAL_FIELD_IDS, parsePlan, type BarCount, type CompositionPlan, type StyleId } from '../src/plan/schema'
+import { GLOBAL_FIELD_IDS, parsePlan, parseStyle, type BarCount, type CompositionPlan, type StyleId } from '../src/plan/schema'
 import { barPositions } from '../src/plan/phrase'
 import { HeuristicPlanner } from '../src/planner/HeuristicPlanner'
 import { JevPlanner, directTransport } from '../src/planner/JevPlanner'
@@ -123,7 +123,7 @@ async function maybeLiveJev(styles: StyleId[], bars: BarCount) {
 async function main() {
   const bars = (Number(arg('--bars') ?? 16) || 16) as BarCount
   const seeds = (arg('--seeds') ?? DEFAULT_SEEDS.join(',')).split(',').map(Number)
-  const liveStyles = ((arg('--live-styles') ?? 'chopin,beethoven').split(',') as StyleId[]).filter(Boolean)
+  const liveStyles = (arg('--live-styles') ?? 'chopin,beethoven').split(',').filter(Boolean).map((style) => parseStyle(style, '--live-styles'))
   const refs = loadRefs()
   const planner = new HeuristicPlanner()
   const byId = new Map(refs.map((row) => [row.file.id, row]))

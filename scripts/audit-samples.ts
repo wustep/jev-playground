@@ -35,7 +35,7 @@ const SEEDS = arg('--seeds', 12)
 const BARS = arg('--bars', 16) as BarCount
 
 /** Filename prefix → dial style. */
-const PREFIX: Record<string, StyleId> = { bach: 'bach', beethoven: 'beethoven', chopin: 'chopin', debussy: 'debussy', zimmer: 'hans_zimmer', glass: 'glass' as StyleId, laufey: 'laufey' as StyleId, fox: 'elijah_fox' as StyleId }
+const PREFIX: Record<string, StyleId> = { bach: 'bach', beethoven: 'beethoven', chopin: 'chopin', debussy: 'debussy', zimmer: 'hans_zimmer', glass: 'glass', laufey: 'laufey', fox: 'elijah_fox' }
 
 function refsFor(style: StyleId): { path: string; local: boolean }[] {
   const out: { path: string; local: boolean }[] = []

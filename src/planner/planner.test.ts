@@ -2,14 +2,14 @@ import { Midi } from '@tonejs/midi'
 import { describe, expect, it } from 'vitest'
 import { handleJev } from '../../server/jevHandler'
 import { scoreToMidi } from '../midi/exportMidi'
-import { ACCOMPANIMENT_IDS, BAR_COUNT_VALUES, FORM_IDS, GLOBAL_FIELD_IDS, MOTION_IDS, REGISTER_IDS, STYLE_IDS, TEMPO_IDS, parsePlan } from '../plan/schema'
+import { ACCOMPANIMENT_IDS, BAR_COUNT_VALUES, CHORDS, FORM_IDS, GLOBAL_FIELD_IDS, MOTION_IDS, REGISTER_IDS, STYLE_IDS, TEMPO_IDS, parsePlan } from '../plan/schema'
 import { barPositions, formSlots } from '../plan/phrase'
 import { STYLE_PROFILES } from '../plan/styles'
 import { keyInfo, resolveChord } from '../render/harmony'
 import { renderPlan, timeline } from '../render/renderPlan'
 import { HeuristicPlanner } from './HeuristicPlanner'
 import { JevPlanner, type JevTransport } from './JevPlanner'
-import { buildRequest, chordOptionsFor, parseOp } from './jev/requests'
+import { buildRequest, parseOp } from './jev/requests'
 import { pickFrom, rng, withNovelty } from './pick'
 import type { Answer, SystemOneRequest, SystemOneResponse } from './jev/systemOne'
 
@@ -89,8 +89,6 @@ describe('JevPlanner', () => {
     expect(JSON.stringify(seen[2].state)).toContain('phrases_so_far')
     expect(JSON.stringify(seen[2].state)).toContain('prior_melodic_shapes')
     expect(JSON.stringify(seen[1].state)).toContain('melody_register')
-    expect(Object.keys(chordOptionsFor('A_minor'))).not.toContain('Imaj9')
-    expect(Object.keys(chordOptionsFor('C_major'))).not.toContain('i64')
 
     renderPlan(plan, 1) // and the renderer accepts it
   })
@@ -188,7 +186,8 @@ describe('JevPlanner', () => {
       }, 'jev-latest'),
     ]
     const criteria = JSON.stringify(requests.flatMap((request) => Object.values(request.questions).map((q) => [q.criteria, q.instructions])))
-    const chords = JSON.stringify([chordOptionsFor('C_major'), chordOptionsFor('C_minor')])
+    // Every chord description can reach Jev inside a phrase option's label.
+    const chords = JSON.stringify(CHORDS)
     for (const name of ['Bach', 'Beethoven', 'Debussy', 'Glass', 'Laufey', 'Fox', 'Chopin', 'Zimmer', 'Satie', 'Reich']) {
       expect(criteria).not.toContain(name)
       expect(chords).not.toContain(name)

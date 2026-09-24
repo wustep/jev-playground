@@ -448,17 +448,6 @@ function chordToneRate(score: Score): number {
   return n ? Number((tones / n).toFixed(3)) : 0
 }
 
-export function bassFingerprint(score: Score): string {
-  return score.bars
-    .map((bar) =>
-      bar.bass
-        .flat()
-        .map((note) => `${note.start}:${note.dur}:${note.pitches.join(',')}`)
-        .join('|'),
-    )
-    .join('/')
-}
-
 export function innerRhCount(score: Score): number {
   return score.bars.reduce((n, bar) => n + bar.treble.slice(1).reduce((m, v) => m + v.length, 0), 0)
 }

@@ -54,7 +54,6 @@ import {
   type CompositionPlan,
   type ContourId,
   type GlobalField,
-  type KeyId,
   type PlanGlobals,
   type StyleId,
 } from '../../plan/schema.js'
@@ -132,27 +131,6 @@ function globalsRequest(op: Extract<JevOp, { op: 'globals' }>, model: string): S
   for (const field of GLOBAL_FIELD_IDS) questions[field] = choice(GLOBAL_INSTRUCTIONS[field], GLOBAL_FIELDS[field])
   return { model, state: { task: TASK, requested_style: styleState(op.style, op.brief) }, questions }
 }
-
-// Labels that only make sense in one mode are not offered in the other: the
-// model can't pick what it isn't shown, and ~25 fewer options is ~25 fewer
-// ways to go wrong. The root-position tonic triads of BOTH modes stay in
-// (Picardy thirds, mode flips), as do the borrowed chords that are the point
-// of modal mixture.
-const MAJOR_ONLY: ReadonlySet<ChordId> = new Set<ChordId>(['I6', 'I64', 'iii', 'iii6', 'iii64', 'iii7', 'iii9', 'vi', 'vi6', 'vi7', 'vi9', 'vi11', 'Imaj42', 'ii6', 'ii65', 'ii42', 'ii7', 'ii9', 'V7_of_ii', 'V7_of_vi', 'sharp_i_dim7', 'biii7', 'I6_9', 'Imaj9', 'Iadd9', 'Iadd6', 'Imaj7s5', 'Imaj7s11', 'II_over_I', 'IVmaj7s11'])
-const MINOR_ONLY: ReadonlySet<ChordId> = new Set<ChordId>(['i6', 'i64', 'i42', 'i9', 'i11', 'i_add9', 'i_maj7', 'i_add6', 'ii_dim', 'ii_dim6', 'ii_half_dim65', 'iv64', 'v6', 'iv9'])
-
-/** The chord labels offered to Jev in `key`. */
-export function chordOptionsFor(key: KeyId): Record<string, string> {
-  const hidden = key.endsWith('_minor') ? MAJOR_ONLY : MINOR_ONLY
-  return Object.fromEntries(Object.entries(CHORDS).filter(([id]) => !hidden.has(id as ChordId)))
-}
-
-/**
- * Chords offered as the first half of a bar that arrives on a cadence chord in
- * its second half: the cadential six-four and the pre-dominants. Asked only on
- * the bar before a cadence and on a half-cadence bar, in the same request as
- * that bar's chord, so a two-chord cadence costs no extra round trip.
- */
 
 const describeChord = (chord: ChordId, chord2: ChordId | null | undefined) =>
   `${chord} — ${CHORDS[chord]}` + (chord2 ? `; second half of the bar: ${chord2} — ${CHORDS[chord2]}` : '')
