@@ -7,9 +7,9 @@ Can a **System One** model steer music across styles?
 - **Jev** (or an offline stub behind the same interface) decides *only enum labels*: where the tune sings, how fast it moves, what holds it up, then form, key, meter, palette, tempo and dynamics — and, per 4-bar slot, a harmony-book phrase plus per-bar contours. Code expands those into per-bar chords, roles and notes.
 - **App code** expands that plan into notes, engraves it (VexFlow), plays it (smplr) and exports it (`.mid`).
 
-Styles on the dial: **Johann Sebastian Bach · Ludwig van Beethoven · Frédéric Chopin · Claude Debussy · Hans Zimmer**.
+Styles on the dial: **Johann Sebastian Bach · Ludwig van Beethoven · Frédéric Chopin · Claude Debussy · Philip Glass · Hans Zimmer · Laufey · Elijah Fox**.
 
-A style earns a face by diverging on the axes the plan can name — register, motion, accompaniment, palette, rubato — not by having a name. Four of the five can be measured against committed public-domain MIDI; Zimmer holds the drama pole.
+A style earns a face by diverging on the axes the plan can name — register, motion, accompaniment, palette, rubato — not by having a name, and a test holds them to it: every style's most typical plan must differ from every other's on register, motion and accompaniment. A style is a table row plus a harmony book; none of them has code of its own. The four classical styles are measured against committed public-domain MIDI; Glass and Fox against local files that never enter the repository; Laufey and Zimmer have no MIDI at all (see [`docs/ref-midi/public/README.md`](docs/ref-midi/public/README.md#living-artists-acquisition-status)).
 
 ## Routes
 
@@ -35,6 +35,8 @@ npm test           # vitest: renderer invariants, Jev request shapes, proxy, MID
 npx --yes tsx scripts/label-reach.ts
 # generated vs the committed public-domain reference MIDI
 npx --yes tsx scripts/compare-generated-vs-reference.ts --summary
+# seeds x styles, every metric, beside every reference (local ones too, if present)
+npx --yes tsx scripts/audit-samples.ts --seeds 24
 ```
 
 Node 20+.
@@ -112,7 +114,7 @@ Bars may be 4, 8, 16, 32, or 64.
 ```ts
 interface CompositionPlan {
   version: 2
-  style: StyleId              // bach | beethoven | chopin | debussy | hans_zimmer
+  style: StyleId              // bach | beethoven | chopin | debussy | glass | hans_zimmer | laufey | elijah_fox
   register: RegisterId        // low | mid | high — WHERE THE TUNE SINGS
   motion: MotionId            // sustained | walking | flowing | florid — HOW FAST IT MOVES
   accompaniment: AccompanimentId  // sustained | broken | pulse | stride | counterline — WHAT HOLDS IT UP

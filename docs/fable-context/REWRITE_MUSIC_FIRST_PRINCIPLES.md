@@ -61,11 +61,13 @@ Removed: `character` (12 values, one measured melody outcome per style), `textur
 | bach | 70.0 | 69.1 | 11 | 12 |
 | debussy | 76.4 | 73.2 | 5.5 | 6.25 |
 
-Register now tracks the references within about two semitones. Subdivision is right for Chopin, Bach and Debussy. **Beethoven's onset density is the one still short**: the Op. 13 Adagio's 10.5 attacks a 2/4 bar are 32nd-note figuration over a slow pulse, and the `florid` rate (3.5 a beat) does not reach it. Raising the rate would over-drive every other style, so the honest fix is a fifth motion value or a tempo-aware rate; neither is in this branch.
+Register now tracks the references within about two semitones. Subdivision is right for Chopin, Bach and Debussy.
+
+> **Retracted, 2026-09-24.** This section originally called Beethoven's onset density "the one still short" against Op. 13 II's 10.5 attacks a bar, and moved that reference plan to `florid`. The 10.5 was the metric: it counted every note-on in the upper-staff track, including the sixteenth murmur the right hand plays *under* the tune. The tune's top voice attacks 3.19 times a bar, at MIDI 66.3 rather than 62. See [the polish pass](#polish-pass-2026-09-24) below.
 
 ## The dial
 
-Eight styles to five: Bach, Beethoven, Chopin, Debussy, Zimmer. The four with committed reference MIDI can be measured; Zimmer holds the drama pole. Glass, Laufey and Elijah Fox are gone — no references, and their priors were the most costume-like.
+This pass cut eight styles to five: Bach, Beethoven, Chopin, Debussy, Zimmer. The polish pass restored Glass, Laufey and Elijah Fox as table rows — see below.
 
 A style is now one row of five fields in `src/render/styleVoice.ts` (accent, articulation, humanize, rubato, spacing) plus its harmony book. **Nothing in that row chooses a note.** Which notes to play is the plan's job; the row is only how they are played.
 
@@ -101,7 +103,68 @@ A fourth came from looking at the running app rather than the tests: `sustained`
 
 ## What is not done
 
-- **Beethoven's subdivision**, above. The clearest remaining gap against a reference.
 - **No keyed A/B.** Everything here is the offline stub through the production renderer. A live-Jev listen at identical style, seed and bars is the release check, and it has not been run.
 - **Zimmer has no reference MIDI**, so its row is unfalsifiable in the same way the three deleted styles were. It is kept for the drama pole, and that is a judgment, not a measurement.
 - **`counterline` is thin.** It is a real second voice with contrary motion, but it does not imitate, so a Bach invention comes out as two lines rather than as a subject and its answer.
+
+---
+
+## Polish pass, 2026-09-24
+
+Same branch. Keeps the melody-first model; adds no per-artist code.
+
+### A metric correction first
+
+`midiMetrics` read the reference melody as every note-on in the upper-staff track. For Op. 13 II that includes the inner sixteenths, so the tune looked like 10.9 attacks a bar at MIDI 62. Measured as a **top voice** — an attack counts only if nothing higher is still sounding over it — it is **3.19 attacks a bar at 66.3**. That retracts the Beethoven "gap" above, moves the `low` register window from [54,71] to [57,73], and returns the Op. 13 reference plan from `florid` to `flowing`. Rendered, it now lands at 65.1 / 3.5 against 66.3 / 3.19. `combinedSkyline` keeps the naive both-hands view on purpose: it exists to show the drift. Moonlight I is the case this cannot fix — its tune enters at bar 5, so its first bars' top line is the triplets.
+
+### What the audit found and what changed
+
+`scripts/audit-samples.ts` renders many seeds of every style and prints every metric beside every reference for that style.
+
+| found | change | result |
+| --- | --- | --- |
+| One pitch struck 7 times running (a climax contour pressed on its ceiling; a short figure stretched by duplication on recall) | A line may strike a pitch twice, not three times; the guard sees across barlines. A blocked stutter-step turns around. | longest run 7 → 2–3 (3 = a cadence landing) |
+| Ornamented returns came back at exactly the density they left (8.75 = 8.75 across 72 Chopin bars) | Fioritura: any note an eighth or longer may be split into sixteenths behind its arrival | returns 8.75 → 10.3; nocturne reference rises 7.25 → 10.6 |
+| Returns started cold after the rest | A pickup at the end of the rest steps into the returning tune; half a beat of silence is kept | — |
+| `counterline` never quoted the tune | First bar exposes the subject alone; the next answers it an octave below in its rhythm | — |
+| Every tune attacked every downbeat (mazurka: 56%) | Where the accompaniment owns beat one — an invention's second voice, a dance bass — a fresh statement enters just after it. Silenced *after* the tune is written, so it removes notes and changes none. | Bach 95%, Chopin 98%, Laufey 97% |
+| Every phrase end rested, including `open` ones | Only a cadence breathes; an open join runs on | Glass silent beats 9% → 4% (étude 0%) |
+| Accompaniment density ignored loudness | Density follows velocity as well as role; full density doubles the bass an octave down | crescendos build texture |
+| Zimmer never returned (`chain` everywhere) | sentence / arch | ret4 0.19 → 0.45 |
+| Debussy drew `sustained` 7/12 | toward walking/flowing | 3.35 → 4.81 on/bar (refs 4.5–7.0) |
+
+### Artists restored
+
+Glass, Laufey and Elijah Fox are back: a `STYLE_LABELS` entry, a five-field `StyleVoice` row, a dial theme, and their harmony books and priors from `main` put through the same v1 → v2 remap. The mechanical remap got two things wrong that measurement caught: it gave Glass `chain` form (no return) for music that *is* return, and it gave Fox no `florid` at all against a local reference running 16.4 attacks a bar — which also made his most typical piece sound exactly like Chopin's. A test now requires all eight argmax plans to differ on register / motion / accompaniment. Glass's 2-against-3 lean returns as a generic `rubato` value, not per-artist code.
+
+### Reference coverage
+
+Three public-domain Mutopia files were added so the variants with no reference have one: Chopin Mazurka Op. 6/1 (CC BY 3.0), Beethoven *Für Elise* (PD), Debussy Préludes I/4 (CC BY-SA 4.0). The mazurka moved Chopin's `dance` register from high to mid (top voice 69.1).
+
+Living artists never enter the repository. Glass's Étude No. 6 and Fox's "Wyoming" are measured from `docs/ref-midi/local/` (gitignored) when present. Laufey (owned PDFs only) and Zimmer (nothing) remain gaps. The full table is in [`docs/ref-midi/public/README.md`](../ref-midi/public/README.md#living-artists-acquisition-status).
+
+### After, 24 seeds × 16 bars
+
+| style | register | ref | on/bar | ref | ceiling breaches |
+| --- | --- | --- | --- | --- | --- |
+| bach | 69.8 | 69.1–72.2 | 8.2 | 11–12 | 0 |
+| beethoven | 70.1 | 66.3–71.9 | 4.0 | 3.2–4.2 | 0 |
+| chopin | 74.7 | 69.1–76.5 | 6.7 | 3.1–10.6 | 0 |
+| debussy | 74.6 | 70.8–74.3 | 4.8 | 4.5–7.0 | 0 |
+| glass | 68.1 | 65.6 (local) | 4.9 | 6.0 | 0 |
+| hans_zimmer | 70.1 | — | 3.6 | — | 0 |
+| laufey | 70.1 | — | 4.3 | — | 0 |
+| elijah_fox | 70.9 | 71.4 (local) | 6.4 | 16.4 | 0 |
+
+`label-reach`: for every style, `register` gives 3/3 distinct lines, `motion` 4/4, and `accompaniment` one sung line with five distinct accompaniments.
+
+### Still not done
+
+- **No listening pass this round.** Chrome and Playwright were both unavailable, so the dial and sheet were not looked at; the dial CSS is the original 8-stop grid and unchanged.
+- **Fox runs at 6.4 attacks a bar against "Wyoming"'s 16.4.** Deliberate: one 18-bar transcription shouldn't erase his slow chordal pieces.
+- **Bach at 8.2 vs 11–12**: the chorale and sarabande variants pull the mean down; inventions and preludes alone are at 13.
+- **Chopin's 8-bar period answers itself literally**, where Op. 9/2 dresses its very first answer. At 16 bars the dressed return arrives.
+- **Clair de lune's reference plan sings 5 semitones high** (78.9 vs 73.9); `high` is still the nearer window.
+- **Downbeats**: returns and non-statement bars still attack beat one. Ties across the barline would do more, but need cross-bar notes in the Score.
+- **No keyed A/B** against live Jev.
+
