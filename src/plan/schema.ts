@@ -64,11 +64,17 @@ export const REGISTER_IDS = keysOf<RegisterId>(REGISTERS)
  * at 76.5. An earlier calibration read Op. 13 at 62 — but that count included
  * the inner sixteenths the right hand plays under the tune, and `low` was set
  * a fourth too deep on the strength of it.
+ *
+ * `high` was centred on the nocturne's 76.5, but a tune rendered in it lands
+ * above its window's centre — climaxes lift, and there is headroom to 85 — so
+ * every reference plan labelled `high` sang sharp of its MIDI: the nocturne
+ * by 1.2, the arabesque by 3.9, Clair de lune by 5.4. Two semitones down, they
+ * render at −0.8, +1.6 and +2.1.
  */
 export const REGISTER_RANGE: Record<RegisterId, readonly [number, number]> = {
   low: [57, 73],
   mid: [61, 78],
-  high: [68, 85],
+  high: [66, 83],
 }
 
 /**
