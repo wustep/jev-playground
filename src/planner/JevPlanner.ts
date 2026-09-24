@@ -1,21 +1,22 @@
 // Live planner: every field of the CompositionPlan is a Jev Choice answer.
 //
-//   request 1      the CHARACTER of the piece: most typical (Choice) + which ones
-//                  this composer writes at all (one Noul each); code combines them
-//   request 2      form + globals, given that character            (fan-out)
-//   requests 3..   one per 4-bar form slot: a HarmonyBook phrase + four contours
+//   request 1      the piece: register, motion, accompaniment, form, key,
+//                  meter, palette, tempo, dynamics, shape       (one fan-out)
+//   requests 2..   one per 4-bar form slot: a HarmonyBook phrase + four contours
 //   score()        one request: one Score per style + song_quality (0–3)
 //
 // Bar roles are not asked: they are the chosen form, expanded by code
-// (src/plan/forms.ts).
+// (src/plan/phrase.ts). Nor is a `character`: it used to be request 1, and a
+// sweep of all twelve of its values found one melody outcome per style.
+//
+// Jev is asked for labels only. It is never asked for notes — the two
+// experimental paths that did (`notes=guide`, `notes=line`) are gone, with
+// the user-facing modes they served.
 //
 // Jev returns a full probability distribution for every Choice; `pick.ts`
 // decides (argmax or seeded sampling) — code owns the policy, Jev the judgment.
 
 import {
-  BAR_ROLE_IDS,
-  CHARACTERS,
-  CHARACTER_IDS,
   CONTOURS,
   CONTOUR_IDS,
   GLOBAL_FIELDS,
@@ -24,7 +25,6 @@ import {
   parseOption,
   type BarCount,
   type BarPlan,
-  type CharacterId,
   type ChordId,
   type ContourId,
   type FormId,
@@ -35,50 +35,13 @@ import {
   type PlanGlobals,
   type StyleId,
   type StyleMatchScore,
-  hookBarsValue,
-  resolveHookBars,
 } from '../plan/schema'
-import {
-  BASS_PATTERN_QUESTION_ID,
-  FIGURE_QUESTION_ID,
-  GOAL_QUESTION_ID,
-  MELODY_DEGREES,
-  PHRASE_NOTE_COUNT,
-  lastSoundingDegree,
-  melodyMemoryFrom,
-  guideMemoryFrom,
-  parseBassPattern,
-  parseJevGuideChoices,
-  parseJevNoteChoices,
-  parseMelodyFigure,
-  parseMelodyGoal,
-  pitchQuestionId,
-  rhythmsFor,
-  type BassPatternId,
-  type GuideMemoryBar,
-  type MelodyDegreeId,
-  type MelodyMemoryBar,
-  type NotesWriteMode,
-} from '../plan/notes'
-import { lastSoundingMidi, realizeJevGuideChoices, realizeJevNoteChoices, type NotePhrase } from '../render/jevNotes'
-import {
-  degreesNearlyIdentical,
-  nudgeMelodyDegrees,
-  prefersLongAndRest,
-  withDegreeProximity,
-  withLyricalRhythmBias,
-} from './jev/notesPriors'
-import { formRoles, formSlots, themeSources } from '../plan/forms'
+import { barPositions, formSlots } from '../plan/phrase'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, slotContourQuestionId, withPhraseNovelty } from '../plan/harmonyPhrases'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
-import { marginConfidence, normalize, pickFrom, rng } from './pick'
-import { buildRequest, characterQuestionId, scoreQuestionId, SONG_SCORE_QUESTION_ID, type JevOp } from './jev/requests'
+import { normalize, pickFrom, rng } from './pick'
+import { buildRequest, scoreQuestionId, SONG_SCORE_QUESTION_ID, type JevOp } from './jev/requests'
 import { callSystemOne, DEFAULT_MODEL, type Answer, type ChoiceAnswer, type SystemOneResponse } from './jev/systemOne'
-
-/** noul ** this: 0.95 → 0.81, 0.75 → 0.32, 0.5 → 0.06, 0.2 → 0.002. */
-const PLAUSIBILITY_SHARPNESS = 4
-/** Added to the Choice probability, so that characters Jev did not name "most typical" still get drawn. */
-const TYPICALITY_FLOOR = 0.5
 
 /** Sends one op to Jev, however it gets there. */
 export type JevTransport = (op: JevOp, signal?: AbortSignal) => Promise<SystemOneResponse>
@@ -165,50 +128,31 @@ export class JevPlanner implements Planner {
       return picked
     }
 
-    // 1 ─ what kind of piece. Jev says which character is most typical (a Choice) and, separately,
-    // which characters this composer writes at all (a Noul each). Policy, in code: a character's
-    // weight is its plausibility, sharpened, times its typicality plus a constant — so the signature
-    // character leads without monopolising, and a foreign one (noul ≈ 0.2) all but never comes up.
-    const concept = await ask('character', { op: 'concept', style: input.style, brief: input.brief })
-    const typical = choiceAnswer(concept, 'character').probabilities
-    const plausibility = normalize(
-      Object.fromEntries(
-        CHARACTER_IDS.map((id) => {
-          const answer = concept[characterQuestionId(id)]
-          if (!answer || answer.type !== 'noul') throw new Error(`Jev response is missing noul answer "${characterQuestionId(id)}"`)
-          return [id, answer.noul ** PLAUSIBILITY_SHARPNESS * ((typical[id] ?? 0) + TYPICALITY_FLOOR)]
-        }),
-      ) as Record<CharacterId, number>,
-    )
-    const character = parseOption(CHARACTERS, pickFrom(plausibility, input.pick, random), 'jev.character')
-    decisions.push({ field: 'character', choice: character, confidence: marginConfidence(plausibility), probabilities: plausibility })
-    options?.onProgress?.([...decisions])
-
-    // 2 ─ form and globals in a single fan-out, all conditioned on that character
-    const second = await ask('globals + form', { op: 'globals', style: input.style, brief: input.brief, character })
-    const globals = { character } as Record<GlobalField, string>
+    // 1 ─ the piece, in one fan-out. Register, motion and accompaniment are
+    //     asked alongside the rest and lead the question set: they decide
+    //     what the listener actually hears. The old first request asked for a
+    //     `character` instead, and a sweep of all twelve of its values found
+    //     one melody outcome per style — so it is not asked any more.
+    const answers = await ask('globals', { op: 'globals', style: input.style, brief: input.brief })
+    const globals = {} as Record<GlobalField, string>
     for (const field of GLOBAL_FIELD_IDS) {
-      if (field === 'character') continue
-      globals[field] = decide(second, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
+      globals[field] = decide(answers, field, field, GLOBAL_FIELDS[field] as OptionTable<string>)
     }
     const barCount: BarCount = input.bars
-    const hook = hookBarsValue((globals as PlanGlobals).hookBars ?? '4')
-    // Roles are the form, expanded by code: coherent by construction.
-    const roles = formRoles(globals.form as FormId, barCount, hook)
-    roles.forEach((role, i) => {
-      decisions.push({ field: `bars[${i}].role`, choice: role, confidence: 1, probabilities: normalize(Object.fromEntries(BAR_ROLE_IDS.map((id) => [id, id === role ? 1 : 0]))) })
-    })
+    const form = globals.form as FormId
+    // Roles are the form, expanded by code: coherent by construction, and no
+    // longer a plan field a hand edit could set against the form it came from.
+    const positions = barPositions(form, barCount)
 
-    // 3 ─ one HarmonyBook phrase per 4-bar slot. Cadence splits are applied in
+    // 2 ─ one HarmonyBook phrase per 4-bar slot. Cadence splits are applied in
     // code from the book's `splits` list (no extra approach Choice).
-    const slots = formSlots(globals.form as FormId, barCount, hook)
-    const returns = themeSources(globals.form as FormId, barCount, hook)
+    const slots = formSlots(form, barCount)
     const book = bookFor(input.style, globals.key as KeyId)
     const pickedChords: ChordId[] = []
     const contours: ContourId[] = []
     for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
       const slot = slots[slotIndex]
-      const answers = await ask(`phrase ${slotIndex + 1}`, {
+      const slotAnswers = await ask(`phrase ${slotIndex + 1}`, {
         op: 'phrase',
         style: input.style,
         brief: input.brief,
@@ -222,7 +166,7 @@ export class JevPlanner implements Planner {
       const table = Object.fromEntries(catalog.map((entry) => [entry.id, entry.label]))
       const isLast = slotIndex === slots.length - 1
       const phraseId = decide(
-        answers,
+        slotAnswers,
         'phrase',
         `slots[${slotIndex}].phrase`,
         table,
@@ -232,9 +176,9 @@ export class JevPlanner implements Planner {
       pickedChords.push(...expandPhrase(phraseId, book, slot))
       for (let k = 0; k < 4; k++) {
         const bar = slotIndex * 4 + k
-        const source = returns[bar]
-        if (source === undefined) {
-          contours.push(decide(answers, slotContourQuestionId(k), `bars[${bar}].contour`, CONTOURS))
+        const source = positions[bar]?.returnsFrom
+        if (source === undefined || contours[source] === undefined) {
+          contours.push(decide(slotAnswers, slotContourQuestionId(k), `bars[${bar}].contour`, CONTOURS))
           continue
         }
         // A returning bar IS the earlier bar's tune: its shape is the form's decision, not a fresh one.
@@ -244,7 +188,7 @@ export class JevPlanner implements Planner {
       }
     }
     const harmony = finishPhraseHarmony(pickedChords, slots, book)
-    const bars: BarPlan[] = roles.map((role, i) => {
+    const bars: BarPlan[] = Array.from({ length: barCount }, (_, i) => {
       const chord = harmony.chords[i]
       const chord2 = harmony.seconds[i]
       const contour = contours[i]
@@ -252,10 +196,10 @@ export class JevPlanner implements Planner {
       if (chord2) {
         decisions.push({ field: `bars[${i}].chord2`, choice: chord2, confidence: 1, probabilities: normalize({ [chord2]: 1 }) })
       }
-      return chord2 ? { chord, chord2, role, contour } : { chord, role, contour }
+      return chord2 ? { chord, chord2, contour } : { chord, contour }
     })
 
-    const plan: CompositionPlan = { version: 1, style: input.style, ...(globals as PlanGlobals), bars }
+    const plan: CompositionPlan = { version: 2, style: input.style, ...(globals as PlanGlobals), bars }
     return {
       plan,
       trace: {
@@ -292,213 +236,4 @@ export class JevPlanner implements Planner {
     return { scores: result, songQuality, exchanges: [exchange] }
   }
 
-  /**
-   * Debug experiment: repeated closed-schema picks after the plan.
-   *
-   * `mode: 'line'` (default) — today’s 4-slot RH phrase plus a bass pattern
-   * for every new-material plan bar; theme-return bars reuse the source
-   * rhythm, degrees and bass pattern, re-spelled on the later chord.
-   *
-   * `mode: 'guide'` — D1: Jev picks a closed figure + chord-tone goal; code
-   * writes the singing line. Theme returns reuse source figure+goal and
-   * ornament the source melody (realize-only; no new op).
-   * No `pitch_1..4`. Accompaniment stays with renderPlan.
-   */
-  async writeNotes(
-    plan: CompositionPlan,
-    input: Pick<PlanInput, 'pick' | 'seed' | 'brief'>,
-    options?: Pick<PlanOptions, 'signal'> & { mode?: NotesWriteMode },
-  ): Promise<{ phrases: NotePhrase[]; exchanges: Required<Exchange>[] }> {
-    if ((options?.mode ?? 'line') === 'guide') return this.writeGuideNotes(plan, input, options)
-    if (plan.bars.length === 0) throw new Error('Jev notes: plan has no bars')
-    const returns = themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan))
-    const phrases: NotePhrase[] = []
-    const exchanges: Required<Exchange>[] = []
-    const random = rng(input.seed ^ 0x4e07e5)
-    const rhythmTable = rhythmsFor(plan.meter)
-    const melodySoFar: MelodyMemoryBar[] = []
-    const bassSoFar: BassPatternId[] = []
-    const lyrical = prefersLongAndRest(plan.character)
-    let previousMidi: number | undefined
-    let previousBassMidi: number | undefined
-    let lastNewDegrees: MelodyDegreeId[] | undefined
-    let lastBarWasNew = false
-
-    const pickChoices = (answers: Record<string, Answer>, previousDegree: MelodyDegreeId | null) => {
-      const rhythmGiven = choiceAnswer(answers, 'rhythm').probabilities
-      const rhythmUsed = input.pick === 'sample' && lyrical ? withLyricalRhythmBias(rhythmGiven) : rhythmGiven
-      const rhythm = parseOption(rhythmTable, pickFrom(rhythmUsed, input.pick, random), 'jev.rhythm')
-      let previous = previousDegree
-      const degrees = Array.from({ length: PHRASE_NOTE_COUNT }, (_, i) => {
-        const given = choiceAnswer(answers, pitchQuestionId(i)).probabilities
-        const used = input.pick === 'sample' ? withDegreeProximity(given, previous, { lyrical }) : given
-        const picked = parseOption(MELODY_DEGREES, pickFrom(used, input.pick, random), `jev.${pitchQuestionId(i)}`)
-        if (picked !== 'rest') previous = picked
-        return picked
-      })
-      const bassPattern = parseBassPattern(
-        pickFrom(choiceAnswer(answers, BASS_PATTERN_QUESTION_ID).probabilities, input.pick, random),
-        `jev.${BASS_PATTERN_QUESTION_ID}`,
-      )
-      return parseJevNoteChoices({ rhythm, degrees, bassPattern }, plan.meter)
-    }
-
-    const remember = (phrase: NotePhrase, bassPattern?: BassPatternId) => {
-      melodySoFar.push(...melodyMemoryFrom([phrase]))
-      bassSoFar.push(bassPattern ?? phrase.bass?.pattern ?? 'root_hold')
-      previousMidi = lastSoundingMidi(phrase.notes) ?? previousMidi
-      previousBassMidi = lastSoundingMidi(phrase.bass?.notes ?? []) ?? previousBassMidi
-    }
-
-    const realize = (choices: { rhythm: NotePhrase['rhythm']; degrees: MelodyDegreeId[]; bassPattern?: BassPatternId }, barIndex: number) =>
-      realizeJevNoteChoices(choices, plan, {
-        barIndex,
-        lastSoundingMidi: previousMidi,
-        lastBassMidi: previousBassMidi,
-      })
-
-    for (let i = 0; i < plan.bars.length; i++) {
-      const source = returns[i]
-      const from = source !== undefined ? phrases[source] : undefined
-      if (from) {
-        const bassPattern = from.bass?.pattern
-        const phrase = realize(
-          { rhythm: from.rhythm, degrees: from.degrees, ...(bassPattern ? { bassPattern } : {}) },
-          i,
-        )
-        phrases.push(phrase)
-        remember(phrase, bassPattern)
-        lastBarWasNew = false
-        continue
-      }
-      const bar = plan.bars[i]
-      const next = plan.bars[i + 1]
-      const op: JevOp = {
-        op: 'notes',
-        style: plan.style,
-        brief: input.brief,
-        character: plan.character,
-        key: plan.key,
-        meter: plan.meter,
-        tempo: plan.tempo,
-        texture: plan.texture,
-        palette: plan.palette,
-        bar,
-        barIndex: i,
-        melodySoFar: [...melodySoFar],
-        bassSoFar: [...bassSoFar],
-        ...(next ? { nextChord: next.chord } : {}),
-        ...(plan.arrangement ? { arrangement: plan.arrangement } : {}),
-      }
-      const exchange = await this.exchange(`notes bar ${i + 1}`, op, options?.signal)
-      exchanges.push(exchange)
-      let choices = pickChoices(exchange.response.answers, lastSoundingDegree(melodySoFar.at(-1)?.degrees ?? []))
-      if (lastBarWasNew && lastNewDegrees && degreesNearlyIdentical(lastNewDegrees, choices.degrees)) {
-        choices = { ...choices, degrees: nudgeMelodyDegrees(choices.degrees) }
-      }
-      const phrase = realize(choices, i)
-      phrases.push(phrase)
-      remember(phrase, choices.bassPattern)
-      lastNewDegrees = choices.degrees
-      lastBarWasNew = true
-    }
-    return { phrases, exchanges }
-  }
-
-  /**
-   * D1: Jev picks figure + goal; code realizes the singing line. Theme-return
-   * bars reuse the source figure and goal and ornament that source melody
-   * rather than writing a new figure. `melody_so_far` carries prior
-   * figure/goal ids. No parallel degrees.
-   */
-  private async writeGuideNotes(
-    plan: CompositionPlan,
-    input: Pick<PlanInput, 'pick' | 'seed' | 'brief'>,
-    options?: Pick<PlanOptions, 'signal'>,
-  ): Promise<{ phrases: NotePhrase[]; exchanges: Required<Exchange>[] }> {
-    if (plan.bars.length === 0) throw new Error('Jev notes: plan has no bars')
-    const returns = themeSources(plan.form, plan.bars.length as BarCount, resolveHookBars(plan))
-    const phrases: NotePhrase[] = []
-    const exchanges: Required<Exchange>[] = []
-    const random = rng(input.seed ^ 0x4e07e5)
-    const guideSoFar: GuideMemoryBar[] = []
-    const lyrical = prefersLongAndRest(plan.character)
-    let previousMidi: number | undefined
-    let lastNotes: NotePhrase['notes'] | undefined
-    let lastRhythm: NotePhrase['rhythm'] | undefined
-
-    const pickGuide = (answers: Record<string, Answer>) => {
-      const figure = parseMelodyFigure(
-        pickFrom(choiceAnswer(answers, FIGURE_QUESTION_ID).probabilities, input.pick, random),
-        `jev.${FIGURE_QUESTION_ID}`,
-      )
-      const goal = parseMelodyGoal(
-        pickFrom(choiceAnswer(answers, GOAL_QUESTION_ID).probabilities, input.pick, random),
-        `jev.${GOAL_QUESTION_ID}`,
-      )
-      return parseJevGuideChoices({ figure, goal })
-    }
-
-    const realize = (
-      choices: { figure: NotePhrase['figure']; goal: NotePhrase['goal'] },
-      barIndex: number,
-      sourceNotes?: NotePhrase['notes'],
-    ) =>
-      realizeJevGuideChoices(
-        { figure: choices.figure!, goal: choices.goal! },
-        plan,
-        {
-          barIndex,
-          lastSoundingMidi: previousMidi,
-          lastNotes,
-          lastRhythm,
-          lyrical,
-          sourceNotes,
-        },
-      )
-
-    const remember = (phrase: NotePhrase) => {
-      guideSoFar.push(...guideMemoryFrom([phrase]))
-      previousMidi = lastSoundingMidi(phrase.notes) ?? previousMidi
-      lastNotes = phrase.notes
-      lastRhythm = phrase.rhythm
-    }
-
-    for (let i = 0; i < plan.bars.length; i++) {
-      const source = returns[i]
-      const from = source !== undefined ? phrases[source] : undefined
-      if (from?.figure && from.goal) {
-        const phrase = realize({ figure: from.figure, goal: from.goal }, i, from.notes)
-        phrases.push(phrase)
-        remember(phrase)
-        continue
-      }
-      const bar = plan.bars[i]
-      const next = plan.bars[i + 1]
-      const op: JevOp = {
-        op: 'notes',
-        style: plan.style,
-        brief: input.brief,
-        character: plan.character,
-        key: plan.key,
-        meter: plan.meter,
-        tempo: plan.tempo,
-        texture: plan.texture,
-        palette: plan.palette,
-        bar,
-        barIndex: i,
-        mode: 'guide',
-        melodySoFar: [...guideSoFar],
-        ...(next ? { nextChord: next.chord } : {}),
-        ...(plan.arrangement ? { arrangement: plan.arrangement } : {}),
-      }
-      const exchange = await this.exchange(`notes bar ${i + 1}`, op, options?.signal)
-      exchanges.push(exchange)
-      const choices = pickGuide(exchange.response.answers)
-      const phrase = realize(choices, i)
-      phrases.push(phrase)
-      remember(phrase)
-    }
-    return { phrases, exchanges }
-  }
 }

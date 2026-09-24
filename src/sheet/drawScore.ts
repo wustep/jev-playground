@@ -686,7 +686,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       }
       pen.fillStyle = theme.muted
       pen.font = '500 10.5px "JetBrains Mono", ui-monospace, monospace'
-      pen.fillText(`${bar.index + 1} · ${bar.plan.role.replace(/_/g, ' ')}`, labelX, roleY)
+      pen.fillText(`${bar.index + 1} · ${bar.role.replace(/_/g, ' ')}`, labelX, roleY)
       if (bar.dynamic !== lastDynamic) {
         pen.fillStyle = theme.ink
         pen.font = 'italic 600 17px "Academico", "Fraunces", Georgia, serif'

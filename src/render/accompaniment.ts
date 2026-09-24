@@ -52,7 +52,7 @@ function sustained(bar: BarView, options: AccompanimentOptions): AccompanimentBa
   const chordVoice: Voice = []
   for (const span of spans) {
     const chord = chordAt(bar, span.start)
-    const low = lowBass(chord, bar.memory.bass, 45, 33, Math.min(52, top - 12))
+    const low = lowBass(chord, bar.memory.bass, 45, Math.min(33, top - 24), Math.min(52, top - 12))
     bar.memory.bass = low
     bassVoice.push(note(span.start, span.dur, low, bar.velocity - 6))
     if (options.density === 0) continue
@@ -92,7 +92,7 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     const k = Math.floor(tick / step)
     if (tick === 0 || (bar.chord2 && tick === meter.splitTick)) {
       // The deep bass note under the figuration, on each new harmony.
-      const low = lowBass(chord, previousBass, 43, 31, Math.min(50, top - 14))
+      const low = lowBass(chord, previousBass, 43, Math.min(31, top - 26), Math.min(50, top - 14))
       previousBass = low
       bar.memory.bass = low
       const dur = bar.chord2 ? meter.splitTick : meter.ticksPerBar
@@ -120,7 +120,7 @@ function pulse(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   for (let tick = 0; tick < meter.ticksPerBar; tick += step) {
     const chord = chordAt(bar, tick)
     if (tick === 0 || (bar.chord2 && tick === meter.splitTick)) {
-      const low = lowBass(chord, previousBass, 43, 31, Math.min(50, top - 14))
+      const low = lowBass(chord, previousBass, 43, Math.min(31, top - 26), Math.min(50, top - 14))
       previousBass = low
       bar.memory.bass = low
       bassVoice.push(note(tick, bar.chord2 ? meter.splitTick : meter.ticksPerBar, low, bar.velocity - 4))
@@ -147,7 +147,7 @@ function stride(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     const tick = beat * meter.beatTicks
     const chord = chordAt(bar, tick)
     if (beat === 0 || (bar.chord2 && tick === meter.splitTick)) {
-      const low = bassFor(chord, bar.memory.bass, { lo: 31, hi: Math.min(50, top - 16), allowInversion: !bar.isLast && bar.index > 0 })
+      const low = bassFor(chord, bar.memory.bass, { lo: Math.min(31, top - 28), hi: Math.min(50, top - 16), allowInversion: !bar.isLast && bar.index > 0 })
       bar.memory.bass = low
       bassVoice.push(note(tick, meter.beatTicks, low, bar.velocity))
       if (beats <= 2) continue
@@ -200,7 +200,9 @@ function counterline(bar: BarView, options: AccompanimentOptions, melody: Melody
   bar.memory.counterLast = previous
   const bassVoice: Voice = []
   if (options.density >= 2) {
-    const low = lowBass(bar.chord, bar.memory.bass, 40, 31, lo - 5)
+    // A pedal note under the duet, always a full octave of room below it.
+    const top = Math.max(40, lo - 5)
+    const low = lowBass(bar.chord, bar.memory.bass, top - 6, top - 12, top)
     bar.memory.bass = low
     bassVoice.push(note(0, meter.ticksPerBar, low, bar.velocity - 14))
   }

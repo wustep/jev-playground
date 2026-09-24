@@ -230,11 +230,11 @@ export function leaps(midis: number[]): { mean: number; max: number; overP4: num
 
 /** True when a later body bar splits the treble into singing + inner/roll. */
 export function scoreHasSplitTreble(score: Score): boolean {
-  return score.bars.slice(score.introBars ?? 0).some((bar) => bar.treble.length >= 2)
+  return score.bars.slice(0).some((bar) => bar.treble.length >= 2)
 }
 
 export function firstSplitTrebleBar(score: Score): Bar | undefined {
-  return score.bars.slice(score.introBars ?? 0).find((bar) => bar.treble.length >= 2)
+  return score.bars.slice(0).find((bar) => bar.treble.length >= 2)
 }
 
 function meanMidi(voices: Voice[]): number | null {
@@ -415,7 +415,7 @@ function chordToneRate(score: Score, firstSplit?: Bar): number {
   const key = keyInfo(score.plan.key)
   let tones = 0
   let n = 0
-  for (const bar of score.bars.slice(score.introBars)) {
+  for (const bar of score.bars.slice(0)) {
     const chord = resolveChord(key, bar.plan.chord)
     const chord2 = bar.plan.chord2 ? resolveChord(key, bar.plan.chord2) : undefined
     const split = bar.split?.tick ?? score.meter.splitTick
@@ -451,7 +451,7 @@ export function innerRhCount(score: Score): number {
 }
 
 export function scoreMetrics(score: Score) {
-  const body = score.bars.slice(score.introBars)
+  const body = score.bars.slice(0)
   const meter = score.meter
   const splitTreble = scoreHasSplitTreble(score)
   const firstSplit = firstSplitTrebleBar(score)
@@ -495,7 +495,7 @@ export function scoreMetrics(score: Score) {
     ...melody,
     meter: meter.id,
     chordToneRate: chordToneRate(score, firstSplit),
-    introBars: score.introBars,
+    introBars: 0,
     innerRhNotes: innerRhCount(score),
     voice: 'singing-treble' as const,
     splitTreble,
