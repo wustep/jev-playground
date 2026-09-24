@@ -1,4 +1,4 @@
-import type { BarCount, CompositionPlan, StyleId, StyleMatchScore } from '../plan/schema'
+import type { BarCount, CompositionPlan, StyleId, StyleMatchScore } from '../plan/schema.js'
 import type { JevOp } from './jev/requests.js'
 import type { SystemOneRequest, SystemOneResponse } from './jev/systemOne.js'
 

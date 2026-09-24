@@ -1,4 +1,4 @@
-import { choiceConfidence, clamp01, softmax } from '../shared/jevMath'
+import { choiceConfidence, clamp01, softmax } from '../shared/jevMath.js'
 import {
   REASON_IDS,
   TRIAGE_ACTIONS,
@@ -12,7 +12,7 @@ import {
   type TriageResult,
 } from './types.js'
 
-export { choiceConfidence, clamp01, softmax } from '../shared/jevMath'
+export { choiceConfidence, clamp01, softmax } from '../shared/jevMath.js'
 
 export const REASON_CATALOG: Record<
   ReasonId,
