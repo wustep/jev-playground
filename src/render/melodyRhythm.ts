@@ -44,7 +44,14 @@ function cellsFor(beatTicks: number): Record<number, number[][]> {
 /** How many attacks this beat gets, given the motion's target rate and where we are in the bar. */
 function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () => number): number {
   const rate = MOTION_RATE[motion]
-  if (motion === 'sustained') return beat === 0 ? 1 : 0
+  if (motion === 'sustained') {
+    // Fewer than one attack a beat: spread them evenly, but always sound the
+    // downbeat. A long-note tune is two or three held notes in a wide bar, not
+    // one whole note in every bar whatever the metre — which is what a flat
+    // "attack on beat 0 only" produced, and it was monotonous by the fourth bar.
+    if (beat === 0) return 1
+    return Math.floor((beat + 1) * rate) - Math.floor(beat * rate)
+  }
   // Spread the fractional part rather than rounding every beat the same way,
   // so a `flowing` line is not four identical beats in a row.
   const jitter = rand() - 0.5
