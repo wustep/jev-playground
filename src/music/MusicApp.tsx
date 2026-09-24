@@ -11,7 +11,7 @@ import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
 import { DIAL_PLANNER, autoplayAfterStyleSwitch, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
-import { displayedSheetIsStale, plannerSelectIsDirty, staleSettingsStatus } from './sheetStale'
+import { displayedPlanIdentity, displayedSheetIsStale, plannerSelectIsDirty, staleSettingsStatus } from './sheetStale'
 import { generateStatusLatencyMs, generatedPlanStatus, planHeuristicSample, readyPlanStatus, restoredPlanStatus, stampGenerateLatency } from './planTiming'
 import { styleCache, type Generated } from './styleCache'
 
@@ -392,6 +392,13 @@ export default function MusicApp() {
   // the plan's register and motion, then accompanies it. Jev chooses the
   // labels or the offline stub does; nothing else writes a note.
   const score = useMemo(() => (plan && generated ? renderPlan(plan, generated.input.seed) : null), [plan, generated])
+
+  // A moved Planner select stops dimming the stand once a plan lands. Without
+  // this, switching planner and pressing Generate left Play and MIDI disabled.
+  const planKey = displayedPlanIdentity(generated)
+  useEffect(() => {
+    setPlannerDirty(false)
+  }, [planKey])
 
   const busy = progress !== null || picking
   const stale = displayedSheetIsStale({ busy, pendingStyle, plannerDirty, generated, input: { style, bars, pick, brief, seed } })

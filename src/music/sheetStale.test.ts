@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CompositionPlan } from '../plan/schema'
 import type { PlanInput, PlanTrace } from '../planner'
-import { displayedSheetIsStale, planInputMatchesDisplayed, plannerSelectIsDirty, staleSettingsStatus } from './sheetStale'
+import { displayedPlanIdentity, displayedSheetIsStale, planInputMatchesDisplayed, plannerSelectIsDirty, staleSettingsStatus } from './sheetStale'
 import type { Generated } from './styleCache'
 
 function stubGenerated(
@@ -80,6 +80,19 @@ describe('displayedSheetIsStale', () => {
     expect(displayedSheetIsStale({ ...base(), input: { ...generated.input, seed: 1 } })).toBe(true)
   })
 
+})
+
+describe('displayedPlanIdentity', () => {
+  // MusicApp clears a dirty Planner select when this changes; if a new plan
+  // from the newly chosen planner kept the old identity, the stand would stay
+  // dimmed with Play disabled.
+  it('changes when a plan from another planner, or another seed, lands', () => {
+    const shown = stubGenerated({ planner: 'heuristic' })
+    expect(displayedPlanIdentity(null)).toBeNull()
+    expect(displayedPlanIdentity(stubGenerated({ planner: 'jev' }))).not.toBe(displayedPlanIdentity(shown))
+    expect(displayedPlanIdentity(stubGenerated({ seed: 8 }))).not.toBe(displayedPlanIdentity(shown))
+    expect(displayedPlanIdentity(stubGenerated())).toBe(displayedPlanIdentity(shown))
+  })
 })
 
 describe('plannerSelectIsDirty', () => {
