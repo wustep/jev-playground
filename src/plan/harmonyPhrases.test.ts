@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BAR_COUNT_VALUES, FORM_IDS, KEY_IDS, STYLE_IDS } from './schema'
-import { formSlots } from './forms'
+import { formSlots } from './phrase'
 import { bookFor, expandPhrase, finishPhraseHarmony, phraseOptions, withPhraseNovelty } from './harmonyPhrases'
 import { STYLE_PROFILES } from './styles'
 
@@ -19,7 +19,7 @@ describe('harmony phrase catalog', () => {
               expect(ids.size).toBe(options.length)
               for (const option of options) {
                 expect(option.chords).toHaveLength(4)
-                expect(expandPhrase(option.id, book, slot)).toEqual(option.chords)
+                expect(expandPhrase(option.id, options)).toEqual(option.chords)
                 expect(option.label).not.toMatch(/Bach|Beethoven|Chopin|Debussy|Glass|Zimmer|Laufey|Fox/)
               }
             }
@@ -51,20 +51,24 @@ describe('harmony phrase catalog', () => {
     expect(adjusted[first.id]).toBeLessThan(raw[first.id])
   })
 
-  it('puts borrowed-iv and ii9–V13 phrases in the Laufey major book', () => {
+  it('keeps Laufey\'s borrowed-iv and ii9–V13 language in her major book', () => {
     const book = STYLE_PROFILES.laufey.harmony.major
     const phrases = [...book.phrases.closed, ...book.phrases.half, ...book.phrases.open]
     expect(phrases.some((phrase) => phrase.includes('V7_of_IV') && phrase.includes('iv6'))).toBe(true)
     expect(phrases.some((phrase) => phrase.includes('ii9') && phrase.includes('V13'))).toBe(true)
-    expect(phrases.some((phrase) => phrase.includes('Imaj7') && phrase.includes('iv'))).toBe(true)
-    expect(book.heads.some((head) => head[0] === 'ii9' && head[1] === 'V13')).toBe(true)
     expect(book.splits.some((pair) => pair[0] === 'ii9' && pair[1] === 'V13')).toBe(true)
   })
 
-  it('favors bossa_comp on Laufey song archetypes', () => {
-    const lyrical = STYLE_PROFILES.laufey.archetypes.lyrical_song?.priors.texture
-    const groove = STYLE_PROFILES.laufey.archetypes.warm_groove?.priors.texture
-    expect(lyrical?.bossa_comp).toBeGreaterThan(lyrical?.chordal_melody ?? 0)
-    expect(groove?.bossa_comp).toBeGreaterThan(groove?.stride_dance ?? 0)
+  it('gives every style a harmony book that agrees with its own vocabulary', () => {
+    for (const style of STYLE_IDS) {
+      for (const mode of ['major', 'minor'] as const) {
+        const book = STYLE_PROFILES[style].harmony[mode]
+        expect(book.heads.length, `${style} ${mode} heads`).toBeGreaterThan(0)
+        expect(book.finals.length).toBeGreaterThan(0)
+        for (const [end, phrases] of Object.entries(book.phrases)) {
+          for (const phrase of phrases) expect(phrase, `${style} ${mode} ${end}`).toHaveLength(4)
+        }
+      }
+    }
   })
 })

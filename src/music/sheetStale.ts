@@ -1,5 +1,4 @@
 import type { PlanInput, PlannerId } from '../planner'
-import { cachedNotesMode, type NotesMode } from './notesMode'
 import type { Generated } from './styleCache'
 
 /** Controls that decide whether the stand still shows the current piece. */
@@ -31,32 +30,11 @@ export function planInputMatchesDisplayed(
   )
 }
 
-/**
- * Notes overlay is current, or we are on the code path (Debug off is always code).
- * `notePhrases === undefined` means the Jev pass has not settled yet.
- * `[]` means it settled and fell back to renderPlan — that is current, not stale.
- */
-export function notesDisplayIsSettled(args: {
-  notesMode: NotesMode
-  debug: boolean
-  generated: Generated | null | undefined
-  pendingNotes: boolean
-}): boolean {
-  const wanted = args.debug ? args.notesMode : 'code'
-  if (wanted === 'code') return !args.pendingNotes
-  if (args.pendingNotes) return false
-  if (!args.generated) return true
-  if (cachedNotesMode(args.generated) !== wanted) return false
-  return args.generated.notePhrases !== undefined
-}
-
 export function displayedSheetIsStale(args: {
   /** Generate progress or Best-of scoring. */
   busy: boolean
   /** Dial / generate targeting a style — includes await-inflight, which is not `busy`. */
   pendingStyle: string | null
-  /** Notes rewrite in flight (guide/line), including before phrases land. */
-  pendingNotes: boolean
   /**
    * User changed Planner away from the planner that produced the shown plan.
    * Dial/boot stubs and detectJev auto-select must leave this false.
@@ -64,12 +42,9 @@ export function displayedSheetIsStale(args: {
   plannerDirty: boolean
   generated: Generated | null | undefined
   input: SheetControlInput
-  notesMode: NotesMode
-  debug: boolean
 }): boolean {
-  if (args.busy || args.pendingStyle !== null || args.pendingNotes || args.plannerDirty) return true
-  if (!planInputMatchesDisplayed(args.generated, args.input)) return true
-  return !notesDisplayIsSettled(args)
+  if (args.busy || args.pendingStyle !== null || args.plannerDirty) return true
+  return !planInputMatchesDisplayed(args.generated, args.input)
 }
 
 /** Status when controls no longer match the stand and nothing is in flight. */

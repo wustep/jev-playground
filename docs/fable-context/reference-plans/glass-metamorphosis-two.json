@@ -1,74 +1,57 @@
 {
   "id": "glass-metamorphosis-two",
   "piece": "Philip Glass, Metamorphosis Two",
-  "whyHere": "Quiet oscillation \u2192 fast four-note arpeggios \u2192 quiet (published program notes).",
+  "whyHere": "Quiet oscillation → fast four-note arpeggios → quiet (published program notes).",
   "evidence": "inferred",
   "midi": null,
   "midiSource": null,
   "midiLicense": null,
-  "notes": "NO MIDI. Exact chords are not encoded (STYLE_NOTES: not verifiable without scores). Harmony here is a book-legal stand-in so parsePlan works \u2014 not a claim about the piece's RN. Key not claimed.",
-  "_stretch": [
-    "proposed phrasing: on_the_beat",
-    "do not invent the ostinato pitches",
-    "middle cell should get faster without a new form label",
-    "key unknown / not claimed"
-  ],
+  "notes": "NO MIDI. Exact chords are not encoded (STYLE_NOTES: not verifiable without scores). Harmony here is a book-legal stand-in so parsePlan works — not a claim about the piece's RN. Key not claimed.",
   "plan": {
-    "version": 1,
+    "version": 2,
     "style": "glass",
-    "character": "meditative_stillness",
-    "form": "arch_return",
+    "register": "mid",
+    "motion": "sustained",
+    "accompaniment": "pulse",
+    "form": "arch",
     "key": "A_minor",
     "meter": "four_four",
-    "texture": "melody_over_ostinato",
     "palette": "diatonic",
     "tempo": "andante",
     "dynamics": "p",
     "dynamicShape": "arch",
-    "defaultInstrument": "grand_piano",
-    "arrangement": "peak_then_bare",
-    "opening": "vamp_intro",
-    "pedal": "half",
     "bars": [
       {
         "chord": "i",
-        "role": "statement",
-        "contour": "static"
-      },
-      {
-        "chord": "i",
-        "role": "restatement",
-        "contour": "static"
-      },
-      {
-        "chord": "bVI",
-        "role": "contrast",
-        "contour": "wave"
-      },
-      {
-        "chord": "bVI",
-        "role": "development",
         "contour": "wave"
       },
       {
         "chord": "i",
-        "role": "climax",
+        "contour": "wave"
+      },
+      {
+        "chord": "bVI",
+        "contour": "wave"
+      },
+      {
+        "chord": "bVI",
+        "contour": "wave"
+      },
+      {
+        "chord": "i",
         "contour": "rise"
       },
       {
         "chord": "i",
-        "role": "echo",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "bVI",
-        "role": "dissolve",
         "contour": "fall"
       },
       {
         "chord": "i64",
-        "role": "cadence",
-        "contour": "static"
+        "contour": "wave"
       }
     ]
   }

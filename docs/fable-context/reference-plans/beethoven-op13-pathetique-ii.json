@@ -1,73 +1,57 @@
 {
   "id": "beethoven-op13-pathetique-ii",
-  "piece": "Beethoven, Sonata Op. 13 Path\u00e9tique, II Adagio cantabile",
+  "piece": "Beethoven, Sonata Op. 13 Pathétique, II Adagio cantabile",
   "whyHere": "The singing slow-movement model: 8-bar theme, return an octave higher, denser left hand.",
   "evidence": "score",
   "midi": "docs/ref-midi/public/beethoven-op13-pathetique-2.mid",
   "midiSource": "https://www.mutopiaproject.org/ftp/BeethovenLv/O13/pathetique-2/pathetique-2.mid",
   "midiLicense": "Public Domain (Mutopia-2011/10/25-295)",
-  "notes": "First 8 bars of the theme. The next 8 in the piece are this period again +8va (arrangement lift). Our 16-bar period inserts a B we do not sketch here.",
-  "_stretch": [
-    "proposed phrasing: breathing",
-    "8-bar theme as the return unit (period at 16 bars inserts B)",
-    "register lift of a whole phrase, not just climax + a third"
-  ],
+  "notes": "First 8 bars of the theme. The next 8 in the piece are this period again +8va (arrangement lift). Our 16-bar period inserts a B we do not sketch here. The tune's top voice attacks about 3.2 times a 2/4 bar at MIDI 66: `flowing`, sung. (An earlier count of 10.5 onsets a bar included the inner sixteenth murmur the right hand plays under the tune; that was the metric, not the music.)",
   "plan": {
-    "version": 1,
+    "version": 2,
     "style": "beethoven",
-    "character": "lyrical_song",
+    "register": "low",
+    "motion": "flowing",
+    "accompaniment": "broken",
     "form": "period",
     "key": "Ab_major",
     "meter": "two_four",
-    "texture": "alberti_melody",
     "palette": "diatonic",
     "tempo": "adagio",
     "dynamics": "p",
     "dynamicShape": "arch",
-    "defaultInstrument": "grand_piano",
-    "arrangement": "lift_on_return",
-    "opening": "straight_in",
-    "pedal": "half",
     "bars": [
       {
         "chord": "I",
-        "role": "statement",
         "contour": "arch"
       },
       {
         "chord": "vi",
-        "role": "development",
         "contour": "wave"
       },
       {
         "chord": "V7_of_V",
-        "role": "development",
         "contour": "rise"
       },
       {
         "chord": "V",
-        "role": "half_cadence",
         "contour": "fall"
       },
       {
         "chord": "I",
-        "role": "restatement",
         "contour": "arch"
       },
       {
         "chord": "vi",
-        "role": "development",
         "contour": "wave"
       },
       {
         "chord": "I64",
-        "role": "climax",
         "contour": "arch",
         "chord2": "V7"
       },
       {
         "chord": "I",
-        "role": "cadence",
         "contour": "fall"
       }
     ]

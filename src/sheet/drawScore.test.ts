@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
-import { Formatter, Stave } from 'vexflow/bravura'
+import { describe, expect, it, vi } from 'vitest'
+import { Formatter, Stave, StaveTie } from 'vexflow/bravura'
+import type { CompositionPlan } from '../plan/schema'
+import { renderPlan } from '../render/renderPlan'
 import { METER_INFO, type Bar, type Score, type Voice } from '../render/score'
 import {
   attachVoicesToStave,
@@ -7,6 +9,7 @@ import {
   buildVoice,
   CHORD_ABOVE_STAFF,
   chooseBarsPerSystem,
+  drawScore,
   DYNAMIC_BELOW_BASS,
   flattenWideBeams,
   LEDGER_STROKE_PX,
@@ -259,10 +262,10 @@ describe('beams, ties, and system padding', () => {
 
   it('widens the grand-staff gap when bass climbs into the treble', () => {
     const quiet = systemPadding([
-      { index: 0, plan: { chord: 'I', role: 'statement', contour: 'arch' }, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['C3'], velocity: 64 }]], dynamic: 'mf' },
+      { index: 0, plan: { chord: 'I', contour: 'arch' }, role: 'statement' as const, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['C3'], velocity: 64 }]], dynamic: 'mf' },
     ])
     const crowded = systemPadding([
-      { index: 0, plan: { chord: 'I', role: 'statement', contour: 'arch' }, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['E4', 'F#4'], velocity: 64 }]], dynamic: 'mf' },
+      { index: 0, plan: { chord: 'I', contour: 'arch' }, role: 'statement' as const, chordSymbol: 'C', treble: [[{ start: 0, dur: 16, pitches: ['G4'], velocity: 70 }]], bass: [[{ start: 0, dur: 16, pitches: ['E4', 'F#4'], velocity: 64 }]], dynamic: 'mf' },
     ])
     expect(quiet.gap).toBe(0)
     expect(crowded.gap).toBeGreaterThan(quiet.gap)
@@ -272,7 +275,8 @@ describe('beams, ties, and system padding', () => {
 function testBar(index: number, treble: Voice[], bass: Voice[] = [whole('C3')]): Bar {
   return {
     index,
-    plan: { chord: 'i', role: 'statement', contour: 'arch' },
+    plan: { chord: 'i', contour: 'arch' },
+    role: 'statement',
     chordSymbol: 'Fm',
     treble,
     bass,
@@ -282,7 +286,7 @@ function testBar(index: number, treble: Voice[], bass: Voice[] = [whole('C3')]):
 
 function testScore(bars: Bar[]): Score {
   return {
-    plan: { version: 1 } as Score['plan'],
+    plan: { version: 2 } as unknown as Score['plan'],
     seed: 1,
     keySignature: 'C',
     meter,
@@ -290,7 +294,6 @@ function testScore(bars: Bar[]): Score {
     bars,
     pedal: 'half',
     articulation: 1,
-    introBars: 0,
     ritardando: false,
   }
 }
@@ -366,5 +369,65 @@ describe('dense-bar width and labels', () => {
     expect(first.dynamicX).toBeLessThan(noteStart)
     expect(first.roleY).toBeGreaterThan(first.dynamicY)
     expect(later.dynamicX).toBeGreaterThanOrEqual(x)
+  })
+})
+
+/** A canvas whose 2D context accepts every call and draws nothing. */
+function blankCanvas(): HTMLCanvasElement {
+  const canvas = { width: 0, height: 0, style: {}, toDataURL: () => '', getContext: () => context } as unknown as HTMLCanvasElement
+  const context: object = new Proxy({} as Record<string | symbol, unknown>, {
+    get: (target, prop) =>
+      prop in target
+        ? target[prop]
+        : prop === 'measureText'
+          ? () => ({ width: 8, actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2 })
+          : prop === 'canvas'
+            ? canvas
+            : prop === 'getLineDash'
+              ? () => []
+              : () => {},
+    set: (target, prop, value) => ((target[prop] = value), true),
+  })
+  return canvas
+}
+
+describe('ties over the barline', () => {
+  it('ties the tune into the next bar, and across a system break in two halves', () => {
+    const plan: CompositionPlan = {
+      version: 2,
+      style: 'bach',
+      register: 'mid',
+      motion: 'flowing',
+      accompaniment: 'counterline',
+      form: 'period',
+      key: 'C_major',
+      meter: 'four_four',
+      palette: 'diatonic',
+      tempo: 'adagio',
+      dynamics: 'mf',
+      dynamicShape: 'steady',
+      bars: Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V', 'I'] as const)[i % 4], contour: 'wave' as const })),
+    }
+    const score = renderPlan(plan, 2)
+    const heldBars = score.bars.flatMap((bar) => (bar.treble[0]?.[0]?.tied ? [bar.index] : []))
+    expect(heldBars.length).toBeGreaterThan(0)
+    const theme = { ink: '#000', muted: '#666', accent: '#a00' } as unknown as Parameters<typeof drawScore>[3]
+    // VexFlow warns that it cannot measure text without a DOM; the notes do not care.
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    for (const width of [420, 6000]) {
+      const drawn: { first: boolean; last: boolean }[] = []
+      const draw = vi.spyOn(StaveTie.prototype, 'draw').mockImplementation(function (this: StaveTie) {
+        drawn.push({ first: Boolean(this.getNotes().firstNote), last: Boolean(this.getNotes().lastNote) })
+        return true
+      })
+      const layout = drawScore(blankCanvas(), score, width, theme)
+      draw.mockRestore()
+      const top = new Map(layout.bars.map((bar) => [bar.index, bar.top]))
+      const broken = heldBars.filter((i) => top.get(i) !== top.get(i - 1)).length
+      expect(drawn.filter((tie) => tie.first && !tie.last), `${width}px: a half-tie leaves each system that breaks a held note`).toHaveLength(broken)
+      expect(drawn.filter((tie) => !tie.first && tie.last), `${width}px: and one arrives on the next`).toHaveLength(broken)
+      expect(drawn.filter((tie) => tie.first && tie.last).length, `${width}px: whole ties within a system`).toBeGreaterThanOrEqual(heldBars.length - broken)
+    }
+    quiet.mockRestore()
   })
 })

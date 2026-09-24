@@ -13,21 +13,16 @@ import { keyInfo } from '../render/harmony'
 import { scoreBarForPlan, type Score } from '../render/score'
 
 const FIELD_LABEL: Record<GlobalField, string> = {
-  character: 'Character',
+  register: 'Register',
+  motion: 'Motion',
+  accompaniment: 'Accompaniment',
   form: 'Form',
   key: 'Key',
   meter: 'Meter',
-  texture: 'Texture',
   palette: 'Palette',
   tempo: 'Tempo',
   dynamics: 'Dynamics',
   dynamicShape: 'Shape',
-  defaultInstrument: 'Instrument',
-  arrangement: 'Arrangement',
-  opening: 'Opening',
-  pedal: 'Pedal',
-  phrasing: 'Phrasing',
-  hookBars: 'Hook',
 }
 
 function pretty(field: GlobalField, plan: CompositionPlan): string {
@@ -127,11 +122,11 @@ export function PlanPanel({ plan, score, decisions, edited, onApply, debug = fal
           const decision = edited ? undefined : byField.get(`bars[${i}].chord`)
           const body = scoreBarForPlan(score, i)
           return (
-            <li key={i} className={`bar-cell role-${bar.role}`} title={runnersUp(decision)}>
+            <li key={i} className={`bar-cell role-${body?.role ?? 'continuation'}`} title={runnersUp(decision)}>
               <span className="bar-number">{i + 1}</span>
               <span className="bar-chord">{bar.chord2 ? `${bar.chord} · ${bar.chord2}` : bar.chord}</span>
               <span className="bar-symbol">{body?.split ? `${body.chordSymbol} · ${body.split.chordSymbol}` : body?.chordSymbol}</span>
-              <span className="bar-role">{bar.role.replace(/_/g, ' ')}</span>
+              <span className="bar-role">{(body?.role ?? '').replace(/_/g, ' ')}</span>
               <span className="bar-contour">{CONTOUR_GLYPH[bar.contour]}</span>
               <Confidence value={decision?.confidence} />
             </li>
@@ -181,4 +176,4 @@ export function PlanPanel({ plan, score, decisions, edited, onApply, debug = fal
   )
 }
 
-const CONTOUR_GLYPH: Record<ContourId, string> = { rise: '↗', fall: '↘', arch: '∩', dip: '∪', static: '→', wave: '∿', leap_fall: '⤴↘', drop_rise: '⤵↗', pendulum: '⇅' }
+const CONTOUR_GLYPH: Record<ContourId, string> = { rise: '↗', fall: '↘', arch: '∩', dip: '∪', wave: '∿', leap_fall: '⤴↘' }

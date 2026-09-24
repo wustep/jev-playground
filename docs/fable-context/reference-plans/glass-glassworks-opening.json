@@ -1,75 +1,57 @@
 {
   "id": "glass-glassworks-opening",
   "piece": "Philip Glass, Glassworks: Opening",
-  "whyHere": "Keyboard-accessible loop: three 4-bar groups \u00d7 4, 3:2, F minor.",
+  "whyHere": "Keyboard-accessible loop: three 4-bar groups × 4, 3:2, F minor.",
   "evidence": "inferred",
   "midi": null,
   "midiSource": null,
   "midiLicense": null,
-  "notes": "NO MIDI. Chords are inferred from published loop descriptions (Wikipedia ABC:||ABC; Wu thesis; Hooktheory user tab). Honest closed stand-in is the book's verified i\u2013bVI\u2013bIII\u2013V cycle, not a score RN.",
-  "_stretch": [
-    "proposed phrasing: on_the_beat",
-    "3:2 / hemiola grid (Opening's identity)",
-    "hook_bars: 4 (loops keep 2)",
-    "close: stop rather than cadence",
-    "exact Opening chords \u2014 copyright; not proposed"
-  ],
+  "notes": "NO MIDI. Chords are inferred from published loop descriptions (Wikipedia ABC:||ABC; Wu thesis; Hooktheory user tab). Honest closed stand-in is the book's verified i–bVI–bIII–V cycle, not a score RN.",
   "plan": {
-    "version": 1,
+    "version": 2,
     "style": "glass",
-    "character": "hypnotic_pulse",
-    "form": "additive_loop",
+    "register": "mid",
+    "motion": "flowing",
+    "accompaniment": "broken",
+    "form": "sentence",
     "key": "F_minor",
     "meter": "four_four",
-    "texture": "minimal_cells",
     "palette": "diatonic",
     "tempo": "moderato",
     "dynamics": "mp",
     "dynamicShape": "terraced",
-    "defaultInstrument": "grand_piano",
-    "arrangement": "terraced_blocks",
-    "opening": "straight_in",
-    "pedal": "half",
     "bars": [
       {
         "chord": "i",
-        "role": "statement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "i",
-        "role": "restatement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "bVI",
-        "role": "development",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "bVI",
-        "role": "restatement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "bIII",
-        "role": "contrast",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "bIII",
-        "role": "development",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "V",
-        "role": "development",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "v",
-        "role": "echo",
-        "contour": "static"
+        "contour": "wave"
       }
     ]
   }

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { formRoles } from '../plan/forms'
 import type { ChordId, CompositionPlan, ContourId } from '../plan/schema'
 import { renderPlan } from '../render/renderPlan'
 import type { Bar, Voice } from '../render/score'
@@ -10,34 +9,33 @@ import {
   midiMetrics,
   midiPickupAlignTicks,
   midiThematicStartOverride,
-  scoreHasSplitTreble,
+  accompanimentOfBar,
+  ceilingBreaches,
+  melodyOfBar,
   scoreMetrics,
-  isTacetAccompanimentBar,
-  singingVoices,
   skyline,
   splitMidiHands,
+  topVoice,
 } from './compareMetrics'
 
 const CONTOURS: ContourId[] = ['arch', 'leap_fall', 'wave', 'rise']
 
 function songPlan(overrides: Partial<CompositionPlan> = {}): CompositionPlan {
   const chords: ChordId[] = ['I', 'vi', 'ii6', 'V', 'I', 'vi', 'ii6', 'I', 'IV', 'ii', 'V7_of_V', 'V', 'I', 'vi', 'V7', 'I']
-  const roles = formRoles('period', 16)
   return {
-    version: 1,
+    version: 2,
     style: 'chopin',
-    character: 'lyrical_song',
+    register: 'high',
+    motion: 'flowing',
+    accompaniment: 'broken',
     form: 'period',
     key: 'Eb_major',
     meter: 'twelve_eight',
-    texture: 'rolling_nocturne',
     palette: 'chromatic_approach',
     tempo: 'andante',
     dynamics: 'p',
     dynamicShape: 'steady',
-    defaultInstrument: 'grand_piano',
-    opening: 'pickup',
-    bars: chords.map((chord, i) => ({ chord, role: roles[i], contour: CONTOURS[i % 4] })),
+    bars: chords.map((chord, i) => ({ chord, contour: CONTOURS[i % 4] })),
     ...overrides,
   }
 }
@@ -49,7 +47,8 @@ function voice(notes: [number, number, string[]][]): Voice {
 function barOf(treble: Voice[], bass: Voice[] = []): Bar {
   return {
     index: 0,
-    plan: { chord: 'I', role: 'statement', contour: 'arch' },
+    plan: { chord: 'I', contour: 'arch' },
+    role: 'statement',
     chordSymbol: 'Eb',
     treble,
     bass,
@@ -134,60 +133,39 @@ describe('thematic start', () => {
   })
 })
 
-describe('generated singing voice', () => {
-  it('takes only treble[0] after overlay rules, not the inner roll', () => {
+describe('the melody voice', () => {
+  it('is treble[0], with no heuristic in between', () => {
     const melody = voice([[0, 12, ['Db5']], [12, 6, ['Ab5']]])
-    const roll = voice([[0, 2, ['Ab3']], [2, 2, ['Db4']], [4, 2, ['F4']]])
-    const later = barOf([melody, roll])
-    const sung = singingVoices(barOf([melody, roll]), later)
-    expect(sung).toEqual([melody])
-    const tops = skyline(sung).map((e) => e.midi)
-    expect(tops).toEqual([73, 80])
-    expect(skyline([melody, roll]).some((e) => e.midi < 70)).toBe(true)
+    const inner = voice([[0, 2, ['Ab3']], [2, 2, ['Db4']], [4, 2, ['F4']]])
+    expect(melodyOfBar(barOf([melody, inner]))).toEqual([melody])
+    expect(accompanimentOfBar(barOf([melody, inner]))).toEqual([inner])
+    // The old metric read a skyline over both voices, which is how a
+    // left-hand roll came to be reported as a melody.
+    expect(skyline([melody, inner]).some((event) => event.midi < 70)).toBe(true)
+    expect(skyline(melodyOfBar(barOf([melody, inner]))).map((event) => event.midi)).toEqual([73, 80])
   })
 
-  it('treats a one-voice roll as tacet only when it matches a later inner voice', () => {
-    const roll = voice([
-      [0, 2, ['Ab3']],
-      [2, 2, ['Db4']],
-      [4, 2, ['F4']],
-      [6, 2, ['Ab3']],
-      [8, 2, ['Db4']],
-      [10, 2, ['F4']],
-    ])
-    const melody = voice([[0, 12, ['Db5']]])
-    const later = barOf([melody, roll])
-    later.index = 2
-    const tacet = barOf([roll])
-    tacet.index = 1
-    expect(isTacetAccompanimentBar(tacet, later)).toBe(true)
-    expect(singingVoices(tacet, later)).toEqual([])
-    expect(singingVoices(tacet, undefined)).toEqual([roll])
-    expect(singingVoices(barOf([melody]), later)).toEqual([melody])
+  it('is empty where the tune rests, rather than falling through to what is under it', () => {
+    const inner = voice([[0, 2, ['Ab3']], [2, 2, ['Db4']]])
+    const resting = barOf([], [inner])
+    expect(melodyOfBar(resting)).toEqual([])
+    expect(accompanimentOfBar(resting)).toEqual([inner])
   })
 
-  it('does not treat a sparse overlaid tune as tacet just because it sits near the inner', () => {
-    const inner = voice([[0, 2, ['E4']], [2, 2, ['G4']], [4, 2, ['C5']]])
-    const tune = voice([[0, 8, ['E4']], [8, 8, ['G4']]])
-    const later = barOf([tune, inner])
-    later.index = 3
-    const early = barOf([tune])
-    early.index = 0
-    expect(isTacetAccompanimentBar(early, later)).toBe(false)
-    expect(singingVoices(early, later)).toEqual([tune])
-  })
-
-  it('starts Chopin code ret4 after the tacet accompaniment bar', () => {
+  it('counts a ceiling breach when something under the tune reaches it', () => {
     const score = renderPlan(songPlan(), 1)
-    expect(score.introBars).toBe(1)
-    expect(scoreHasSplitTreble(score)).toBe(true)
-    const firstSplit = score.bars.slice(score.introBars).find((bar) => bar.treble.length >= 2)
-    expect(singingVoices(score.bars[score.introBars], firstSplit)).toEqual([])
-    const metrics = scoreMetrics(score)
-    expect(metrics.voice).toBe('singing-treble')
-    expect(metrics.thematicStartBar).toBe(1)
-    expect(metrics.registerMean).toBeGreaterThan(70)
-    expect(metrics.ret4).not.toBe(metrics.combinedSkyline.ret4)
+    expect(ceilingBreaches(score), 'the renderer must never let this happen').toBe(0)
+    const broken = { ...score, bars: score.bars.map((bar, i) => (i === 0 ? { ...bar, bass: [voice([[0, 4, ['C7']]])] } : bar)) }
+    expect(ceilingBreaches(broken), 'but the metric must be able to see it').toBe(1)
+  })
+
+  it('measures the Chopin-shaped plan on its melody, high and moving', () => {
+    const metrics = scoreMetrics(renderPlan(songPlan(), 1))
+    expect(metrics.voice).toBe('melody-voice')
+    expect(metrics.thematicStartBar).toBe(0)
+    expect(metrics.registerMean).toBeGreaterThan(72)
+    expect(metrics.ceilingBreaches).toBe(0)
+    expect(metrics.onsetDensityEarly).toBeGreaterThan(4)
   })
 })
 
@@ -204,14 +182,31 @@ describe('committed Mutopia files', () => {
     expect(midi.registerMean - midi.combinedSkyline.registerMean).toBeGreaterThan(3)
   })
 
-  it('scores Beethoven Pathétique II RH at 62 and starts the theme at bar 0', () => {
+  it('reads Pathétique II as its tune, not the sixteenth murmur under it', () => {
+    // The upper-staff track carries the melody AND an inner accompaniment.
+    // Counting every note-on made the tune look like 10.9 attacks a bar at
+    // MIDI 62; the top voice alone attacks about 3 times a bar, a fourth higher.
     const midi = midiMetrics('docs/ref-midi/public/beethoven-op13-pathetique-2.mid')
     if ('error' in midi) throw new Error(midi.error)
     expect(midi.handSplit.melodyName).toMatch(/up/i)
     expect(midi.thematicStartBar).toBe(0)
-    expect(midi.registerMean).toBe(62)
-    expect(midi.combinedSkyline.registerMean).toBe(62)
+    expect(midi.registerMean).toBe(66.3)
+    expect(midi.combinedSkyline.registerMean, 'the naive skyline is pulled down by the inner voice').toBe(62)
+    expect(midi.onsetDensityMean).toBeGreaterThan(2.5)
+    expect(midi.onsetDensityMean).toBeLessThan(4)
     expect(midi.ret8).toBeGreaterThan(0.9)
+  })
+
+  it('does not count a note struck under a held higher note as melody', () => {
+    // A held C5 with an inner line moving beneath it: one melody attack, not four.
+    const line = topVoice([
+      { start: 0, dur: 16, midi: 72 },
+      { start: 0, dur: 4, midi: 60 },
+      { start: 4, dur: 4, midi: 62 },
+      { start: 8, dur: 4, midi: 64 },
+      { start: 12, dur: 4, midi: 65 },
+    ])
+    expect(line.map((event) => event.midi)).toEqual([72])
   })
 
   it('scores Debussy Arabesque from thematic bar 2 and the upper staff', () => {

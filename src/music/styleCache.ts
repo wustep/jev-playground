@@ -1,7 +1,5 @@
 import type { StyleId } from '../plan/schema'
-import type { Exchange, PlanInput, PlanResult, ScoreResult } from '../planner'
-import type { NotesMode } from './notesMode'
-import type { NotePhrase } from '../render/jevNotes'
+import type { PlanInput, PlanResult, ScoreResult } from '../planner'
 
 export interface Generated extends PlanResult {
   input: PlanInput
@@ -9,17 +7,9 @@ export interface Generated extends PlanResult {
   notice: string | null
   /** Precomputed style-match (best-of-N already scored the winner). */
   matches?: ScoreResult
-  /**
-   * Debug-only: Jev's validated RH phrases, one per plan bar, applied on top
-   * of renderPlan. `undefined` = not tried; `[]` = tried and failed.
-   */
-  notePhrases?: NotePhrase[]
-  noteExchanges?: Exchange[]
-  /** Which Debug notes path produced `notePhrases`. Legacy cache without this is `line`. */
-  noteMode?: Extract<NotesMode, 'guide' | 'line'>
 }
 
-const STORAGE_KEY = 'jev-playground:music-style-cache:v1'
+const STORAGE_KEY = 'jev-playground:music-style-cache:v2'
 
 /** Survives MusicApp remounts (route/tab away and back). */
 const memory = new Map<StyleId, Generated>()

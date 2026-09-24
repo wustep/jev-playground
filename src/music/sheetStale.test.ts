@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CompositionPlan } from '../plan/schema'
 import type { PlanInput, PlanTrace } from '../planner'
-import {
-  displayedPlanIdentity,
-  displayedSheetIsStale,
-  notesDisplayIsSettled,
-  planInputMatchesDisplayed,
-  plannerSelectIsDirty,
-  staleSettingsStatus,
-} from './sheetStale'
+import { displayedPlanIdentity, displayedSheetIsStale, planInputMatchesDisplayed, plannerSelectIsDirty, staleSettingsStatus } from './sheetStale'
 import type { Generated } from './styleCache'
 
 function stubGenerated(
@@ -19,8 +12,6 @@ function stubGenerated(
     pick?: PlanInput['pick']
     brief?: boolean
     seed?: number
-    noteMode?: Generated['noteMode']
-    notePhrases?: Generated['notePhrases']
   } = {},
 ): Generated {
   const bars = overrides.bars ?? 16
@@ -32,7 +23,7 @@ function stubGenerated(
     brief: overrides.brief ?? true,
     seed: overrides.seed ?? 7,
   }
-  const plan = { style, defaultInstrument: 'grand_piano', bars: Array.from({ length: bars }, () => ({})) } as unknown as CompositionPlan
+  const plan = { style, bars: Array.from({ length: bars }, () => ({})) } as unknown as CompositionPlan
   return {
     plan,
     input,
@@ -44,8 +35,6 @@ function stubGenerated(
       decisions: [],
       exchanges: [],
     },
-    noteMode: overrides.noteMode,
-    notePhrases: overrides.notePhrases,
   }
 }
 
@@ -64,38 +53,15 @@ describe('planInputMatchesDisplayed', () => {
   })
 })
 
-describe('notesDisplayIsSettled', () => {
-  it('treats Debug off and Notes:code as settled even if a prior overlay is cached', () => {
-    const generated = stubGenerated({ noteMode: 'guide', notePhrases: [] })
-    expect(notesDisplayIsSettled({ notesMode: 'code', debug: true, generated, pendingNotes: false })).toBe(true)
-    expect(notesDisplayIsSettled({ notesMode: 'guide', debug: false, generated, pendingNotes: false })).toBe(true)
-  })
-
-  it('is unsettled while a guide/line rewrite is in flight or the cache is the other mode', () => {
-    const generated = stubGenerated({ noteMode: 'line', notePhrases: [] })
-    expect(notesDisplayIsSettled({ notesMode: 'guide', debug: true, generated, pendingNotes: true })).toBe(false)
-    expect(notesDisplayIsSettled({ notesMode: 'guide', debug: true, generated, pendingNotes: false })).toBe(false)
-    expect(notesDisplayIsSettled({ notesMode: 'line', debug: true, generated: stubGenerated(), pendingNotes: false })).toBe(false)
-  })
-
-  it('treats a failed notes pass ([]) as settled for that mode', () => {
-    const generated = stubGenerated({ noteMode: 'guide', notePhrases: [] })
-    expect(notesDisplayIsSettled({ notesMode: 'guide', debug: true, generated, pendingNotes: false })).toBe(true)
-  })
-})
-
 describe('displayedSheetIsStale', () => {
   const base = () => {
     const generated = stubGenerated()
     return {
       busy: false,
       pendingStyle: null as string | null,
-      pendingNotes: false,
       plannerDirty: false,
       generated,
       input: matchingInput(generated),
-      notesMode: 'code' as const,
-      debug: false,
     }
   }
 
@@ -105,19 +71,27 @@ describe('displayedSheetIsStale', () => {
     expect(displayedSheetIsStale({ ...base(), pendingStyle: 'chopin' })).toBe(true)
   })
 
-  it('goes stale when Planner / Notes / Bars / Decide-by / Style brief / Seed disagree', () => {
+  it('goes stale when Planner / Bars / Decide-by / Style brief / Seed disagree', () => {
     const generated = stubGenerated()
     expect(displayedSheetIsStale({ ...base(), plannerDirty: true })).toBe(true)
-    expect(displayedSheetIsStale({ ...base(), pendingNotes: true, notesMode: 'guide', debug: true })).toBe(true)
     expect(displayedSheetIsStale({ ...base(), input: { ...generated.input, bars: 64 } })).toBe(true)
     expect(displayedSheetIsStale({ ...base(), input: { ...generated.input, pick: 'argmax' } })).toBe(true)
     expect(displayedSheetIsStale({ ...base(), input: { ...generated.input, brief: false } })).toBe(true)
     expect(displayedSheetIsStale({ ...base(), input: { ...generated.input, seed: 1 } })).toBe(true)
   })
 
-  it('does not stale for Debug alone when the score path stays code', () => {
-    expect(displayedSheetIsStale({ ...base(), debug: true, notesMode: 'code' })).toBe(false)
-    expect(displayedSheetIsStale({ ...base(), debug: false, notesMode: 'guide' })).toBe(false)
+})
+
+describe('displayedPlanIdentity', () => {
+  // MusicApp clears a dirty Planner select when this changes; if a new plan
+  // from the newly chosen planner kept the old identity, the stand would stay
+  // dimmed with Play disabled.
+  it('changes when a plan from another planner, or another seed, lands', () => {
+    const shown = stubGenerated({ planner: 'heuristic' })
+    expect(displayedPlanIdentity(null)).toBeNull()
+    expect(displayedPlanIdentity(stubGenerated({ planner: 'jev' }))).not.toBe(displayedPlanIdentity(shown))
+    expect(displayedPlanIdentity(stubGenerated({ seed: 8 }))).not.toBe(displayedPlanIdentity(shown))
+    expect(displayedPlanIdentity(stubGenerated())).toBe(displayedPlanIdentity(shown))
   })
 })
 
@@ -127,17 +101,6 @@ describe('plannerSelectIsDirty', () => {
     expect(plannerSelectIsDirty('heuristic', 'heuristic')).toBe(false)
     expect(plannerSelectIsDirty('jev', 'heuristic')).toBe(true)
     expect(plannerSelectIsDirty('heuristic', 'jev')).toBe(true)
-  })
-})
-
-describe('displayedPlanIdentity', () => {
-  it('changes when the settled plan changes and ignores notes overlays', () => {
-    const a = stubGenerated({ noteMode: 'guide', notePhrases: [] })
-    const b = { ...a, noteMode: 'line' as const, notePhrases: [] }
-    const c = stubGenerated({ seed: 8 })
-    expect(displayedPlanIdentity(a)).toBe(displayedPlanIdentity(b))
-    expect(displayedPlanIdentity(a)).not.toBe(displayedPlanIdentity(c))
-    expect(displayedPlanIdentity(null)).toBeNull()
   })
 })
 

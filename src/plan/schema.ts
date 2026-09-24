@@ -1,9 +1,15 @@
 // The contract between the planner (Jev or a stub) and the renderer.
 //
-// Everything a planner may decide is a closed enum. Each option carries a short
-// musical description: the UI shows it, and JevPlanner sends it as the Choice
-// `criteria` for that option. Descriptions deliberately never name a composer —
-// connecting "Debussy" to `parallel_planing` is the judgment under test.
+// Every field here is a closed enum that measurably changes sounding notes.
+// That is the whole editorial rule: a label that cannot be heard does not
+// belong in the plan. Each option carries a short musical description — the UI
+// shows it, and JevPlanner sends it as the Choice `criteria` for that option.
+// Descriptions deliberately never name a composer: connecting "Debussy" to
+// `parallel_planing` was the judgment under test, and still is.
+//
+// The three fields that matter most are new, and they exist because the old
+// schema had no way to say them: `register` (where the tune sings),
+// `motion` (how fast it moves) and `accompaniment` (what holds it up).
 //
 // NOTE: this file is also imported by the /api/jev serverless function, so
 // relative imports in this chain use explicit `.js` extensions (Node ESM).
@@ -13,6 +19,13 @@ export type OptionTable<K extends string> = Readonly<Record<K, string>>
 const keysOf = <K extends string>(table: OptionTable<K>) => Object.keys(table) as K[]
 
 // ── Styles (the dial) ───────────────────────────────────────────────────────
+//
+// Eight faces. A style earns one by diverging on the axes below — register,
+// motion, accompaniment, palette, rubato — not by having a name; a test
+// requires every style's most typical plan to differ on the first three.
+// The four with committed public-domain reference MIDI can be measured;
+// Glass and Fox only against local, uncommitted files; Laufey and Zimmer
+// not at all yet.
 
 export const STYLE_LABELS = {
   bach: 'Johann Sebastian Bach',
@@ -27,7 +40,93 @@ export const STYLE_LABELS = {
 export type StyleId = keyof typeof STYLE_LABELS
 export const STYLE_IDS = keysOf<StyleId>(STYLE_LABELS)
 
-// ── Global decisions ────────────────────────────────────────────────────────
+// ── The singing line ────────────────────────────────────────────────────────
+
+/**
+ * Where the tune lives. This is the field whose absence made every style
+ * sound alike: the old renderer hardcoded a melody window in each of its 23
+ * textures, all of them centred on MIDI 74–76, so a low cantabile Adagio was
+ * unreachable however the plan was labelled.
+ */
+export const REGISTERS = {
+  low: 'The tune sings low, in the tenor-to-alto range around and just above middle C — a cantabile inner voice, warm and covered',
+  mid: 'The tune sings in the comfortable soprano range just above middle C — plain, speaking, neither strained nor dark',
+  high: 'The tune sings high and bright, well above the accompaniment — a clear vocal line with air underneath it',
+} as const
+export type RegisterId = keyof typeof REGISTERS
+export const REGISTER_IDS = keysOf<RegisterId>(REGISTERS)
+
+/**
+ * The sounding window of each register, as MIDI numbers: [floor, ceiling].
+ *
+ * Calibrated against the TOP VOICE of the committed reference MIDI: Op. 13's
+ * Adagio sings at 66, Bach's C major prelude figure at 69, Op. 9/2's nocturne
+ * at 76.5. An earlier calibration read Op. 13 at 62 — but that count included
+ * the inner sixteenths the right hand plays under the tune, and `low` was set
+ * a fourth too deep on the strength of it.
+ *
+ * `high` was centred on the nocturne's 76.5, but a tune rendered in it lands
+ * above its window's centre — climaxes lift, and there is headroom to 85 — so
+ * every reference plan labelled `high` sang sharp of its MIDI: the nocturne
+ * by 1.2, the arabesque by 3.9, Clair de lune by 5.4. Two semitones down, they
+ * render at −0.8, +1.6 and +2.1.
+ */
+export const REGISTER_RANGE: Record<RegisterId, readonly [number, number]> = {
+  low: [57, 73],
+  mid: [61, 78],
+  high: [66, 83],
+}
+
+/**
+ * How fast the tune moves — its subdivision, in attacks per felt beat. The
+ * old schema had no word for this either, which is why a nocturne came out at
+ * 3.25 melody onsets per bar against the reference's 7.25.
+ */
+export const MOTIONS = {
+  sustained: 'Long held notes, one or two to a bar, ringing over a moving accompaniment; the line is nearly still',
+  walking: 'About one note to a beat — a plain singing pace, the tune stepping evenly with the pulse',
+  flowing: 'About two notes to a beat, the line moving continuously with occasional longer arrivals',
+  florid: 'Three or four notes to a beat: running figuration, turns and scale fragments decorating a slower skeleton',
+} as const
+export type MotionId = keyof typeof MOTIONS
+export const MOTION_IDS = keysOf<MotionId>(MOTIONS)
+
+/** Attacks per felt beat for each motion — the target the rhythm writer aims at. */
+export const MOTION_RATE: Record<MotionId, number> = { sustained: 0.4, walking: 1, flowing: 2, florid: 3.5 }
+
+// ── What holds the tune up ──────────────────────────────────────────────────
+
+/**
+ * Five patterns, replacing twenty-three textures. Each is a *shape*, not a
+ * composer: it is told the melody's floor and must stay under it, so the
+ * accompaniment can never steal the ear or double the tune by accident.
+ * `counterline` is the one that is not support: the second line is a peer in
+ * weight and rhythm, and the piece is a duet rather than a tune with a
+ * backing — but it too sings under the first voice's floor.
+ */
+export const ACCOMPANIMENTS = {
+  sustained: 'Held chords underneath: the harmony sounds once and rings, the left hand barely moving — hymn, pad, chorale',
+  broken: 'The chord spread out in time and rolled low to high, continuously, under the tune — nocturne, Alberti, arpeggio figuration',
+  pulse: 'The same chord struck again and again on a steady subdivision, the harmony changing only at the barline — ostinato, driving repetition',
+  stride: 'A low bass note on the downbeat answered by mid-register chords on the remaining beats — waltz, march, stride',
+  counterline: 'A second independent melodic line of equal weight, in dialogue with the first — two-voice counterpoint, not an accompaniment at all',
+} as const
+export type AccompanimentId = keyof typeof ACCOMPANIMENTS
+export const ACCOMPANIMENT_IDS = keysOf<AccompanimentId>(ACCOMPANIMENTS)
+
+// ── Form ────────────────────────────────────────────────────────────────────
+//
+// Four, not eleven. Form's whole job is to say which bars bring an earlier bar
+// back, and where the breath falls. Eleven names could not say more than four.
+
+export const FORMS = {
+  period: 'A phrase and its answer: the second phrase begins as the first did and closes where the first only paused',
+  sentence: 'A short idea, the same idea again a step or a chord away, then a longer continuation that drives to the cadence',
+  arch: 'A first section, a departure to new material, then the first section again — the return is the point',
+  chain: 'One idea spun out continuously without literal return; each phrase grows from the last, no repeat',
+} as const
+export type FormId = keyof typeof FORMS
+export const FORM_IDS = keysOf<FormId>(FORMS)
 
 export const KEYS = {
   C_major: 'C major — no sharps or flats; plain, open, bright',
@@ -55,48 +154,9 @@ export const KEYS = {
 export type KeyId = keyof typeof KEYS
 export const KEY_IDS = keysOf<KeyId>(KEYS)
 
-// The piece's character is decided FIRST and then handed to every later
-// decision as context. It is what lets one style produce a hymn on one
-// generation and a toccata on the next while each plan stays coherent
-// (slow tempo with soft dynamics with a singing texture …).
-export const CHARACTERS = {
-  lyrical_song: 'A slow, singing melody over a simple accompaniment; tender and intimate',
-  stormy_drama: 'Turbulent and forceful: driving rhythm, sharp accents, minor-key tension',
-  flowing_perpetual: 'Continuous even figuration that never stops; a smooth stream of fast notes',
-  solemn_hymn: 'Grave, chordal and measured, like a hymn or a slow procession',
-  dance_lilt: 'A light, lilting dance in a swinging triple or compound meter',
-  playful_wit: 'Quick, witty and light on its feet: detached notes, surprises, off-beat accents',
-  meditative_stillness: 'Very slow and spare: long tones, silence and resonance; time almost stops',
-  hypnotic_pulse: 'A steady motoric pulse of small repeating patterns that change only gradually',
-  dreamy_haze: 'Soft, blurred and floating; veiled colours and no hard edges',
-  heroic_bright: 'Bright, confident and extroverted: major-key energy and strong rhythm',
-  warm_groove: 'A relaxed, warm groove with laid-back syncopation; unhurried and soulful',
-  restless_searching: 'Uneasy and searching: shifting harmonies, questions left unanswered',
-} as const
-export type CharacterId = keyof typeof CHARACTERS
-export const CHARACTER_IDS = keysOf<CharacterId>(CHARACTERS)
-
-// How the bars are laid out as phrases. Code expands a form into per-bar roles
-// (src/plan/forms.ts); the renderer only ever reads the roles.
-export const FORMS = {
-  period: 'Question and answer: a phrase that pauses on an open half cadence, then the same opening again, this time closing firmly',
-  sentence: 'A short idea, its immediate repetition, then fragments that accelerate into one single cadence',
-  spinning_out: 'An opening gesture spun out through sequences — one figure stepping through new harmonies — into a closing cadence',
-  binary_dance: 'Two balanced halves: the first travels away and pauses open, the second starts from the far point and works its way home',
-  arch_return: 'Statement, a contrasting middle in a new colour or register, then a return of the opening, often as a quieter echo',
-  additive_loop: 'A short chord loop repeated many times, each pass adding or changing one small thing; no real cadence until it simply stops',
-  mosaic_pairs: 'Short two-bar ideas, each immediately repeated and then set beside a new one like tiles; little development, a fading close',
-  layered_build: 'Starts bare and adds a layer every few bars, building to a peak near the end before a brief release',
-  vamp_and_tag: 'A relaxed vamp that circles with small variations and fills, then a short tag ending on a held colour chord',
-  call_and_response: 'A bold call answered each time by a softer or contrasting reply',
-  free_fantasia: 'Improvisatory and through-composed: gestures follow one another freely with pauses and surprises, no literal repeats',
-} as const
-export type FormId = keyof typeof FORMS
-export const FORM_IDS = keysOf<FormId>(FORMS)
-
 export const METERS = {
-  four_four: '4/4 — four quarter-note beats; square, march- or song-like',
-  three_four: '3/4 — three quarter-note beats; waltz or minuet lilt',
+  four_four: '4/4 — four quarter-note beats; the default, even and square',
+  three_four: '3/4 — three quarter-note beats; waltz, minuet or sarabande lilt',
   two_four: '2/4 — two quarter-note beats; compact march or allegro pulse',
   six_eight: '6/8 — two dotted-quarter beats; rolling, barcarolle or gigue feel',
   nine_eight: '9/8 — three dotted-quarter beats; compound triple, a rocking 3+3+3',
@@ -104,57 +164,6 @@ export const METERS = {
 } as const
 export type MeterId = keyof typeof METERS
 export const METER_IDS = keysOf<MeterId>(METERS)
-
-export const TEXTURES = {
-  chorale:
-    'Four-voice hymn texture: soprano, alto, tenor and bass moving together mostly in quarter notes with passing tones',
-  two_voice_counterpoint:
-    'Two independent lines: running sixteenth notes in one hand against walking eighth notes in the other, trading hands',
-  broken_chord_prelude:
-    'Continuous even sixteenth-note broken chords passed from left hand to right, one harmony per bar, no separate melody',
-  alberti_melody:
-    'Singing right-hand melody over a left-hand low–high–middle–high broken-chord accompaniment',
-  dramatic_chords:
-    'Thick block chords over left-hand octaves; short rhythmic motto, rests, sudden accents, repeated hammered chords',
-  parallel_planing:
-    'Chords gliding in parallel motion under a floating melody, over long low bass pedal tones; blurred and non-functional',
-  wash_arpeggio:
-    'Wide harp-like arpeggio sweeps rising across both hands into a long ringing melody note, sustain pedal held',
-  minimal_cells:
-    'Short arpeggio cells repeated hypnotically with steady pulse, little melody, two-against-three cross-rhythms, gradual additive change',
-  syncopated_ostinato:
-    'Left-hand ostinato in 3+3+2 groupings under sparse syncopated right-hand stabs in open fourths and short motifs',
-  lush_voicings:
-    'Rolled rich extended chords (ninths, elevenths) held under gentle pentatonic melodic fills; laid-back, soulful',
-  bossa_comp:
-    'Bossa-nova piano: bass on 1 and the and of 2, shell voicings (3rd + 7th) on partido-alto off-beats, a sung tune on top',
-  aria_walking_bass:
-    'Ornamented singing right-hand line over a steadily walking left-hand bass in even eighth notes',
-  toccata_perpetual:
-    'Both hands in relentless sixteenths: a zig-zag figure pivoting around one chord tone and its lower neighbour, mirrored between the hands',
-  stride_dance:
-    'Dance accompaniment: a low bass note on the downbeat answered by mid-register chords on the other beats (waltz or stride), under a lilting tune',
-  rolling_nocturne:
-    'Slow rolling broken chords in the middle register over deep sustained bass octaves, with a sparse long-note melody ringing on top',
-  tremolo_storm:
-    'Left-hand broken-octave tremolo rumbling under rising detached right-hand chords and sudden scale rushes; agitated',
-  pulsing_chords:
-    'Repeated pulsing eighth-note chords, low and even, the harmony changing slowly, with short melodic fragments flickering above',
-  melody_over_ostinato:
-    'A small rocking left-hand figure repeated unchanged while a slow, sparse melody of long notes and rests floats above',
-  interlocking_hands:
-    'Hands overlapped in one register, alternating rapid notes in close seconds and clusters with shifting off-kilter accents',
-  displaced_arpeggio:
-    'Continuous sixteenth-note chord arpeggios whose accents fall in uneven groups (5+5+6, 7+5+4), a colour tone on top, over a plain bass',
-  chordal_melody:
-    'Melody carried as the top note of close mid-register chords while an inner voice slides by half-steps; sparse bass, intimate',
-  bell_organum:
-    'Hollow parallel fifths and octaves moving slowly in block chords, framed by bell-like octaves in the extreme registers, pedal held',
-  scherzo_staccato:
-    'Light detached chords and quick upbeat figures tossed between the hands, with rests, sudden accents and dynamic jokes',
-} as const
-export type TextureId = keyof typeof TEXTURES
-export const TEXTURE_IDS = keysOf<TextureId>(TEXTURES)
 
 export const PALETTES = {
   diatonic: 'Plain major or natural-minor scale tones; stepwise passing notes stay inside the key',
@@ -167,6 +176,7 @@ export const PALETTES = {
 } as const
 export type PaletteId = keyof typeof PALETTES
 export const PALETTE_IDS = keysOf<PaletteId>(PALETTES)
+
 
 export const TEMPOS = {
   larghissimo: 'Extremely slow, almost still, about 16 quarter notes per minute',
@@ -196,6 +206,7 @@ export const TEMPO_BPM: Record<TempoId, number> = {
   presto: 168,
   prestissimo: 208,
 }
+
 
 export const DYNAMICS = {
   pp: 'pianissimo — very soft, barely touched',
@@ -233,110 +244,6 @@ export const INSTRUMENTS = {
 export type InstrumentId = keyof typeof INSTRUMENTS
 export const INSTRUMENT_IDS = keysOf<InstrumentId>(INSTRUMENTS)
 
-export const ARRANGEMENTS = {
-  constant: 'One unchanging arrangement from first bar to last — the same density, the same doubling',
-  build: 'Starts bare and adds a layer each phrase, so the last statement is the fullest',
-  lift_on_return: 'The first statement is simple; when the idea comes back the arrangement is fuller — a thicker left hand, the tune doubled at the octave',
-  peak_then_bare: 'Builds to a peak past the midpoint, then drops back to a bare exposed texture to finish',
-  terraced_blocks: 'Whole phrases sit at one density, then jump to another, like stops on an organ',
-} as const
-export type ArrangementId = keyof typeof ARRANGEMENTS
-export const ARRANGEMENT_IDS = keysOf<ArrangementId>(ARRANGEMENTS)
-
-export const OPENINGS = {
-  straight_in: 'The tune begins on the first downbeat — no introduction',
-  vamp_intro: 'One or two bars of accompaniment alone before the tune enters, the pattern starting before anybody sings',
-  pickup: 'A short upbeat into the first downbeat, the tune leaning in from the bar before',
-} as const
-export type OpeningId = keyof typeof OPENINGS
-export const OPENING_IDS = keysOf<OpeningId>(OPENINGS)
-
-export const PEDALS = {
-  dry: 'No sustain pedal — notes cut at their written length; dry, detached, clear',
-  half: 'Half pedal — chords overlap and bloom a little, but the texture stays readable',
-  full: 'Sustain pedal held — sonorities ring through the bar, a wash of overlapping tones',
-} as const
-export type PedalId = keyof typeof PEDALS
-export const PEDAL_IDS = keysOf<PedalId>(PEDALS)
-
-/**
- * How the singing line treats the barline and the phrase end. Independent of
- * `character` so a stormy ballade can still land and rest, and a nocturne can
- * lean in from an upbeat without changing its character label.
- */
-export const PHRASINGS = {
-  on_the_beat:
-    'The tune attacks the downbeat of every bar and does not rest at phrase ends — a perpetual, stormy or motor line',
-  upbeat:
-    'The tune leans in from an anacrusis: phrase ends leave a beat of air that a pickup fills into the next downbeat',
-  breathing:
-    'The tune lands early at phrase ends, holds, and rests — a sung line that takes a breath before the next phrase',
-  long_breathed:
-    'Long tones and more air: phrase ends rest for two beats, then a sparse pickup into the return',
-} as const
-export type PhrasingId = keyof typeof PHRASINGS
-export const PHRASING_IDS = keysOf<PhrasingId>(PHRASINGS)
-
-/** Hand-edited plans that omit `phrasing` keep today's character-driven default. */
-export function defaultPhrasing(character: CharacterId): PhrasingId {
-  switch (character) {
-    case 'lyrical_song':
-    case 'solemn_hymn':
-    case 'dance_lilt':
-    case 'warm_groove':
-    case 'restless_searching':
-      return 'breathing'
-    case 'meditative_stillness':
-    case 'dreamy_haze':
-      return 'long_breathed'
-    default:
-      return 'on_the_beat'
-  }
-}
-
-/**
- * How many bars of the opening idea come back in the skyline. Independent of
- * `form` so a 16-bar period can still be a 4-bar nocturne A, or an 8-bar
- * Adagio theme said twice. Loop forms default to a 4-bar cell; vamps stay at 2.
- */
-export const HOOK_BARS = {
-  '2': 'A two-bar hook — only the opening cell returns; the rest of each phrase goes its own way',
-  '4': 'A four-bar hook — the returning skyline is a four-bar cell or phrase, said again',
-  '8': 'An eight-bar hook — the returning skyline is a full eight-bar theme, the way a slow-movement period comes back',
-} as const
-export type HookBarsId = keyof typeof HOOK_BARS
-export const HOOK_BARS_IDS = keysOf<HookBarsId>(HOOK_BARS)
-export const HOOK_BARS_VALUES = [2, 4, 8] as const
-export type HookBars = (typeof HOOK_BARS_VALUES)[number]
-
-/** Numeric length of a closed `hookBars` pick. */
-export function hookBarsValue(id: HookBarsId): HookBars {
-  return Number(id) as HookBars
-}
-
-/** Hand-edited plans that omit `hookBars` keep a form-and-character default. */
-export function defaultHookBars(character: CharacterId, form: FormId): HookBarsId {
-  if (form === 'additive_loop' || form === 'layered_build') return '4'
-  if (form === 'vamp_and_tag' || form === 'mosaic_pairs') return '2'
-  switch (character) {
-    case 'lyrical_song':
-    case 'solemn_hymn':
-    case 'warm_groove':
-      return '4'
-    case 'hypnotic_pulse':
-    case 'meditative_stillness':
-    case 'dreamy_haze':
-      return '4'
-    default:
-      return '2'
-  }
-}
-
-/** Plan pick, or the form-and-character default. */
-export function resolveHookBars(plan: Pick<CompositionPlan, 'character' | 'form' | 'hookBars'>): HookBars {
-  return hookBarsValue(plan.hookBars ?? defaultHookBars(plan.character, plan.form))
-}
-
 export const BAR_COUNTS = {
   '4': 'Four bars — one short phrase, a single gesture',
   '8': 'Eight bars — a full period: a phrase and its answer',
@@ -350,53 +257,19 @@ export const BAR_COUNT_VALUES = [4, 8, 16, 32, 64] as const
 export type BarCount = (typeof BAR_COUNT_VALUES)[number]
 
 // ── Per-bar decisions ───────────────────────────────────────────────────────
-
-export const BAR_ROLES = {
-  statement: 'Presents the main idea for the first time',
-  restatement: 'Repeats the main idea, literally or lightly varied',
-  development: 'Fragments or sequences the idea; more motion, pushing forward',
-  contrast: 'Departs to a new register, figure or colour',
-  climax: 'The peak: highest register, densest and loudest moment',
-  half_cadence: 'Pauses, unresolved, breathing before the answer',
-  cadence: 'Closes: comes to rest on a final long sonority',
-  sequence: 'Repeats the previous bar\'s figure exactly, moved onto a new harmony a step or a fifth away',
-  echo: 'Repeats the previous bar much more softly, like a distant reply',
-  surprise: 'An unexpected harmonic turn: a chord from outside the key, lit up for a moment',
-  dissolve: 'Thins out and fades: fewer notes, softer, the texture evaporating',
-} as const
-export type BarRoleId = keyof typeof BAR_ROLES
-export const BAR_ROLE_IDS = keysOf<BarRoleId>(BAR_ROLES)
-
-/**
- * The four newer roles are inflections of an older one. Renderer gesture
- * tables are keyed by the base role; the inflection (reuse the last bar's
- * figure, drop the dynamic, thin the texture …) is applied on top.
- */
-export type BaseRoleId = Exclude<BarRoleId, 'sequence' | 'echo' | 'surprise' | 'dissolve'>
-export const ROLE_BASE: Record<BarRoleId, BaseRoleId> = {
-  statement: 'statement',
-  restatement: 'restatement',
-  development: 'development',
-  contrast: 'contrast',
-  climax: 'climax',
-  half_cadence: 'half_cadence',
-  cadence: 'cadence',
-  sequence: 'development',
-  echo: 'restatement',
-  surprise: 'contrast',
-  dissolve: 'contrast',
-}
+//
+// A bar carries its harmony and the shape of the tune over it. It does NOT
+// carry a role: the role is what the form says about that bar's position, and
+// a plan that could disagree with its own form was a plan the renderer had to
+// defend against. `src/plan/phrase.ts` derives roles from form + bar count.
 
 export const CONTOURS = {
-  rise: 'Melodic line climbs through the bar',
-  fall: 'Melodic line descends through the bar',
-  arch: 'Line rises to a mid-bar peak and returns',
-  dip: 'Line sinks mid-bar and returns',
-  static: 'Line hovers around one pitch',
-  wave: 'Line undulates: up, down and up again, like a turn figure written large',
-  leap_fall: 'Line opens with a leap upward, then falls back by step to fill the gap',
-  drop_rise: 'Line drops suddenly, then climbs back by step',
-  pendulum: 'Line swings between a high and a low register, implying two voices in one',
+  rise: 'The line climbs through the bar',
+  fall: 'The line descends through the bar',
+  arch: 'The line rises to a mid-bar peak and comes back down',
+  dip: 'The line sinks mid-bar and comes back up',
+  wave: 'The line undulates — up, down and up again, a turn figure written large',
+  leap_fall: 'The line opens with a leap upward, then falls back by step to fill the gap',
 } as const
 export type ContourId = keyof typeof CONTOURS
 export const CONTOUR_IDS = keysOf<ContourId>(CONTOURS)
@@ -541,75 +414,50 @@ export interface BarPlan {
    * for the one-harmony-per-bar norm.
    */
   chord2?: ChordId
-  role: BarRoleId
+  /** The shape of the singing line over this bar. */
   contour: ContourId
 }
 
+/**
+ * Eleven fields. Every one of them changes sounding notes — that is the test
+ * a field has to pass to be here at all. Version 2 dropped `character` (12
+ * values, zero measured effect on the melody), `texture` (23 values, each an
+ * independent re-implementation of the whole renderer), `arrangement`,
+ * `opening`, `pedal`, `phrasing`, `hookBars` and the per-bar `role`.
+ */
 export interface CompositionPlan {
-  version: 1
+  version: 2
   style: StyleId
-  /** Decided first; every later decision is conditioned on it. */
-  character: CharacterId
-  /** Phrase layout. `bars[].role` is its expansion and is what the renderer reads. */
+  /** Where the tune sings. */
+  register: RegisterId
+  /** How fast the tune moves. */
+  motion: MotionId
+  /** What holds it up. */
+  accompaniment: AccompanimentId
+  /** Which bars bring an earlier bar back, and where the breath falls. */
   form: FormId
   key: KeyId
   meter: MeterId
-  texture: TextureId
   palette: PaletteId
   tempo: TempoId
   dynamics: DynamicId
   dynamicShape: DynamicShapeId
-  defaultInstrument: InstrumentId
-  /**
-   * How density changes when material returns. Optional on hand-edited plans;
-   * planners always write it, and the renderer defaults from style + character.
-   */
-  arrangement?: ArrangementId
-  /**
-   * How the piece starts. Optional on hand-edited plans (default straight_in,
-   * so a 16-bar plan stays 16 score bars). Planners always write it.
-   * Vamp and pickup prepend extra Score.bars; plan.bars stays 4/8/16/32/64.
-   */
-  opening?: OpeningId
-  /**
-   * Sustain pedal for the piece. Optional on hand-edited plans; planners always
-   * write it. The renderer defaults from the texture (washed textures ring).
-   */
-  pedal?: PedalId
-  /**
-   * How the tune treats phrase ends and pickups. Optional on hand-edited plans;
-   * planners always write it. The renderer defaults from `character` (lyrical
-   * breathes; perpetual / stormy stay on the beat).
-   */
-  phrasing?: PhrasingId
-  /**
-   * How many bars of the opening idea return in the skyline. Optional on
-   * hand-edited plans; planners always write it. The renderer defaults from
-   * `form` + `character` (loops 4, vamps 2, lyrical 4). Beethoven lyrical
-   * priors pick 8 so an Adagio theme can come back whole.
-   */
-  hookBars?: HookBarsId
   /** 4, 8, 16, 32 or 64 bars, one harmony each — two where a bar carries a `chord2`. */
   bars: BarPlan[]
 }
 
 /** The global (non-bar) fields, in the order planners decide them. */
 export const GLOBAL_FIELDS = {
-  character: CHARACTERS,
+  register: REGISTERS,
+  motion: MOTIONS,
+  accompaniment: ACCOMPANIMENTS,
   form: FORMS,
   key: KEYS,
   meter: METERS,
-  texture: TEXTURES,
   palette: PALETTES,
   tempo: TEMPOS,
   dynamics: DYNAMICS,
   dynamicShape: DYNAMIC_SHAPES,
-  defaultInstrument: INSTRUMENTS,
-  arrangement: ARRANGEMENTS,
-  opening: OPENINGS,
-  pedal: PEDALS,
-  phrasing: PHRASINGS,
-  hookBars: HOOK_BARS,
 } as const
 export type GlobalField = keyof typeof GLOBAL_FIELDS
 export const GLOBAL_FIELD_IDS = Object.keys(GLOBAL_FIELDS) as GlobalField[]
@@ -641,7 +489,6 @@ export function parseBarPlan(raw: unknown, path: string): BarPlan {
   const bar = raw as Record<string, unknown>
   const parsed: BarPlan = {
     chord: parseOption(CHORDS, bar.chord, `${path}.chord`),
-    role: parseOption(BAR_ROLES, bar.role, `${path}.role`),
     contour: parseOption(CONTOURS, bar.contour, `${path}.contour`),
   }
   // Optional; `null` is what a hand-edited JSON plan uses to say "no second chord".
@@ -652,24 +499,17 @@ export function parseBarPlan(raw: unknown, path: string): BarPlan {
 export function parseGlobals(raw: unknown, path = 'plan'): PlanGlobals {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError(`${path}: expected an object`)
   const obj = raw as Record<string, unknown>
-  const character = parseOption(CHARACTERS, obj.character, `${path}.character`)
-  const form = parseOption(FORMS, obj.form, `${path}.form`)
   return {
-    character,
-    form,
+    register: parseOption(REGISTERS, obj.register, `${path}.register`),
+    motion: parseOption(MOTIONS, obj.motion, `${path}.motion`),
+    accompaniment: parseOption(ACCOMPANIMENTS, obj.accompaniment, `${path}.accompaniment`),
+    form: parseOption(FORMS, obj.form, `${path}.form`),
     key: parseOption(KEYS, obj.key, `${path}.key`),
     meter: parseOption(METERS, obj.meter, `${path}.meter`),
-    texture: parseOption(TEXTURES, obj.texture, `${path}.texture`),
     palette: parseOption(PALETTES, obj.palette, `${path}.palette`),
     tempo: parseOption(TEMPOS, obj.tempo, `${path}.tempo`),
     dynamics: parseOption(DYNAMICS, obj.dynamics, `${path}.dynamics`),
     dynamicShape: parseOption(DYNAMIC_SHAPES, obj.dynamicShape, `${path}.dynamicShape`),
-    defaultInstrument: parseOption(INSTRUMENTS, obj.defaultInstrument, `${path}.defaultInstrument`),
-    arrangement: obj.arrangement != null ? parseOption(ARRANGEMENTS, obj.arrangement, `${path}.arrangement`) : 'lift_on_return',
-    opening: obj.opening != null ? parseOption(OPENINGS, obj.opening, `${path}.opening`) : 'straight_in',
-    pedal: obj.pedal != null ? parseOption(PEDALS, obj.pedal, `${path}.pedal`) : 'half',
-    phrasing: obj.phrasing != null ? parseOption(PHRASINGS, obj.phrasing, `${path}.phrasing`) : defaultPhrasing(character),
-    hookBars: obj.hookBars != null ? parseOption(HOOK_BARS, obj.hookBars, `${path}.hookBars`) : defaultHookBars(character, form),
   }
 }
 
@@ -685,7 +525,7 @@ export function parsePlan(raw: unknown): CompositionPlan {
     throw new PlanValidationError(`plan.bars: expected an array of ${BAR_COUNT_VALUES.join(', ')} bars`)
   }
   return {
-    version: 1,
+    version: 2,
     style: parseStyle(obj.style, 'plan.style'),
     ...parseGlobals(obj),
     bars: obj.bars.map((bar, i) => parseBarPlan(bar, `plan.bars[${i}]`)),

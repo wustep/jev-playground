@@ -1,211 +1,124 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ACCOMPANIMENTS,
+  ACCOMPANIMENT_IDS,
   BAR_COUNT_VALUES,
-  GLOBAL_FIELD_IDS,
   GLOBAL_FIELDS,
-  HOOK_BARS,
-  HOOK_BARS_IDS,
-  PEDAL_IDS,
-  PEDALS,
-  PHRASING_IDS,
-  PHRASINGS,
+  GLOBAL_FIELD_IDS,
+  MOTIONS,
+  MOTION_IDS,
+  MOTION_RATE,
+  REGISTERS,
+  REGISTER_IDS,
+  REGISTER_RANGE,
+  TEMPOS,
   TEMPO_BPM,
   TEMPO_IDS,
-  TEMPOS,
-  defaultHookBars,
-  defaultPhrasing,
   parseGlobals,
   parsePlan,
-  resolveHookBars,
 } from './schema'
 
-const KEPT_TEMPO_BPM = {
-  largo: 50,
-  adagio: 66,
-  andante: 84,
-  moderato: 104,
-  allegro: 132,
-  presto: 168,
-} as const
+const bars = [
+  { chord: 'I', contour: 'arch' },
+  { chord: 'V', contour: 'rise' },
+  { chord: 'V7', contour: 'fall' },
+  { chord: 'I', contour: 'fall' },
+]
+
+const base = {
+  version: 2,
+  style: 'chopin',
+  register: 'high',
+  motion: 'flowing',
+  accompaniment: 'broken',
+  form: 'period',
+  key: 'Db_major',
+  meter: 'twelve_eight',
+  palette: 'chromatic_approach',
+  tempo: 'adagio',
+  dynamics: 'p',
+  dynamicShape: 'arch',
+  bars,
+}
 
 describe('TEMPOS', () => {
-  it('keeps the original six ids and BPMs', () => {
-    for (const [id, bpm] of Object.entries(KEPT_TEMPO_BPM)) {
-      expect(TEMPO_IDS).toContain(id)
-      expect(TEMPO_BPM[id as keyof typeof KEPT_TEMPO_BPM]).toBe(bpm)
-    }
-  })
-
-  it('adds the five Standard Tempo Category rungs at their midpoints', () => {
-    expect(TEMPO_BPM.larghissimo).toBe(16)
-    expect(TEMPO_BPM.grave).toBe(30)
-    expect(TEMPO_BPM.larghetto).toBe(63)
-    expect(TEMPO_BPM.vivace).toBe(160)
-    expect(TEMPO_BPM.prestissimo).toBe(208)
-  })
-
   it('lists slow → fast, matching TEMPO_BPM', () => {
-    expect(TEMPO_IDS).toEqual([
-      'larghissimo',
-      'grave',
-      'largo',
-      'larghetto',
-      'adagio',
-      'andante',
-      'moderato',
-      'allegro',
-      'vivace',
-      'presto',
-      'prestissimo',
-    ])
+    expect(TEMPO_IDS).toEqual(['larghissimo', 'grave', 'largo', 'larghetto', 'adagio', 'andante', 'moderato', 'allegro', 'vivace', 'presto', 'prestissimo'])
     const bpms = TEMPO_IDS.map((id) => TEMPO_BPM[id])
     expect(bpms).toEqual([...bpms].sort((a, b) => a - b))
     expect(Object.keys(TEMPOS)).toEqual(TEMPO_IDS)
   })
 })
 
-describe('PEDALS', () => {
-  it('is a closed three-level sustain Choice', () => {
-    expect(PEDAL_IDS).toEqual(['dry', 'half', 'full'])
-    expect(Object.keys(PEDALS)).toEqual(PEDAL_IDS)
+describe('the singing-line fields', () => {
+  it('are the three the old schema could not say, and lead the fan-out', () => {
+    expect(GLOBAL_FIELD_IDS.slice(0, 3)).toEqual(['register', 'motion', 'accompaniment'])
+    expect(GLOBAL_FIELDS.register).toBe(REGISTERS)
+    expect(GLOBAL_FIELDS.motion).toBe(MOTIONS)
+    expect(GLOBAL_FIELDS.accompaniment).toBe(ACCOMPANIMENTS)
   })
 
-  it('is a plan global, allowlisted and fanned out with the others', () => {
-    expect(GLOBAL_FIELD_IDS).toContain('pedal')
-    expect(GLOBAL_FIELDS.pedal).toBe(PEDALS)
-  })
-
-  it('defaults a hand-edited plan to half and accepts an explicit pick', () => {
-    const bars = [
-      { chord: 'I', role: 'statement', contour: 'arch' },
-      { chord: 'V', role: 'development', contour: 'rise' },
-      { chord: 'V7', role: 'half_cadence', contour: 'fall' },
-      { chord: 'I', role: 'cadence', contour: 'fall' },
-    ]
-    const base = {
-      version: 1,
-      style: 'bach',
-      character: 'playful_wit',
-      form: 'period',
-      key: 'C_major',
-      meter: 'four_four',
-      texture: 'two_voice_counterpoint',
-      palette: 'diatonic',
-      tempo: 'allegro',
-      dynamics: 'mf',
-      dynamicShape: 'terraced',
-      defaultInstrument: 'harpsichord',
-      bars,
+  it('gives every register a window, low to high, overlapping but distinct', () => {
+    expect(REGISTER_IDS).toEqual(['low', 'mid', 'high'])
+    const ranges = REGISTER_IDS.map((id) => REGISTER_RANGE[id])
+    for (const [lo, hi] of ranges) expect(hi).toBeGreaterThan(lo)
+    for (let k = 1; k < ranges.length; k++) {
+      expect(ranges[k][0], 'each register starts above the last').toBeGreaterThan(ranges[k - 1][0])
+      expect(ranges[k][1]).toBeGreaterThan(ranges[k - 1][1])
     }
-    expect(parseGlobals(base).pedal).toBe('half')
-    expect(parsePlan({ ...base, pedal: 'dry' }).pedal).toBe('dry')
-    expect(parsePlan({ ...base, pedal: 'full' }).pedal).toBe('full')
-    expect(() => parsePlan({ ...base, pedal: 'soft' })).toThrow(/pedal/)
+  })
+
+  it('orders motion strictly by attacks per beat', () => {
+    expect(MOTION_IDS).toEqual(['sustained', 'walking', 'flowing', 'florid'])
+    const rates = MOTION_IDS.map((id) => MOTION_RATE[id])
+    expect(rates).toEqual([...rates].sort((a, b) => a - b))
+    expect(new Set(rates).size).toBe(rates.length)
+  })
+
+  it('keeps five accompaniment patterns, of which only counterline is a peer', () => {
+    expect(ACCOMPANIMENT_IDS).toEqual(['sustained', 'broken', 'pulse', 'stride', 'counterline'])
   })
 })
 
-describe('PHRASINGS', () => {
-  it('is a closed four-way Choice, fanned out with the other globals', () => {
-    expect(PHRASING_IDS).toEqual(['on_the_beat', 'upbeat', 'breathing', 'long_breathed'])
-    expect(Object.keys(PHRASINGS)).toEqual(PHRASING_IDS)
-    expect(GLOBAL_FIELD_IDS).toContain('phrasing')
-    expect(GLOBAL_FIELDS.phrasing).toBe(PHRASINGS)
+describe('the schema only carries what changes notes', () => {
+  it('has dropped the labels that measurably did not', () => {
+    for (const dead of ['character', 'texture', 'arrangement', 'opening', 'pedal', 'phrasing', 'hookBars', 'defaultInstrument']) {
+      expect(GLOBAL_FIELD_IDS as readonly string[], `${dead} should be gone`).not.toContain(dead)
+    }
   })
 
-  it('defaults a hand-edited plan from character and accepts an explicit pick', () => {
-    const bars = [
-      { chord: 'I', role: 'statement', contour: 'arch' },
-      { chord: 'V', role: 'development', contour: 'rise' },
-      { chord: 'V7', role: 'half_cadence', contour: 'fall' },
-      { chord: 'I', role: 'cadence', contour: 'fall' },
-    ]
-    const lyrical = {
-      version: 1,
-      style: 'chopin',
-      character: 'lyrical_song',
-      form: 'period',
-      key: 'Eb_major',
-      meter: 'twelve_eight',
-      texture: 'rolling_nocturne',
-      palette: 'diatonic',
-      tempo: 'andante',
-      dynamics: 'p',
-      dynamicShape: 'arch',
-      defaultInstrument: 'grand_piano',
-      bars,
-    }
-    const storm = { ...lyrical, style: 'beethoven', character: 'stormy_drama', meter: 'four_four', texture: 'tremolo_storm' }
-    expect(defaultPhrasing('lyrical_song')).toBe('breathing')
-    expect(defaultPhrasing('stormy_drama')).toBe('on_the_beat')
-    expect(parseGlobals(lyrical).phrasing).toBe('breathing')
-    expect(parseGlobals(storm).phrasing).toBe('on_the_beat')
-    expect(parsePlan({ ...lyrical, phrasing: 'upbeat' }).phrasing).toBe('upbeat')
-    expect(parsePlan({ ...storm, phrasing: 'breathing' }).phrasing).toBe('breathing')
-    expect(() => parsePlan({ ...lyrical, phrasing: 'none' })).toThrow(/phrasing/)
+  it('no longer lets a bar carry a role that could contradict its form', () => {
+    const parsed = parsePlan({ ...base, bars: bars.map((bar) => ({ ...bar, role: 'climax' })) })
+    for (const bar of parsed.bars) expect(bar).not.toHaveProperty('role')
   })
 })
 
-describe('HOOK_BARS', () => {
-  it('is a closed 2 | 4 | 8 Choice, fanned out with the other globals', () => {
-    expect(HOOK_BARS_IDS).toEqual(['2', '4', '8'])
-    expect(Object.keys(HOOK_BARS)).toEqual(HOOK_BARS_IDS)
-    expect(GLOBAL_FIELD_IDS).toContain('hookBars')
-    expect(GLOBAL_FIELDS.hookBars).toBe(HOOK_BARS)
+describe('parsePlan', () => {
+  it('round-trips a well-formed plan and rejects a bad label', () => {
+    const parsed = parsePlan(base)
+    expect(parsed.version).toBe(2)
+    expect(parsed.register).toBe('high')
+    expect(parsed.motion).toBe('flowing')
+    expect(parsed.accompaniment).toBe('broken')
+    expect(() => parsePlan({ ...base, register: 'middle' })).toThrow(/register/)
+    expect(() => parsePlan({ ...base, motion: 'brisk' })).toThrow(/motion/)
+    expect(() => parsePlan({ ...base, accompaniment: 'alberti' })).toThrow(/accompaniment/)
   })
 
-  it('defaults a hand-edited plan from form and character, and accepts an explicit pick', () => {
-    const bars = [
-      { chord: 'I', role: 'statement', contour: 'arch' },
-      { chord: 'V', role: 'development', contour: 'rise' },
-      { chord: 'V7', role: 'half_cadence', contour: 'fall' },
-      { chord: 'I', role: 'cadence', contour: 'fall' },
-    ]
-    const loop = {
-      version: 1,
-      style: 'glass',
-      character: 'hypnotic_pulse',
-      form: 'additive_loop',
-      key: 'F_minor',
-      meter: 'four_four',
-      texture: 'minimal_cells',
-      palette: 'diatonic',
-      tempo: 'andante',
-      dynamics: 'mp',
-      dynamicShape: 'late_surge',
-      defaultInstrument: 'grand_piano',
-      bars,
-    }
-    const vamp = { ...loop, form: 'vamp_and_tag', character: 'warm_groove' }
-    const lyrical = { ...loop, style: 'chopin', character: 'lyrical_song', form: 'period', key: 'Eb_major' }
-    expect(defaultHookBars('hypnotic_pulse', 'additive_loop')).toBe('4')
-    expect(defaultHookBars('warm_groove', 'vamp_and_tag')).toBe('2')
-    expect(defaultHookBars('lyrical_song', 'period')).toBe('4')
-    expect(parseGlobals(loop).hookBars).toBe('4')
-    expect(parseGlobals(vamp).hookBars).toBe('2')
-    expect(parseGlobals(lyrical).hookBars).toBe('4')
-    expect(resolveHookBars(parsePlan({ ...loop, hookBars: '8' }))).toBe(8)
-    expect(parsePlan({ ...lyrical, hookBars: '2' }).hookBars).toBe('2')
-    expect(() => parsePlan({ ...loop, hookBars: '16' })).toThrow(/hookBars/)
+  it('requires the singing-line fields rather than defaulting them', () => {
+    const { register: _register, ...withoutRegister } = base
+    expect(() => parseGlobals(withoutRegister)).toThrow(/register/)
   })
 
   it('accepts 64-bar plans and rejects lengths outside BAR_COUNT_VALUES', () => {
     expect(BAR_COUNT_VALUES).toEqual([4, 8, 16, 32, 64])
-    const bar = { chord: 'I', role: 'statement', contour: 'arch' }
-    const base = {
-      version: 1,
-      style: 'bach',
-      character: 'playful_wit',
-      form: 'period',
-      key: 'C_major',
-      meter: 'four_four',
-      texture: 'two_voice_counterpoint',
-      palette: 'diatonic',
-      tempo: 'allegro',
-      dynamics: 'mf',
-      dynamicShape: 'terraced',
-      defaultInstrument: 'harpsichord',
-    }
-    expect(parsePlan({ ...base, bars: Array.from({ length: 64 }, () => bar) }).bars).toHaveLength(64)
-    expect(() => parsePlan({ ...base, bars: Array.from({ length: 48 }, () => bar) })).toThrow(/4, 8, 16, 32, 64/)
+    expect(parsePlan({ ...base, bars: Array.from({ length: 64 }, () => bars[0]) }).bars).toHaveLength(64)
+    expect(() => parsePlan({ ...base, bars: Array.from({ length: 48 }, () => bars[0]) })).toThrow(/4, 8, 16, 32, 64/)
+  })
+
+  it('takes an optional second harmony for the second half of a bar', () => {
+    const parsed = parsePlan({ ...base, bars: [{ chord: 'I64', chord2: 'V7', contour: 'arch' }, ...bars.slice(1)] })
+    expect(parsed.bars[0].chord2).toBe('V7')
+    expect(parsed.bars[1].chord2).toBeUndefined()
   })
 })

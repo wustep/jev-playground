@@ -5,8 +5,8 @@
 // Request/Response objects.
 //
 // It is deliberately NOT a generic passthrough: the body is a typed op from a
-// fixed allowlist (music: concept / globals / bar / phrase / score / notes; trolley:
-// cast / judge; inbox: triage; match: rank) that is re-validated against the enums, and the actual
+// fixed allowlist (music: globals / phrase / score; trolley: cast / judge;
+// inbox: triage; match: rank) that is re-validated against the enums, and the actual
 // state/questions are rebuilt here. A stranger with the URL can only ask this
 // app's questions — and only so many per minute (server/rateLimit.ts).
 //

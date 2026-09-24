@@ -4,37 +4,36 @@
 // and so there is a baseline to compare Jev's choices against.
 //
 // The order of decisions mirrors JevPlanner's:
-//   1. character  — which kind of piece (one of the style's archetypes)
-//   2. globals    — form, key, meter, texture … from that archetype's priors
-//   3. bars       — roles from the form; chords assembled from the style's
-//                   harmony book by the form's phrase slots; contours per bar.
-//                   Shadow requests are one phrase Choice per slot (same as Jev).
+//   1. globals — register, motion, accompaniment first (they decide the most),
+//                then form, key, meter, palette, tempo, dynamics
+//   2. bars    — chords assembled from the style's harmony book by the form's
+//                phrase slots; one contour per bar. Shadow requests are one
+//                phrase Choice per slot, the same as Jev's.
+//
+// The stub privately picks one of the style's `variants` — a nocturne, a
+// waltz, a ballade — and samples that variant's priors. The variant is not a
+// plan field: it never reaches the renderer, and Jev is never asked for it.
 
 import {
-  BAR_ROLE_IDS,
-  CHARACTER_IDS,
   CHORD_IDS,
   CONTOUR_IDS,
   GLOBAL_FIELDS,
   GLOBAL_FIELD_IDS,
+  parseGlobals,
   type BarCount,
   type BarPlan,
-  type BarRoleId,
-  type CharacterId,
   type ChordId,
   type CompositionPlan,
   type ContourId,
-  type FormId,
   type GlobalField,
   type MatchLevel,
-  type PlanGlobals,
   type StyleId,
   type StyleMatchScore,
-  hookBarsValue,
 } from '../plan/schema'
-import { formSlots, themeSources, type PhraseSlot } from '../plan/forms'
+import { BARS_PER_PHRASE, barPositions, formSlots, type BarPosition, type BarRole, type PhraseSlot } from '../plan/phrase'
+import { approachesInto, bookFor, splitBarOf } from '../plan/harmonyPhrases'
 import { rootDegree } from '../render/harmony'
-import { STYLE_PROFILES, styleVocabulary, type HarmonyBook, type StylePriors, type StyleProfile, type Weights } from '../plan/styles'
+import { STYLE_PROFILES, styleVocabulary, type HarmonyBook, type StylePriors, type StyleProfile, type Variant, type Weights } from '../plan/styles'
 import type { Decision, Exchange, PlanInput, PlanOptions, PlanResult, Planner, ScoreResult } from './Planner'
 import { decision, normalize, pickFrom, rng } from './pick'
 import { buildRequest, type JevOp } from './jev/requests'
@@ -48,22 +47,21 @@ const unsent = (label: string, op: JevOp): Exchange => ({ label, op, request: bu
 export function shadowExchanges(plan: CompositionPlan, brief: boolean): Exchange[] {
   const { version: _version, style, bars, ...globals } = plan
   const barCount = bars.length as BarCount
-  const slotCount = barCount / 4
   return [
-    unsent('character', { op: 'concept', style, brief }),
-    unsent('globals + form', { op: 'globals', style, brief, character: plan.character }),
-    ...Array.from({ length: slotCount }, (_, slotIndex) =>
-      unsent(`phrase ${slotIndex + 1}`, {
+    unsent('globals', { op: 'globals', style, brief }),
+    ...formSlots(plan.form, barCount).map((_, slotIndex) => {
+      const before = bars.slice(0, slotIndex * BARS_PER_PHRASE)
+      return unsent(`phrase ${slotIndex + 1}`, {
         op: 'phrase',
         style,
         brief,
         globals,
         barCount,
         slotIndex,
-        chords: bars.slice(0, slotIndex * 4).map((bar) => bar.chord),
-        contours: bars.slice(0, slotIndex * 4).map((bar) => bar.contour),
-      }),
-    ),
+        chords: before.map((bar) => bar.chord),
+        contours: before.map((bar) => bar.contour),
+      })
+    }),
   ]
 }
 
@@ -78,26 +76,29 @@ function withFloor<K extends string>(options: readonly K[], weights: Weights<K>)
 /** Options a prior actually names: the only ones the stub will pick. */
 const authored = <K extends string>(weights: Weights<K>) => (Object.keys(weights) as K[]).filter((k) => (weights[k] ?? 0) > 0)
 
-const CONTOUR_BY_ROLE: Partial<Record<BarRoleId, Weights<ContourId>>> = {
+const CONTOUR_BY_ROLE: Partial<Record<BarRole, Weights<ContourId>>> = {
   statement: { leap_fall: 1.3, arch: 1.2 },
-  climax: { rise: 2.5, arch: 1.5, leap_fall: 1.6, fall: 0.4, static: 0.3, dip: 0.4 },
-  cadence: { fall: 3, static: 1.5, leap_fall: 1.2, rise: 0.3, pendulum: 0.3, wave: 0.5 },
+  climax: { rise: 2.5, arch: 1.5, leap_fall: 1.6, fall: 0.4, dip: 0.4 },
+  cadence: { fall: 3, leap_fall: 1.2, rise: 0.3, wave: 0.5 },
   half_cadence: { rise: 1.5, dip: 1.3, fall: 0.7 },
-  contrast: { dip: 1.6, drop_rise: 1.6, fall: 1.3 },
-  development: { rise: 1.4, wave: 1.4, pendulum: 1.3, arch: 1.2, static: 0.5 },
-  surprise: { drop_rise: 1.8, leap_fall: 1.6, static: 0.5 },
-  dissolve: { fall: 2.5, static: 1.8, rise: 0.4, pendulum: 0.3 },
+  contrast: { dip: 1.6, fall: 1.3 },
+  sequence: { rise: 1.4, wave: 1.4, arch: 1.2 },
+  continuation: { wave: 1.3, arch: 1.2 },
 }
 
-export const isMinorKey = (key: string) => key.endsWith('_minor')
-
-/** The priors in force for one archetype: the style's base, overridden field by field. */
-export function effectivePriors(profile: StyleProfile, character: CharacterId): StylePriors {
-  return { ...profile.priors, ...(profile.archetypes[character]?.priors ?? {}) }
+/** The priors in force for one variant: the style's base, overridden field by field. */
+export function effectivePriors(profile: StyleProfile, variant: Variant | undefined): StylePriors {
+  return { ...profile.priors, ...(variant?.priors ?? {}) }
 }
 
-function archetypeWeights(profile: StyleProfile): Weights<CharacterId> {
-  return Object.fromEntries(Object.entries(profile.archetypes).map(([character, archetype]) => [character, archetype.weight])) as Weights<CharacterId>
+/** One of the style's kinds of piece, drawn by weight. Never leaves this file's process. */
+function pickVariant(profile: StyleProfile, sample: boolean, random: () => number): Variant | undefined {
+  if (!profile.variants.length) return undefined
+  if (!sample) return profile.variants.reduce((best, v) => (v.weight > best.weight ? v : best))
+  const total = profile.variants.reduce((sum, v) => sum + v.weight, 0)
+  let at = random() * total
+  for (const variant of profile.variants) if ((at -= variant.weight) <= 0) return variant
+  return profile.variants[profile.variants.length - 1]
 }
 
 // ── harmony from the form's phrase slots ────────────────────────────────────
@@ -111,12 +112,26 @@ interface Harmony {
 }
 
 /** Bars whose harmony must not be held over from the bar before: they are the phrase's punctuation. */
-const PUNCTUATION: ReadonlySet<BarRoleId> = new Set<BarRoleId>(['half_cadence', 'cadence', 'surprise'])
+const PUNCTUATION: ReadonlySet<BarRole> = new Set<BarRole>(['half_cadence', 'cadence'])
 
-function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds: boolean, sample: boolean, random: () => number): Harmony {
+/**
+ * Which idea a phrase is a statement of. A phrase that returns shares its
+ * source's harmonic head, which is what makes the return sound like one.
+ */
+const ideaOf = (slots: readonly PhraseSlot[], index: number): number => {
+  let at = index
+  const seen = new Set<number>()
+  while (slots[at]?.returnsFrom !== undefined && !seen.has(at)) {
+    seen.add(at)
+    at = slots[at].returnsFrom!
+  }
+  return at
+}
+
+function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], positions: readonly BarPosition[], holds: boolean, sample: boolean, random: () => number): Harmony {
   const chords: ChordId[] = []
   const candidates: ChordId[][] = []
-  const heads = new Map<PhraseSlot['material'], readonly ChordId[]>()
+  const heads = new Map<number, readonly ChordId[]>()
   // Long harmonic rhythm, where the style has it. Decided once per piece so a
   // piece is consistent with itself: its opening idea sits on one chord for
   // two bars, and its chord cycle moves at half speed — each chord two bars,
@@ -155,40 +170,40 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
       const alternatives = book.subs[chord]
       return sample && alternatives?.length && random() < 0.45 ? alternatives[Math.floor(random() * alternatives.length)] : chord
     })
-  const headFor = (slot: PhraseSlot) => {
-    const known = heads.get(slot.material)
+  const headFor = (slot: PhraseSlot, at: number) => {
+    const known = heads.get(ideaOf(slots, at))
     if (known) return { unit: slot.varied ? vary(known) : known, pool: [known] }
     const picked = pickUnit(book.heads, last())
     // A held head: the opening chord for both bars, unless the second bar is the phrase's punctuation.
-    const held = holdHeads && !PUNCTUATION.has(slot.roles[1]) && picked.unit[0] !== picked.unit[1]
+    const held = holdHeads && !PUNCTUATION.has(positions[at * 4 + 1]?.role ?? 'continuation') && picked.unit[0] !== picked.unit[1]
     const unit: readonly ChordId[] = held ? [picked.unit[0], picked.unit[0]] : picked.unit
-    heads.set(slot.material, unit)
+    heads.set(ideaOf(slots, at), unit)
     return { unit, pool: held ? [unit, ...picked.pool] : picked.pool }
   }
   const tailFor = (slot: PhraseSlot) => pickUnit(book.tails[slot.end].length ? book.tails[slot.end] : book.tails.open, last())
 
-  for (const slot of slots) {
+  for (const [at, slot] of slots.entries()) {
     switch (slot.build) {
       case 'head_tail': {
         const whole = book.phrases[slot.end]
         // First appearance of an idea may be a whole phrase lifted from the repertoire.
-        if (!heads.has(slot.material) && whole.length && (!sample || random() < 0.5)) {
+        if (!heads.has(ideaOf(slots, at)) && whole.length && (!sample || random() < 0.5)) {
           const picked = pickUnit(whole, last())
           // A holding piece lets the phrase's opening chord sit through its second bar as well.
-          const held = holdHeads && !PUNCTUATION.has(slot.roles[1]) && picked.unit[0] !== picked.unit[1]
+          const held = holdHeads && !PUNCTUATION.has(positions[at * 4 + 1]?.role ?? 'continuation') && picked.unit[0] !== picked.unit[1]
           const phrase: readonly ChordId[] = held ? [picked.unit[0], picked.unit[0], picked.unit[2], picked.unit[3]] : picked.unit
-          heads.set(slot.material, phrase.slice(0, 2))
+          heads.set(ideaOf(slots, at), phrase.slice(0, 2))
           push(phrase, held ? [phrase, ...picked.pool] : picked.pool)
           break
         }
-        const head = headFor(slot)
+        const head = headFor(slot, at)
         push(head.unit, head.pool)
         const tail = tailFor(slot)
         push(tail.unit, tail.pool)
         break
       }
       case 'head_seq': {
-        const head = headFor(slot)
+        const head = headFor(slot, at)
         push(head.unit, head.pool)
         const seq = pickUnit(book.seqs, last())
         push(seq.unit, seq.pool)
@@ -209,13 +224,12 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
         break
       }
       case 'duplicate': {
-        const head = headFor(slot)
+        const head = headFor(slot, at)
         push(head.unit, head.pool)
-        push(vary(heads.get(slot.material) ?? head.unit), [head.unit])
+        push(vary(heads.get(ideaOf(slots, at)) ?? head.unit), [head.unit])
         break
       }
       case 'loop': {
-        const at = slots.indexOf(slot)
         const middle = at >= Math.floor(slots.length / 2) && at < slots.length - 1
         const loop = middle ? loopB : loopA
         if (at === Math.floor(slots.length / 2) || at === slots.length - 1) loopAt = 0 // a new section starts its cycle from the top
@@ -246,7 +260,7 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
           const picked = pickUnit(book.codas, last())
           push(picked.unit, picked.pool)
         } else {
-          const head = headFor(slot)
+          const head = headFor(slot, at)
           push(head.unit, head.pool)
           const tail = pickUnit(book.tails.closed, last())
           push(tail.unit, tail.pool)
@@ -256,16 +270,15 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
     }
   }
 
-  // Role-driven touches: a `surprise` bar reaches outside the key …
-  slots.forEach((slot, s) =>
-    slot.roles.forEach((role, k) => {
-      const bar = s * 4 + k
-      if (role !== 'surprise' || bar === 0 || bar === chords.length - 1 || !book.surprises.length) return
-      candidates[bar] = [...new Set([chords[bar], ...book.surprises])]
-      if (sample ? random() < 0.75 : true) chords[bar] = sample ? book.surprises[Math.floor(random() * book.surprises.length)] : book.surprises[0]
-    }),
-  )
-  // … and the piece ends on one of the style's finals (an added-sixth tonic, a Picardy third, a bare six-four).
+  // A departing phrase reaches outside the key on its second bar: the colour
+  // that makes a middle section feel like somewhere else.
+  slots.forEach((slot, s) => {
+    const bar = s * 4 + 1
+    if (slot.returnsFrom !== undefined || slot.build !== 'seq_seq' || bar >= chords.length - 1 || !book.surprises.length) return
+    candidates[bar] = [...new Set([chords[bar], ...book.surprises])]
+    if (sample ? random() < 0.6 : true) chords[bar] = sample ? book.surprises[Math.floor(random() * book.surprises.length)] : book.surprises[0]
+  })
+  // The piece ends on one of the style's finals (an added-sixth tonic, a Picardy third, a bare six-four).
   const end = chords.length - 1
   if (!book.finals.includes(chords[end]) || (sample && random() < 0.5)) {
     candidates[end] = [...new Set([chords[end], ...book.finals])]
@@ -277,12 +290,10 @@ function assembleHarmony(book: HarmonyBook, slots: readonly PhraseSlot[], holds:
   // I6/4–V), so cadences move at the pace of the repertoire, not the barline.
   const seconds: (ChordId | undefined)[] = chords.map(() => undefined)
   slots.forEach((slot, s) => {
-    if (!book.splits.length) return
-    // A half cadence splits its own bar (I6/4 | V); a phrase that closes, or runs on, splits the bar before its arrival.
-    const at = slot.end === 'half' ? s * 4 + 3 : s * 4 + 2
+    const at = splitBarOf(slot, s)
     if (at >= end) return
     const arrival = chords[at]
-    const options = book.splits.filter(([approach, target]) => target === arrival && approach !== chords[at - 1])
+    const options = approachesInto(book, chords, at)
     if (!options.length || (sample && random() >= 0.7)) return
     const [approach] = sample ? options[Math.floor(random() * options.length)] : options[0]
     candidates[at] = [...new Set([approach, ...options.map(([first]) => first), arrival])]
@@ -326,55 +337,56 @@ export class HeuristicPlanner implements Planner {
       options?.onProgress?.([...decisions])
     }
 
-    // 1 ─ which kind of piece
-    const characters = archetypeWeights(profile)
-    const characterProbabilities = withFloor(CHARACTER_IDS, characters)
-    const character = pickFrom(characterProbabilities, input.pick, random, authored(characters))
-    emit(decision('character', character, characterProbabilities))
-    const priors = effectivePriors(profile, character)
+    // 1 ─ which kind of piece. Private to the stub: `variant` is not a plan
+    //     field, so it is recorded in the trace and goes no further.
+    const variant = pickVariant(profile, sample, random)
+    if (variant) {
+      const weights = Object.fromEntries(profile.variants.map((v) => [v.name, v.weight]))
+      emit(decision('variant', variant.name, normalize(weights)))
+    }
+    const priors = effectivePriors(profile, variant)
 
-    // 2 ─ globals, from that archetype's priors
-    const globals = { character } as Record<GlobalField, string>
+    // 2 ─ globals. Register, motion and accompaniment come first because they
+    //     decide the most about what the piece will sound like.
+    const picked = {} as Record<GlobalField, string>
     for (const field of GLOBAL_FIELD_IDS) {
-      if (field === 'character') continue
       const weights = priors[field] as Weights<string>
       const probabilities = withFloor(Object.keys(GLOBAL_FIELDS[field]), weights)
-      globals[field] = pickFrom(probabilities, input.pick, random, authored(weights))
-      emit(decision(field, globals[field], probabilities))
+      picked[field] = pickFrom(probabilities, input.pick, random, authored(weights))
+      emit(decision(field, picked[field], probabilities))
     }
+    // Drawn from each field's own table, so this only hands them back typed.
+    const globals = parseGlobals(picked, 'stub')
 
     const barCount: BarCount = input.bars
 
-    // 3 ─ bars: the form gives the roles and says how to assemble the harmony
-    const hook = hookBarsValue((globals as PlanGlobals).hookBars ?? '4')
-    const slots = formSlots(globals.form as FormId, barCount, hook)
-    const roles = slots.flatMap((slot) => [...slot.roles])
-    const returns = themeSources(globals.form as FormId, barCount, hook)
-    const book = profile.harmony[isMinorKey(globals.key) ? 'minor' : 'major']
-    let harmony = assembleHarmony(book, slots, profile.holds, sample, random)
+    // 3 ─ bars: the form says how to assemble the harmony; one contour each
+    const slots = formSlots(globals.form, barCount)
+    const positions = barPositions(globals.form, barCount)
+    const book = bookFor(input.style, globals.key)
+    let harmony = assembleHarmony(book, slots, positions, profile.holds, sample, random)
     for (let attempt = 0; sample && attempt < 8 && hasPopLoop(harmony.chords); attempt++) {
-      harmony = assembleHarmony(book, slots, profile.holds, sample, random)
+      harmony = assembleHarmony(book, slots, positions, profile.holds, sample, random)
     }
 
     const bars: BarPlan[] = []
     for (let i = 0; i < barCount; i++) {
-      const role = roles[i]
+      const position = positions[i]
       const chord = harmony.chords[i]
       const previous = bars[i - 1]
       let contour: ContourId
       let contourProbabilities: Record<ContourId, number>
-      const source = returns[i]
-      if (source !== undefined) {
-        // A returning bar IS the earlier bar's tune (the form's returning phrases): same shape.
-        contour = bars[source].contour
+      if (position.returnsFrom !== undefined && bars[position.returnsFrom]) {
+        // A returning bar IS the earlier bar's tune: the same shape.
+        contour = bars[position.returnsFrom].contour
         contourProbabilities = distributionOf(CONTOUR_IDS, [contour])
-      } else if (previous && (role === 'sequence' || role === 'echo')) {
-        // A sequence or an echo IS the previous figure: same shape, new chord or new dynamic.
+      } else if (previous && position.role === 'sequence') {
+        // A sequence IS the previous figure on a new harmony: the same shape.
         contour = previous.contour
         contourProbabilities = distributionOf(CONTOUR_IDS, [contour])
       } else {
         const weights = withFloor(CONTOUR_IDS, priors.contour)
-        const bias = CONTOUR_BY_ROLE[role] ?? {}
+        const bias = CONTOUR_BY_ROLE[position.role] ?? {}
         for (const id of CONTOUR_IDS) weights[id] *= bias[id] ?? 1
         // Three bars of the same shape in a row is a machine talking.
         if (previous && bars[i - 2]?.contour === previous.contour) weights[previous.contour] *= 0.2
@@ -382,14 +394,13 @@ export class HeuristicPlanner implements Planner {
         contour = pickFrom(contourProbabilities, input.pick, random)
       }
       const chord2 = harmony.seconds[i]
-      bars.push(chord2 ? { chord, chord2, role, contour } : { chord, role, contour })
-      emit(decision(`bars[${i}].role`, role, distributionOf(BAR_ROLE_IDS, [role]), 1))
+      bars.push(chord2 ? { chord, chord2, contour } : { chord, contour })
       emit(decision(`bars[${i}].chord`, chord, distributionOf(CHORD_IDS, harmony.candidates[i])))
       if (chord2) emit(decision(`bars[${i}].chord2`, chord2, distributionOf(CHORD_IDS, [chord2]), 1))
       emit(decision(`bars[${i}].contour`, contour, contourProbabilities))
     }
 
-    const plan: CompositionPlan = { version: 1, style: input.style, ...(globals as PlanGlobals), bars }
+    const plan: CompositionPlan = { version: 2, style: input.style, ...globals, bars }
     const exchanges = shadowExchanges(plan, input.brief)
     return {
       plan,
@@ -420,31 +431,27 @@ export class HeuristicPlanner implements Planner {
   }
 }
 
+/** The three that decide the sound weigh most; the rest colour it. */
 const FIELD_WEIGHT: Record<GlobalField, number> = {
-  texture: 3,
-  character: 1.5,
+  accompaniment: 3,
+  motion: 2.5,
+  register: 2.5,
   palette: 1.5,
   form: 1,
-  defaultInstrument: 1,
   tempo: 1,
   dynamics: 1,
   dynamicShape: 1,
   key: 0.75,
   meter: 0.5,
-  arrangement: 0.75,
-  opening: 0.5,
-  pedal: 0.75,
-  phrasing: 0.75,
-  hookBars: 0.75,
 }
 
 /** 0–1: how typical the plan's globals are for one of the style's kinds of piece. */
-function globalsFit(plan: CompositionPlan, profile: StyleProfile, character: CharacterId): number {
-  const priors = effectivePriors(profile, character)
+function globalsFit(plan: CompositionPlan, profile: StyleProfile, variant: Variant | undefined): number {
+  const priors = effectivePriors(profile, variant)
   let weighted = 0
   let totalWeight = 0
   for (const field of GLOBAL_FIELD_IDS) {
-    const prior = (field === 'character' ? archetypeWeights(profile) : priors[field]) as Weights<string>
+    const prior = priors[field] as Weights<string>
     const peak = Math.max(...Object.values(prior).map((w) => w ?? 0), 1)
     const chosen = plan[field]
     weighted += FIELD_WEIGHT[field] * Math.min(1, (chosen ? (prior[chosen] ?? 0) : 0) / peak)
@@ -454,9 +461,8 @@ function globalsFit(plan: CompositionPlan, profile: StyleProfile, character: Cha
 }
 
 function heuristicMatch(plan: CompositionPlan, profile: StyleProfile): StyleMatchScore {
-  // Judge the plan as the kind of piece it says it is, if the style writes that kind; else as the closest kind it does write.
-  const kinds = profile.archetypes[plan.character] ? [plan.character] : (Object.keys(profile.archetypes) as CharacterId[])
-  const globals = Math.max(...kinds.map((character) => globalsFit(plan, profile, character)))
+  // Judge the plan as the closest kind of piece this style actually writes.
+  const globals = Math.max(...(profile.variants.length ? profile.variants : [undefined]).map((variant) => globalsFit(plan, profile, variant)))
   const vocabulary = styleVocabulary(profile)
   const chordFit = plan.bars.filter((bar) => vocabulary.has(bar.chord)).length / plan.bars.length
   const fit = 0.7 * globals + 0.3 * chordFit

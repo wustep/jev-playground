@@ -2,7 +2,7 @@
 // that looks most like the target style (and least like the others) *and*
 // most like a song rather than an étude.
 //
-// Jev plan × N is too expensive (~18 POSTs each). Heuristic plan is free;
+// Jev plan × N is too expensive (5 POSTs each at 16 bars, 17 at 64). Heuristic plan is free;
 // Jev `score` is one request per candidate (style `match_*` + `song_quality`
 // on the same POST). Five score POSTs stay well under the 90/min budget.
 //

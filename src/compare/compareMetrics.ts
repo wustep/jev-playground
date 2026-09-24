@@ -148,7 +148,9 @@ export function skyline(voices: Voice[]): SkyEvent[] {
   const events: SkyEvent[] = []
   for (const voice of voices) {
     for (const note of voice) {
-      if (!note.pitches.length) continue
+      // A note tied over the barline is not an attack in this bar, just as a
+      // reference MIDI note held over a barline is not an event in the next.
+      if (!note.pitches.length || note.tied) continue
       const midis = note.pitches.map((p) => midiOf(p))
       const top = Math.max(...midis)
       events.push({ start: note.start, dur: note.dur, midi: top, pc: ((top % 12) + 12) % 12 })
@@ -228,53 +230,37 @@ export function leaps(midis: number[]): { mean: number; max: number; overP4: num
   }
 }
 
-/** True when a later body bar splits the treble into singing + inner/roll. */
-export function scoreHasSplitTreble(score: Score): boolean {
-  return score.bars.slice(score.introBars ?? 0).some((bar) => bar.treble.length >= 2)
-}
-
-export function firstSplitTrebleBar(score: Score): Bar | undefined {
-  return score.bars.slice(score.introBars ?? 0).find((bar) => bar.treble.length >= 2)
-}
-
-function meanMidi(voices: Voice[]): number | null {
-  const events = skyline(voices)
-  if (!events.length) return null
-  return events.reduce((sum, event) => sum + event.midi, 0) / events.length
-}
-
 /**
- * Opening tacet: the only treble voice is the same roll that later sits under
- * a sung line (`rolling_nocturne` bar 0). Not every 1-voice bar — a late
- * doubled climax must not erase Bach's figure or a Guide overlay on that bar.
+ * The melody, with no guessing required.
+ *
+ * This used to be a page of heuristics — is this bar's single treble voice a
+ * tune or the accompaniment roll that a later bar puts a tune above? — because
+ * the renderer wrote melody and accompaniment together and nothing recorded
+ * which was which. `treble[0]` is now the singing line by construction
+ * (src/render/renderPlan.ts writes it there, first, before anything
+ * accompanies it), so the metric reads it instead of inferring it. A metric
+ * that has to guess at its own subject will eventually guess wrong, and this
+ * one did: it reported a left-hand skyline as a melody.
  */
-export function isTacetAccompanimentBar(bar: Bar, firstSplit?: Bar): boolean {
-  const inner = firstSplit?.treble[1]
-  if (bar.treble.length >= 2 || !bar.treble[0]?.length || !inner?.length) return false
-  if (firstSplit && bar.index >= firstSplit.index) return false
-  // The roll fills the bar; an overlaid / figure-as-tune line is a handful of notes.
-  if (bar.treble[0].length < 6) return false
-  const topMean = meanMidi([bar.treble[0]])
-  const innerMean = meanMidi([inner])
-  if (topMean == null || innerMean == null) return false
-  return Math.abs(topMean - innerMean) <= 4
-}
-
-/**
- * Singing / top melody voice after overlay rules.
- * Two treble voices → `treble[0]` is the sung line (chordal skyline = top pitch).
- * One treble voice that matches a later inner roll → accompaniment-only tacet.
- * Otherwise the single voice *is* the figure / chorale / overlaid tune.
- */
-export function singingVoices(bar: Bar, firstSplit?: Bar): Voice[] {
-  if (bar.treble.length >= 2) return bar.treble[0] ? [bar.treble[0]] : []
-  if (isTacetAccompanimentBar(bar, firstSplit)) return []
-  return bar.treble[0] ? [bar.treble[0]] : []
+export function melodyOfBar(bar: Bar): Voice[] {
+  return bar.treble[0]?.length ? [bar.treble[0]] : []
 }
 
 export function accompanimentOfBar(bar: Bar): Voice[] {
-  const inner = bar.treble.length >= 2 ? bar.treble.slice(1) : []
-  return [...inner, ...bar.bass]
+  return [...bar.treble.slice(1), ...bar.bass]
+}
+
+/** Bars where something under the tune reaches up to or past its lowest note. */
+export function ceilingBreaches(score: Score): number {
+  let breaches = 0
+  for (const bar of score.bars) {
+    const melody = melodyOfBar(bar).flat().flatMap((note) => note.pitches.map(midiOf))
+    if (!melody.length) continue
+    const floor = Math.min(...melody)
+    const under = accompanimentOfBar(bar).flat().flatMap((note) => note.pitches.map(midiOf))
+    if (under.some((midi) => midi >= floor)) breaches += 1
+  }
+  return breaches
 }
 
 export function isPickupOnlyBar(events: { start: number }[], ticksPerBar: number, beatTicks: number): boolean {
@@ -339,7 +325,30 @@ function rowsFromEvents(
   }))
 }
 
-function skylineFromOnsets(onsets: { start: number; dur: number; midi: number }[]): SkyEvent[] {
+/**
+ * The top voice of a MIDI staff: one event per attack, and only attacks with
+ * nothing higher still sounding over them.
+ *
+ * Collapsing simultaneous notes is not enough. A Mutopia upper-staff track
+ * often carries the tune AND an inner accompaniment under it — Op. 13 II's
+ * murmuring sixteenths, Op. 27/2's triplets — and an inner note struck
+ * beneath a held melody note is not melody. Counting those made Op. 13 II
+ * look like 10.9 melody onsets a bar when the tune attacks 3.2 times, and
+ * pulled its register down toward the inner voice.
+ */
+/**
+ * The naive both-hands skyline: the top note of each attack, nothing more.
+ * Kept only for `combinedSkyline`, which exists to show how far this view
+ * drifts from the real melody — it is the measurement that lied.
+ */
+function naiveSkyline(onsets: readonly { start: number; dur: number; midi: number }[]): SkyEvent[] {
+  const events = onsets
+    .map((n) => ({ start: n.start, dur: n.dur, midi: n.midi, pc: ((n.midi % 12) + 12) % 12 }))
+    .sort((a, b) => a.start - b.start || b.midi - a.midi)
+  return events.filter((event, i) => i === 0 || events[i - 1].start !== event.start)
+}
+
+export function topVoice(onsets: readonly { start: number; dur: number; midi: number }[]): SkyEvent[] {
   const events = onsets
     .map((n) => ({ start: n.start, dur: n.dur, midi: n.midi, pc: ((n.midi % 12) + 12) % 12 }))
     .sort((a, b) => a.start - b.start || b.midi - a.midi)
@@ -347,6 +356,8 @@ function skylineFromOnsets(onsets: { start: number; dur: number; midi: number }[
   for (const event of events) {
     const last = sky[sky.length - 1]
     if (last && last.start === event.start) continue
+    const covered = events.some((other) => other.start < event.start && other.start + other.dur > event.start && other.midi > event.midi)
+    if (covered) continue
     sky.push(event)
   }
   return sky
@@ -392,6 +403,9 @@ function summarizeRows(rows: MelodyBarRow[]) {
   const bassReturn = rows.slice(8, 12).reduce((n, row) => n + (row.bassOnsets ?? 0), 0) / Math.max(1, rows.slice(8, 12).length)
   const onsetEarly = rows.slice(0, 4).reduce((n, row) => n + row.onsets, 0) / Math.max(1, Math.min(4, rows.length))
   const onsetReturn = rows.slice(8, 12).reduce((n, row) => n + row.onsets, 0) / Math.max(1, rows.slice(8, 12).length)
+  // Over every measured bar. The early figure alone swings with where the
+  // first cadence falls, which is a fact about the form, not the line.
+  const onsetMean = rows.reduce((n, row) => n + row.onsets, 0) / Math.max(1, rows.length)
   return {
     barsMeasured: rows.length,
     silentBeatPct: totalBeats ? Number((silentBeats / totalBeats).toFixed(3)) : 0,
@@ -408,14 +422,15 @@ function summarizeRows(rows: MelodyBarRow[]) {
     bassOnsetsReturn: Number(bassReturn.toFixed(2)),
     onsetDensityEarly: Number(onsetEarly.toFixed(2)),
     onsetDensityReturn: Number(onsetReturn.toFixed(2)),
+    onsetDensityMean: Number(onsetMean.toFixed(2)),
   }
 }
 
-function chordToneRate(score: Score, firstSplit?: Bar): number {
+function chordToneRate(score: Score): number {
   const key = keyInfo(score.plan.key)
   let tones = 0
   let n = 0
-  for (const bar of score.bars.slice(score.introBars)) {
+  for (const bar of score.bars.slice(0)) {
     const chord = resolveChord(key, bar.plan.chord)
     const chord2 = bar.plan.chord2 ? resolveChord(key, bar.plan.chord2) : undefined
     const split = bar.split?.tick ?? score.meter.splitTick
@@ -426,7 +441,7 @@ function chordToneRate(score: Score, firstSplit?: Bar): number {
     }
     const primary = pcsOf(chord)
     const secondary = chord2 ? pcsOf(chord2) : primary
-    for (const event of skyline(singingVoices(bar, firstSplit))) {
+    for (const event of skyline(melodyOfBar(bar))) {
       n += 1
       const set = event.start >= split ? secondary : primary
       if (set.has(event.midi % 12)) tones += 1
@@ -435,33 +450,20 @@ function chordToneRate(score: Score, firstSplit?: Bar): number {
   return n ? Number((tones / n).toFixed(3)) : 0
 }
 
-export function bassFingerprint(score: Score): string {
-  return score.bars
-    .map((bar) =>
-      bar.bass
-        .flat()
-        .map((note) => `${note.start}:${note.dur}:${note.pitches.join(',')}`)
-        .join('|'),
-    )
-    .join('/')
-}
-
 export function innerRhCount(score: Score): number {
   return score.bars.reduce((n, bar) => n + bar.treble.slice(1).reduce((m, v) => m + v.length, 0), 0)
 }
 
 export function scoreMetrics(score: Score) {
-  const body = score.bars.slice(score.introBars)
+  const body = score.bars.slice(0)
   const meter = score.meter
-  const splitTreble = scoreHasSplitTreble(score)
-  const firstSplit = firstSplitTrebleBar(score)
   const melodyRows = rowsFromEvents(
     body.map((bar) => {
-      const voices = singingVoices(bar, firstSplit)
+      const voices = melodyOfBar(bar)
       const events = skyline(voices)
       return {
         events,
-        onsets: voices.reduce((n, voice) => n + voice.filter((note) => note.pitches.length).length, 0),
+        onsets: voices.reduce((n, voice) => n + voice.filter((note) => note.pitches.length && !note.tied).length, 0),
         bassOnsets: bar.bass.flat().filter((n) => n.pitches.length).length,
       }
     }),
@@ -494,11 +496,11 @@ export function scoreMetrics(score: Score) {
   return {
     ...melody,
     meter: meter.id,
-    chordToneRate: chordToneRate(score, firstSplit),
-    introBars: score.introBars,
+    chordToneRate: chordToneRate(score),
     innerRhNotes: innerRhCount(score),
-    voice: 'singing-treble' as const,
-    splitTreble,
+    /** Bars where the accompaniment reaches the tune. Should always be 0. */
+    ceilingBreaches: ceilingBreaches(score),
+    voice: 'melody-voice' as const,
     thematicStartBar,
     thematicStartReason: thematicStartBar === 0 ? 'bar-0-is-theme' : 'skipped-leading-silence-or-pickup',
     combinedSkyline: {
@@ -525,13 +527,15 @@ function midiBarOnsets(
   start: number,
   barsWanted: number,
   ticksPerBar: number,
+  line: (onsets: { start: number; dur: number; midi: number }[]) => SkyEvent[] = topVoice,
 ) {
   const bars = []
   for (let i = 0; i < barsWanted; i++) {
     const barStart = start + i * ticksPerBar
     const inBar = notes.filter((n) => n.ticks >= barStart && n.ticks < barStart + ticksPerBar)
     const raw = inBar.map((n) => ({ start: n.ticks - barStart, dur: n.durationTicks, midi: n.midi }))
-    bars.push({ events: skylineFromOnsets(raw), onsets: raw.length })
+    const events = line(raw)
+    bars.push({ events, onsets: events.length })
   }
   return bars
 }
@@ -569,7 +573,7 @@ export function midiMetrics(path: string, barsWanted = 16) {
   const accompBars = midiBarOnsets(hands.accompaniment?.notes ?? [], align.start, load, ticksPerBar)
   const allNotes = tracks.flatMap((track) => track.notes)
   const combinedStart = Math.min(...allNotes.map((n) => n.ticks))
-  const combinedBars = midiBarOnsets(allNotes, combinedStart, barsWanted, ticksPerBar)
+  const combinedBars = midiBarOnsets(allNotes, combinedStart, barsWanted, ticksPerBar, naiveSkyline)
 
   const melodyRows = rowsFromEvents(melodyBars, ticksPerBar, beatTicks)
   const accompRows = rowsFromEvents(accompBars, ticksPerBar, beatTicks)

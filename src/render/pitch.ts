@@ -70,11 +70,6 @@ export function nearestNote(pcs: readonly string[], target: number, lo = 0, hi =
   return rungs[nearestIndex(rungs, target)]
 }
 
-/** Name a MIDI number for the page: sharps in sharp keys, flats otherwise. */
-export function spellMidi(midi: number, sharps: boolean): string {
-  return sharps ? Note.fromMidiSharps(midi) : Note.fromMidi(midi)
-}
-
 export const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value))
 
 export const byPitch = (a: string, b: string) => midiOf(a) - midiOf(b)

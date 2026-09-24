@@ -3,65 +3,70 @@
 //  • `brief`      — optional prose handed to Jev as state (toggle in the UI).
 //                   With the brief off, Jev only sees the style's name.
 //  • `priors`     — base weights the offline HeuristicPlanner samples from.
-//  • `archetypes` — the kinds of piece this composer actually wrote, one per
-//                   character: each overrides the priors it cares about, so a
-//                   plan is coherent (a sarabande is slow AND in 3/4 AND sung)
-//                   and two generations can be genuinely different pieces.
+//  • `variants`   — the kinds of piece this composer actually wrote: each
+//                   overrides the priors it cares about, so a plan is
+//                   coherent (a sarabande is slow AND in 3/4 AND sung) and two
+//                   generations can be genuinely different pieces.
 //  • `harmony`    — a small grammar instead of whole-progression templates:
 //                   two-bar heads, travelling units and tails, verified
-//                   four-bar phrases, chord cycles, pedals and codas. Forms
-//                   (src/plan/forms.ts) say how to combine them, so eight bars
-//                   come out of hundreds of combinations, not three.
+//                   four-bar phrases and codas. The form's phrase slots
+//                   (src/plan/phrase.ts) say how to combine them, so eight
+//                   bars come out of hundreds of combinations, not three.
+//                   The books also carry chord cycles (`loops`) and `pedals`,
+//                   which no current form's slots reach.
 //
-// JevPlanner never reads priors, archetypes or harmony: it asks Jev.
+// JevPlanner never reads priors or variants: it asks Jev. It does read
+// `harmony` — each phrase Choice offers options built from the style's book
+// (src/plan/harmonyPhrases.ts).
 //
 // Where each entry comes from — score, corpus or analysis — is recorded in
 // docs/STYLE_NOTES.md. Entries for living musicians are marked there as
 // verified (from their own teaching material) or inferred.
 
 import type {
-  ArrangementId,
-  OpeningId,
-  PedalId,
-  PhrasingId,
-  HookBarsId,
-  CharacterId,
+  AccompanimentId,
   ChordId,
   ContourId,
   DynamicId,
   DynamicShapeId,
   FormId,
-  InstrumentId,
   KeyId,
   MeterId,
+  MotionId,
   PaletteId,
+  RegisterId,
   StyleId,
   TempoId,
-  TextureId,
 } from './schema.js'
-import type { PhraseEnd } from './forms.js'
+import type { PhraseEnd } from './phrase.js'
 
 export type Weights<K extends string> = Partial<Record<K, number>>
 
 export interface StylePriors {
+  /** Where this style's tune tends to sing. */
+  register: Weights<RegisterId>
+  /** How fast it tends to move. */
+  motion: Weights<MotionId>
+  /** What tends to hold it up. */
+  accompaniment: Weights<AccompanimentId>
   form: Weights<FormId>
   key: Weights<KeyId>
   meter: Weights<MeterId>
-  texture: Weights<TextureId>
   palette: Weights<PaletteId>
   tempo: Weights<TempoId>
   dynamics: Weights<DynamicId>
   dynamicShape: Weights<DynamicShapeId>
-  defaultInstrument: Weights<InstrumentId>
   contour: Weights<ContourId>
-  arrangement: Weights<ArrangementId>
-  opening: Weights<OpeningId>
-  pedal: Weights<PedalId>
-  phrasing: Weights<PhrasingId>
-  hookBars: Weights<HookBarsId>
 }
 
-export interface Archetype {
+export interface Variant {
+  /**
+   * The kind of piece this is, for the debug panel and for reading this file.
+   * It is NOT a plan field and Jev never sees it: `character` used to be one,
+   * and a post-50 sweep found all twelve of its values produced the same
+   * melody. A label that cannot be heard does not belong in the plan.
+   */
+  name: string
   /** Relative frequency of this kind of piece within the style. */
   weight: number
   /** Replaces the base prior of every field it names. */
@@ -104,7 +109,7 @@ export interface HarmonyBook {
 export interface StyleProfile {
   brief: string
   priors: StylePriors
-  archetypes: Partial<Record<CharacterId, Archetype>>
+  variants: Variant[]
   harmony: { major: HarmonyBook; minor: HarmonyBook }
   /** True where holding one chord across a barline is idiomatic (long harmonic rhythm). */
   holds: boolean
@@ -116,107 +121,110 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'German Baroque keyboard, c. 1720: the bass walks by step through inversions (I–ii4/2–V6/5), circle-of-fifths sequences and pedal points — not a singing tune over wide arpeggios, not root-to-root leaps. Eight to sixteen bars are a spun-out head–sequence–cadence or a binary-dance strain that cadences in V (major) or III (minor) at the midpoint; textures are unbroken prelude figuration, two-part invention, four-part chorale, or sarabande/gigue. Terraced dynamics on harpsichord or organ — dry, no swells, no rubato.',
     priors: {
-      form: { spinning_out: 35, binary_dance: 30, period: 20, sentence: 10, call_and_response: 5 },
+      form: { period: 25, sentence: 10, arch: 30, chain: 35 },
       key: { C_major: 12, G_major: 10, D_major: 9, F_major: 8, Bb_major: 6, A_major: 5, Eb_major: 4, E_major: 3, D_minor: 12, G_minor: 9, C_minor: 9, A_minor: 8, E_minor: 6, B_minor: 6, F_minor: 3 },
       meter: { four_four: 42, three_four: 24, six_eight: 14, twelve_eight: 12, nine_eight: 8 },
-      texture: { two_voice_counterpoint: 25, broken_chord_prelude: 20, chorale: 15, aria_walking_bass: 15, toccata_perpetual: 15, stride_dance: 10 },
+      register: { mid: 82, high: 18 },
+      motion: { walking: 20, flowing: 25, florid: 55 },
+      accompaniment: { sustained: 10, broken: 20, stride: 10, counterline: 60 },
       palette: { diatonic: 60, chromatic_approach: 40 },
       tempo: { andante: 28, moderato: 36, allegro: 26, vivace: 6, larghetto: 2, grave: 2 },
       dynamics: { mf: 50, mp: 25, f: 25 },
       dynamicShape: { terraced: 50, steady: 30, waves: 10, late_surge: 10 },
-      defaultInstrument: { harpsichord: 50, church_organ: 25, grand_piano: 25 },
-      contour: { rise: 18, fall: 20, arch: 16, pendulum: 14, wave: 12, leap_fall: 10, dip: 6, drop_rise: 2, static: 2 },
-      arrangement: { constant: 70, lift_on_return: 20, terraced_blocks: 10 },
-      opening: { straight_in: 80, pickup: 15, vamp_intro: 5 },
-      pedal: { dry: 70, half: 25, full: 5 },
-      phrasing: { on_the_beat: 70, breathing: 20, upbeat: 10 },
-      hookBars: { '2': 45, '4': 40, '8': 15 },
+      contour: { rise: 18, fall: 20, arch: 16, dip: 8, wave: 14, leap_fall: 24 },
     },
-    archetypes: {
+    variants: [
       // Preludes in unbroken figuration (WTC I/1, I/2).
-      flowing_perpetual: {
+      {
+        name: 'perpetual',
         weight: 24,
         priors: {
-          form: { spinning_out: 60, binary_dance: 20, sentence: 10, period: 10 },
-          texture: { broken_chord_prelude: 55, toccata_perpetual: 30, two_voice_counterpoint: 15 },
+          form: { period: 10, sentence: 10, arch: 20, chain: 60 },
+          register: { mid: 100 },
+          motion: { florid: 100 },
+          accompaniment: { broken: 60, counterline: 40 },
           meter: { four_four: 58, three_four: 12, six_eight: 12, twelve_eight: 12, nine_eight: 6 },
           tempo: { andante: 35, moderato: 40, allegro: 25 },
           dynamics: { mp: 45, mf: 45, p: 10 },
-          pedal: { dry: 75, half: 25 },
           dynamicShape: { steady: 35, terraced: 25, late_surge: 25, waves: 15 },
-          contour: { static: 30, arch: 25, rise: 15, fall: 15, wave: 15 },
-          phrasing: { on_the_beat: 90, breathing: 10 },
+          contour: { rise: 15, fall: 15, arch: 25, wave: 45 },
         },
       },
       // Two-part inventions.
-      playful_wit: {
+      {
+        name: 'witty',
         weight: 20,
         priors: {
-          form: { spinning_out: 45, binary_dance: 25, sentence: 15, call_and_response: 15 },
-          texture: { two_voice_counterpoint: 80, toccata_perpetual: 20 },
+          form: { period: 15, sentence: 15, arch: 25, chain: 45 },
+          register: { mid: 100 },
+          motion: { florid: 85, flowing: 15 },
+          accompaniment: { counterline: 100 },
           tempo: { allegro: 50, moderato: 32, presto: 10, vivace: 8 },
           dynamics: { mf: 60, f: 25, mp: 15 },
-          contour: { pendulum: 22, leap_fall: 18, rise: 18, fall: 18, wave: 14, arch: 10 },
-          pedal: { dry: 85, half: 15 },
-          phrasing: { on_the_beat: 80, upbeat: 20 },
+          contour: { rise: 18, fall: 18, arch: 10, wave: 14, leap_fall: 40 },
         },
       },
       // Four-part chorales.
-      solemn_hymn: {
+      {
+        name: 'hymn',
         weight: 16,
         priors: {
-          form: { period: 60, binary_dance: 20, call_and_response: 10, sentence: 10 },
-          texture: { chorale: 90, aria_walking_bass: 10 },
+          form: { period: 70, sentence: 10, arch: 20 },
+          register: { mid: 100 },
+          motion: { walking: 90, flowing: 10 },
+          accompaniment: { sustained: 90, counterline: 10 },
           meter: { four_four: 80, three_four: 20 },
           tempo: { andante: 40, adagio: 30, moderato: 18, grave: 12 },
           dynamicShape: { steady: 60, terraced: 40 },
-          defaultInstrument: { church_organ: 50, choir: 20, harpsichord: 15, grand_piano: 15 },
-          contour: { arch: 30, fall: 30, rise: 20, dip: 10, static: 10 },
-          phrasing: { breathing: 80, long_breathed: 20 },
+          contour: { rise: 20, fall: 30, arch: 30, dip: 10, wave: 10 },
         },
       },
       // Sarabandes and arias: slow triple time, ornamented line over a walking bass.
-      lyrical_song: {
+      {
+        name: 'singing',
         weight: 16,
         priors: {
-          form: { binary_dance: 50, period: 35, arch_return: 15 },
-          texture: { aria_walking_bass: 70, chorale: 15, stride_dance: 15 },
+          form: { period: 35, arch: 65 },
+          register: { mid: 70, low: 20, high: 10 },
+          motion: { flowing: 65, walking: 20, florid: 15 },
+          accompaniment: { counterline: 70, stride: 20, sustained: 10 },
           meter: { three_four: 55, four_four: 30, six_eight: 15 },
           tempo: { adagio: 40, andante: 36, largo: 12, larghetto: 12 },
           dynamics: { mp: 50, p: 30, mf: 20 },
           dynamicShape: { terraced: 40, waves: 30, steady: 30 },
-          contour: { arch: 28, fall: 22, leap_fall: 18, wave: 16, rise: 10, dip: 6 },
-          phrasing: { breathing: 70, long_breathed: 20, upbeat: 10 },
-          hookBars: { '4': 55, '8': 30, '2': 15 },
+          contour: { rise: 10, fall: 22, arch: 28, dip: 6, wave: 16, leap_fall: 18 },
         },
       },
       // Gigues, minuets, correntes.
-      dance_lilt: {
+      {
+        name: 'dance',
         weight: 16,
         priors: {
-          form: { binary_dance: 70, period: 20, spinning_out: 10 },
-          texture: { two_voice_counterpoint: 40, stride_dance: 35, aria_walking_bass: 25 },
+          form: { period: 20, arch: 70, chain: 10 },
+          register: { mid: 60, high: 40 },
+          motion: { flowing: 40, florid: 35, walking: 25 },
+          accompaniment: { stride: 35, counterline: 65 },
           meter: { six_eight: 36, three_four: 32, twelve_eight: 20, nine_eight: 12 },
           tempo: { allegro: 42, moderato: 30, presto: 12, vivace: 16 },
-          contour: { leap_fall: 25, pendulum: 20, rise: 18, fall: 17, wave: 12, arch: 8 },
-          pedal: { dry: 80, half: 20 },
-          phrasing: { upbeat: 50, breathing: 30, on_the_beat: 20 },
+          contour: { rise: 18, fall: 17, arch: 8, wave: 12, leap_fall: 45 },
         },
       },
       // Minor-key toccatas.
-      stormy_drama: {
+      {
+        name: 'stormy',
         weight: 8,
         priors: {
-          form: { spinning_out: 60, free_fantasia: 25, sentence: 15 },
+          form: { sentence: 15, chain: 85 },
           key: { C_minor: 25, D_minor: 25, G_minor: 18, A_minor: 12, E_minor: 10, F_minor: 10 },
-          texture: { toccata_perpetual: 70, two_voice_counterpoint: 20, dramatic_chords: 10 },
+          register: { mid: 100 },
+          motion: { florid: 90, flowing: 10 },
+          accompaniment: { counterline: 85, pulse: 15 },
           tempo: { allegro: 50, presto: 24, vivace: 16, prestissimo: 6, moderato: 4 },
           dynamics: { f: 55, mf: 45 },
           dynamicShape: { terraced: 45, late_surge: 35, steady: 20 },
-          phrasing: { on_the_beat: 90, breathing: 10 },
         },
       },
-    },
+    ],
     holds: false,
     harmony: {
       major: {
@@ -274,109 +282,119 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'Viennese piano, c. 1800. A short motto becomes a sentence or period; one harmony often sits two to four bars, then the pace snaps into a cadential 6/4–V–I, a diminished-seventh jolt or a Neapolitan. Left hand is Alberti, repeated chords, octaves or storm tremolo — not a rolling wide-span nocturne, not a rotating cell — and dynamics skip the middle: pianissimo against fortissimo, crescendo cut by sudden piano, sforzando; stormy allegros, singing adagios, staccato scherzos, solemn marches.',
     priors: {
-      form: { sentence: 35, period: 35, call_and_response: 10, arch_return: 10, free_fantasia: 5, layered_build: 5 },
+      form: { period: 45, sentence: 35, arch: 10, chain: 10 },
       key: { C_minor: 16, F_minor: 10, D_minor: 8, Cs_minor: 5, A_minor: 6, E_minor: 4, G_minor: 4, Eb_major: 12, C_major: 10, G_major: 7, Ab_major: 7, E_major: 5, F_major: 5, D_major: 4, A_major: 4, Db_major: 2 },
       meter: { four_four: 32, three_four: 26, two_four: 24, six_eight: 18 },
-      texture: { dramatic_chords: 18, alberti_melody: 18, tremolo_storm: 14, rolling_nocturne: 12, pulsing_chords: 12, scherzo_staccato: 12, chorale: 8, aria_walking_bass: 6 },
+      register: { low: 34, mid: 46, high: 20 },
+      motion: { sustained: 8, walking: 30, flowing: 46, florid: 16 },
+      accompaniment: { sustained: 8, broken: 42, pulse: 34, stride: 12, counterline: 4 },
       palette: { diatonic: 50, chromatic_approach: 50 },
       tempo: { allegro: 30, presto: 12, adagio: 18, andante: 14, moderato: 10, largo: 4, vivace: 6, grave: 3, larghetto: 2, prestissimo: 1 },
       dynamics: { f: 30, ff: 15, p: 35, pp: 20 },
       dynamicShape: { sudden_contrast: 35, build_then_drop: 20, crescendo: 20, arch: 10, late_surge: 10, waves: 5 },
-      defaultInstrument: { grand_piano: 90, strings: 10 },
-      contour: { rise: 24, fall: 16, arch: 14, leap_fall: 12, static: 12, drop_rise: 8, wave: 8, dip: 4, pendulum: 2 },
-      arrangement: { lift_on_return: 55, build: 20, peak_then_bare: 15, constant: 10 },
-      opening: { straight_in: 55, pickup: 30, vamp_intro: 15 },
-      pedal: { half: 40, dry: 35, full: 25 },
-      phrasing: { on_the_beat: 45, breathing: 30, long_breathed: 15, upbeat: 10 },
-      hookBars: { '4': 40, '8': 35, '2': 25 },
+      contour: { rise: 24, fall: 16, arch: 14, dip: 12, wave: 20, leap_fall: 14 },
     },
-    archetypes: {
+    variants: [
       // Pathétique / Tempest / Appassionata allegros.
-      stormy_drama: {
+      {
+        name: 'stormy',
         weight: 26,
         priors: {
-          form: { sentence: 45, period: 20, call_and_response: 20, free_fantasia: 15 },
+          form: { period: 40, sentence: 45, chain: 15 },
           key: { C_minor: 30, F_minor: 18, D_minor: 16, Cs_minor: 8, G_minor: 8, A_minor: 8, E_minor: 6, Eb_major: 6 },
-          texture: { tremolo_storm: 40, dramatic_chords: 35, pulsing_chords: 15, toccata_perpetual: 10 },
+          register: { low: 20, mid: 52, high: 28 },
+          motion: { walking: 25, flowing: 45, florid: 30 },
+          accompaniment: { pulse: 78, broken: 12, counterline: 10 },
           meter: { four_four: 36, two_four: 32, three_four: 18, six_eight: 14 },
           tempo: { allegro: 48, presto: 28, vivace: 12, prestissimo: 6, moderato: 6 },
           dynamics: { f: 40, ff: 25, p: 25, pp: 10 },
           dynamicShape: { sudden_contrast: 45, build_then_drop: 25, crescendo: 20, late_surge: 10 },
-          contour: { rise: 35, leap_fall: 15, fall: 15, drop_rise: 12, arch: 13, static: 10 },
-          phrasing: { on_the_beat: 85, breathing: 15 },
+          contour: { rise: 35, fall: 15, arch: 13, dip: 12, wave: 10, leap_fall: 15 },
         },
       },
       // Adagio cantabile: a hymn-like tune over a murmuring accompaniment.
-      lyrical_song: {
+      {
+        name: 'singing',
         weight: 22,
         priors: {
-          form: { period: 55, arch_return: 25, sentence: 20 },
+          form: { period: 55, sentence: 20, arch: 25 },
           key: { Ab_major: 25, Eb_major: 20, Db_major: 10, E_major: 10, F_major: 10, C_major: 10, A_major: 8, G_major: 7 },
-          texture: { alberti_melody: 40, rolling_nocturne: 20, chorale: 20, aria_walking_bass: 20 },
+          // Op. 13 II: top voice at MIDI 66, ~3.2 attacks a 2/4 bar — sung, not run.
+          register: { low: 80, mid: 20 },
+          motion: { flowing: 60, walking: 30, florid: 10 },
+          accompaniment: { broken: 80, sustained: 20 },
           tempo: { adagio: 48, andante: 30, largo: 10, larghetto: 12 },
           dynamics: { p: 50, pp: 25, f: 25 },
           dynamicShape: { arch: 35, waves: 25, build_then_drop: 25, crescendo: 15 },
-          contour: { arch: 30, fall: 20, wave: 18, rise: 16, leap_fall: 10, dip: 6 },
-          phrasing: { breathing: 70, long_breathed: 20, upbeat: 10 },
-          hookBars: { '8': 80, '4': 20 },
+          contour: { rise: 16, fall: 20, arch: 30, dip: 6, wave: 18, leap_fall: 10 },
         },
       },
       // Op. 27/2, first movement.
-      meditative_stillness: {
+      {
+        name: 'still',
         weight: 12,
         priors: {
-          form: { period: 30, spinning_out: 25, arch_return: 25, free_fantasia: 20 },
+          form: { period: 30, arch: 25, chain: 45 },
           key: { Cs_minor: 35, C_minor: 15, F_minor: 15, A_minor: 10, D_minor: 10, E_minor: 10, B_minor: 5 },
           meter: { four_four: 50, six_eight: 35, three_four: 15 },
-          texture: { rolling_nocturne: 80, chorale: 20 },
+          register: { mid: 45, high: 55 },
+          motion: { sustained: 55, walking: 45 },
+          accompaniment: { broken: 100 },
           tempo: { adagio: 50, largo: 24, andante: 8, grave: 10, larghissimo: 8 },
           dynamics: { pp: 55, p: 45 },
-          pedal: { full: 70, half: 30 },
           dynamicShape: { steady: 40, arch: 30, waves: 30 },
-          contour: { static: 45, fall: 20, arch: 20, dip: 10, rise: 5 },
-          phrasing: { long_breathed: 80, breathing: 20 },
+          contour: { rise: 5, fall: 20, arch: 20, dip: 10, wave: 45 },
         },
       },
       // Waldstein, Eroica, Emperor.
-      heroic_bright: {
+      {
+        name: 'heroic',
         weight: 16,
         priors: {
-          form: { sentence: 45, period: 35, call_and_response: 20 },
+          form: { period: 55, sentence: 45 },
           key: { Eb_major: 30, C_major: 25, D_major: 15, G_major: 10, A_major: 10, F_major: 10 },
-          texture: { pulsing_chords: 35, dramatic_chords: 30, alberti_melody: 20, scherzo_staccato: 15 },
+          register: { mid: 70, high: 30 },
+          motion: { sustained: 25, walking: 50, flowing: 25 },
+          accompaniment: { pulse: 60, broken: 20, stride: 20 },
           meter: { four_four: 40, two_four: 30, three_four: 16, six_eight: 14 },
           tempo: { allegro: 70, presto: 15, moderato: 15 },
           dynamics: { f: 45, ff: 20, p: 25, pp: 10 },
           dynamicShape: { crescendo: 30, sudden_contrast: 35, build_then_drop: 20, terraced: 15 },
-          contour: { rise: 35, leap_fall: 20, arch: 15, fall: 15, drop_rise: 15 },
+          contour: { rise: 35, fall: 15, arch: 15, dip: 15, leap_fall: 20 },
         },
       },
       // Scherzos and bagatelles.
-      playful_wit: {
+      {
+        name: 'witty',
         weight: 14,
         priors: {
-          form: { period: 40, sentence: 30, call_and_response: 30 },
+          form: { period: 70, sentence: 30 },
           meter: { three_four: 60, six_eight: 20, four_four: 20 },
-          texture: { scherzo_staccato: 60, alberti_melody: 25, stride_dance: 15 },
+          register: { mid: 55, high: 45 },
+          motion: { walking: 45, flowing: 40, florid: 15 },
+          accompaniment: { stride: 60, pulse: 25, broken: 15 },
           tempo: { presto: 40, allegro: 50, moderato: 10 },
           dynamics: { p: 50, f: 30, pp: 20 },
           dynamicShape: { sudden_contrast: 60, terraced: 20, build_then_drop: 20 },
         },
       },
       // Funeral marches; the Seventh Symphony's Allegretto ostinato.
-      solemn_hymn: {
+      {
+        name: 'hymn',
         weight: 10,
         priors: {
-          form: { period: 45, layered_build: 30, arch_return: 25 },
+          form: { period: 45, arch: 25, chain: 30 },
           key: { A_minor: 25, C_minor: 25, D_minor: 20, F_minor: 15, Ab_major: 15 },
-          texture: { pulsing_chords: 40, chorale: 35, dramatic_chords: 25 },
+          register: { low: 45, mid: 55 },
+          motion: { walking: 70, sustained: 30 },
+          accompaniment: { sustained: 85, broken: 15 },
           tempo: { andante: 50, adagio: 35, moderato: 15 },
           dynamics: { p: 45, pp: 35, f: 20 },
           dynamicShape: { late_surge: 35, crescendo: 30, sudden_contrast: 20, steady: 15 },
-          contour: { static: 45, arch: 20, rise: 15, fall: 15, dip: 5 },
+          contour: { rise: 15, fall: 15, arch: 20, dip: 5, wave: 45 },
         },
       },
-    },
+    ],
     holds: true,
     harmony: {
       major: {
@@ -435,113 +453,120 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'Polish–French piano, c. 1840. An ornamented vocal right hand (fioritura, delayed resolutions) over a wide-span left-hand arpeggio, a waltz bass-chord-chord, or a mazurka that accents beat two or three — not Alberti, not jazz stride, not block-chord shocks. Nocturnes often sit in 12/8. Harmony stays tonal: chromatic inner voices, cadential 6/4 sharing the bar with V7, Neapolitan in minor, mazurka mixture; eight bars are a 4+4 period whose return is ornamented, often after a pickup. Pedalled grand piano, rubato-friendly; no parallel planing, no ii–V jazz turnaround.',
     priors: {
-      form: { period: 30, sentence: 20, arch_return: 20, binary_dance: 15, spinning_out: 10, free_fantasia: 5 },
+      form: { period: 30, sentence: 20, arch: 35, chain: 15 },
       key: { Db_major: 14, Ab_major: 12, Bb_major: 8, Eb_major: 8, Gb_major: 6, F_major: 5, C_major: 4, Cs_minor: 10, B_minor: 8, Fs_minor: 6, C_minor: 5, E_minor: 5, F_minor: 5, G_minor: 4 },
       meter: { three_four: 38, four_four: 26, twelve_eight: 20, six_eight: 16 },
-      texture: { rolling_nocturne: 22, alberti_melody: 18, chordal_melody: 14, stride_dance: 14, dramatic_chords: 12, broken_chord_prelude: 12, wash_arpeggio: 8 },
+      register: { mid: 30, high: 70 },
+      motion: { walking: 18, flowing: 50, florid: 32 },
+      accompaniment: { broken: 62, stride: 18, sustained: 12, pulse: 8 },
       palette: { chromatic_approach: 55, diatonic: 45 },
       tempo: { adagio: 24, andante: 22, moderato: 16, allegro: 14, largo: 6, larghetto: 8, presto: 5, vivace: 3, grave: 2 },
       dynamics: { p: 35, mp: 20, pp: 15, f: 15, mf: 10, ff: 5 },
       dynamicShape: { arch: 30, waves: 20, sudden_contrast: 15, crescendo: 15, late_surge: 10, terraced: 10 },
-      defaultInstrument: { grand_piano: 95, strings: 5 },
-      contour: { arch: 24, fall: 18, wave: 16, leap_fall: 12, rise: 12, dip: 8, drop_rise: 6, static: 4 },
-      arrangement: { lift_on_return: 60, build: 15, constant: 15, peak_then_bare: 10 },
-      opening: { pickup: 45, vamp_intro: 30, straight_in: 25 },
-      pedal: { full: 55, half: 35, dry: 10 },
-      phrasing: { breathing: 30, upbeat: 28, long_breathed: 22, on_the_beat: 20 },
-      hookBars: { '4': 70, '8': 20, '2': 10 },
+      contour: { rise: 12, fall: 18, arch: 24, dip: 14, wave: 20, leap_fall: 12 },
     },
-    archetypes: {
+    variants: [
       // Nocturnes: singing cantabile over rolling left-hand figuration.
-      lyrical_song: {
+      {
+        name: 'singing',
         weight: 28,
         priors: {
-          form: { period: 45, arch_return: 30, sentence: 25 },
+          form: { period: 45, sentence: 25, arch: 30 },
           key: { Db_major: 22, Ab_major: 18, Eb_major: 12, Gb_major: 10, F_major: 8, C_major: 6, Cs_minor: 12, B_minor: 6, E_minor: 6 },
           meter: { twelve_eight: 48, six_eight: 22, four_four: 18, three_four: 12 },
-          texture: { rolling_nocturne: 50, alberti_melody: 25, chordal_melody: 15, wash_arpeggio: 10 },
+          register: { high: 85, mid: 15 },
+          motion: { flowing: 55, florid: 40, walking: 5 },
+          accompaniment: { broken: 90, sustained: 10 },
           tempo: { adagio: 50, andante: 30, largo: 15, moderato: 5 },
           dynamics: { p: 45, pp: 25, mp: 20, f: 10 },
           dynamicShape: { arch: 40, waves: 30, crescendo: 15, late_surge: 15 },
-          contour: { arch: 32, fall: 20, wave: 20, leap_fall: 12, rise: 10, dip: 6 },
-          phrasing: { upbeat: 50, breathing: 30, long_breathed: 20 },
-          hookBars: { '4': 80, '8': 15, '2': 5 },
+          contour: { rise: 10, fall: 20, arch: 32, dip: 6, wave: 20, leap_fall: 12 },
         },
       },
       // Mazurkas and waltzes.
-      dance_lilt: {
+      {
+        name: 'dance',
         weight: 26,
         priors: {
-          form: { binary_dance: 45, period: 35, arch_return: 20 },
+          form: { period: 35, arch: 65 },
           key: { Bb_major: 18, Ab_major: 14, Db_major: 12, Eb_major: 10, F_major: 8, C_major: 6, Cs_minor: 10, B_minor: 8, Fs_minor: 8, G_minor: 6 },
           meter: { three_four: 85, six_eight: 10, four_four: 5 },
-          texture: { stride_dance: 50, alberti_melody: 25, chordal_melody: 15, rolling_nocturne: 10 },
+          register: { mid: 60, high: 40 },
+          motion: { walking: 40, flowing: 45, florid: 15 },
+          accompaniment: { stride: 75, broken: 25 },
           tempo: { moderato: 40, andante: 30, allegro: 25, adagio: 5 },
           dynamics: { p: 35, mp: 30, mf: 20, f: 15 },
           dynamicShape: { waves: 35, arch: 25, sudden_contrast: 20, terraced: 20 },
-          contour: { leap_fall: 22, wave: 20, arch: 18, rise: 16, fall: 14, dip: 10 },
-          phrasing: { upbeat: 45, breathing: 35, on_the_beat: 20 },
+          contour: { rise: 16, fall: 14, arch: 18, dip: 10, wave: 20, leap_fall: 22 },
         },
       },
       // Ballades and scherzos.
-      stormy_drama: {
+      {
+        name: 'stormy',
         weight: 16,
         priors: {
-          form: { sentence: 35, spinning_out: 25, free_fantasia: 25, arch_return: 15 },
+          form: { sentence: 35, arch: 15, chain: 50 },
           key: { G_minor: 18, C_minor: 16, F_minor: 14, B_minor: 12, Cs_minor: 12, Fs_minor: 10, E_minor: 8, Ab_major: 10 },
           meter: { four_four: 45, six_eight: 30, three_four: 25 },
-          texture: { dramatic_chords: 40, broken_chord_prelude: 20, tremolo_storm: 15, rolling_nocturne: 15, wash_arpeggio: 10 },
+          register: { mid: 45, high: 55 },
+          motion: { flowing: 45, florid: 45, walking: 10 },
+          accompaniment: { broken: 45, pulse: 45, stride: 10 },
           tempo: { allegro: 50, presto: 25, moderato: 15, andante: 10 },
           dynamics: { f: 35, ff: 20, p: 25, pp: 10, mf: 10 },
           dynamicShape: { sudden_contrast: 40, crescendo: 25, late_surge: 20, arch: 15 },
-          contour: { rise: 28, leap_fall: 20, drop_rise: 16, fall: 14, arch: 12, wave: 10 },
-          phrasing: { on_the_beat: 55, breathing: 45 },
+          contour: { rise: 28, fall: 14, arch: 12, dip: 16, wave: 10, leap_fall: 20 },
         },
       },
       // Études: unbroken figuration.
-      flowing_perpetual: {
+      {
+        name: 'perpetual',
         weight: 14,
         priors: {
-          form: { spinning_out: 45, sentence: 25, arch_return: 20, period: 10 },
-          texture: { broken_chord_prelude: 45, wash_arpeggio: 25, toccata_perpetual: 15, alberti_melody: 15 },
+          form: { period: 10, sentence: 25, arch: 20, chain: 45 },
+          register: { mid: 40, high: 60 },
+          motion: { florid: 90, flowing: 10 },
+          accompaniment: { broken: 85, counterline: 15 },
           meter: { four_four: 55, six_eight: 25, three_four: 20 },
           tempo: { allegro: 45, moderato: 30, andante: 15, presto: 10 },
           dynamics: { mf: 35, mp: 25, f: 20, p: 20 },
           dynamicShape: { crescendo: 30, arch: 30, waves: 20, late_surge: 20 },
-          contour: { wave: 28, rise: 22, fall: 18, arch: 16, static: 16 },
-          phrasing: { on_the_beat: 90, breathing: 10 },
+          contour: { rise: 22, fall: 18, arch: 16, wave: 44 },
         },
       },
       // Slow preludes and spare late nocturnes.
-      meditative_stillness: {
+      {
+        name: 'still',
         weight: 10,
         priors: {
-          form: { period: 35, arch_return: 35, spinning_out: 20, free_fantasia: 10 },
+          form: { period: 35, arch: 35, chain: 30 },
           key: { E_minor: 22, Cs_minor: 18, B_minor: 14, F_minor: 12, C_minor: 10, Db_major: 12, Ab_major: 12 },
           meter: { four_four: 50, six_eight: 30, three_four: 20 },
-          texture: { rolling_nocturne: 45, chordal_melody: 30, chorale: 15, melody_over_ostinato: 10 },
+          register: { high: 75, mid: 25 },
+          motion: { sustained: 45, walking: 40, flowing: 15 },
+          accompaniment: { pulse: 60, sustained: 25, broken: 15 },
           tempo: { largo: 40, adagio: 45, andante: 15 },
           dynamics: { pp: 50, p: 40, mp: 10 },
           dynamicShape: { steady: 35, arch: 30, waves: 20, decrescendo: 15 },
-          contour: { static: 30, fall: 25, arch: 20, dip: 15, rise: 10 },
-          phrasing: { long_breathed: 70, breathing: 30 },
+          contour: { rise: 10, fall: 25, arch: 20, dip: 15, wave: 30 },
         },
       },
       // Light waltzes and mazurka jokes.
-      playful_wit: {
+      {
+        name: 'witty',
         weight: 6,
         priors: {
-          form: { binary_dance: 40, period: 30, call_and_response: 30 },
+          form: { period: 60, arch: 40 },
           meter: { three_four: 70, six_eight: 15, four_four: 15 },
-          texture: { stride_dance: 40, scherzo_staccato: 35, alberti_melody: 25 },
+          register: { high: 70, mid: 30 },
+          motion: { florid: 55, flowing: 35, walking: 10 },
+          accompaniment: { stride: 55, broken: 45 },
           tempo: { allegro: 50, moderato: 35, presto: 15 },
           dynamics: { p: 40, mf: 25, f: 20, mp: 15 },
           dynamicShape: { sudden_contrast: 45, terraced: 30, waves: 25 },
-          contour: { leap_fall: 25, wave: 20, rise: 18, fall: 17, pendulum: 12, arch: 8 },
-          phrasing: { upbeat: 50, breathing: 30, on_the_beat: 20 },
+          contour: { rise: 18, fall: 17, arch: 8, wave: 20, leap_fall: 37 },
         },
       },
-    },
+    ],
     holds: true,
     harmony: {
       major: {
@@ -600,101 +625,113 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'French piano, c. 1905. Harmony is colour: parallel triads, ninths and hollow fifths; pentatonic, whole-tone and church modes; added sixths and ninths left hanging over a pedal — closes are plagal, modal or a fade, never V7–I. Phrases are two-bar tiles said twice and set beside the next (mosaic), or an arch whose return is an echo. Very soft, fully pedalled; not a singing 4+4 tonal period, not stacked jazz ninths, not an additive cell process.',
     priors: {
-      form: { mosaic_pairs: 40, arch_return: 40, free_fantasia: 10, layered_build: 5, period: 5 },
+      form: { period: 5, sentence: 40, arch: 40, chain: 15 },
       key: { Db_major: 14, Gb_major: 8, E_major: 10, B_major: 6, F_major: 8, Bb_major: 5, A_major: 5, G_major: 5, C_major: 6, D_minor: 8, Fs_minor: 8, E_minor: 6, A_minor: 5, Cs_minor: 6 },
       meter: { six_eight: 28, four_four: 28, three_four: 22, nine_eight: 22 },
-      texture: { parallel_planing: 20, wash_arpeggio: 20, melody_over_ostinato: 15, chordal_melody: 15, bell_organum: 10, displaced_arpeggio: 5, toccata_perpetual: 5, broken_chord_prelude: 5, stride_dance: 5 },
+      register: { mid: 40, high: 60 },
+      motion: { sustained: 18, walking: 30, flowing: 36, florid: 16 },
+      accompaniment: { sustained: 38, broken: 42, pulse: 12, stride: 8 },
       palette: { pentatonic: 35, whole_tone: 15, modal: 20, modal_dark: 15, diatonic: 15 },
       tempo: { adagio: 30, andante: 34, largo: 12, larghetto: 10, moderato: 8, larghissimo: 4, grave: 2 },
       dynamics: { pp: 50, p: 40, mp: 10 },
       dynamicShape: { arch: 40, waves: 20, steady: 15, decrescendo: 15, late_surge: 10 },
-      defaultInstrument: { grand_piano: 85, strings: 8, choir: 7 },
-      contour: { fall: 22, arch: 22, wave: 16, static: 14, dip: 10, rise: 8, drop_rise: 5, leap_fall: 3 },
-      arrangement: { lift_on_return: 40, constant: 30, terraced_blocks: 20, build: 10 },
-      opening: { vamp_intro: 50, straight_in: 35, pickup: 15 },
-      pedal: { full: 70, half: 25, dry: 5 },
-      phrasing: { long_breathed: 40, on_the_beat: 30, breathing: 20, upbeat: 10 },
-      hookBars: { '2': 45, '4': 40, '8': 15 },
+      contour: { rise: 8, fall: 22, arch: 22, dip: 15, wave: 30, leap_fall: 3 },
     },
-    archetypes: {
-      dreamy_haze: {
+    variants: [
+      {
+        name: 'hazy',
         weight: 30,
         priors: {
-          form: { mosaic_pairs: 50, arch_return: 35, free_fantasia: 15 },
+          form: { sentence: 50, arch: 35, chain: 15 },
           meter: { nine_eight: 32, six_eight: 28, four_four: 22, three_four: 18 },
-          texture: { parallel_planing: 35, wash_arpeggio: 25, chordal_melody: 20, melody_over_ostinato: 20 },
+          register: { mid: 35, high: 65 },
+          motion: { sustained: 30, walking: 45, flowing: 25 },
+          accompaniment: { sustained: 60, broken: 40 },
           palette: { pentatonic: 35, whole_tone: 25, modal: 20, modal_dark: 10, diatonic: 10 },
           tempo: { adagio: 40, andante: 45, largo: 15 },
           dynamics: { pp: 50, p: 45, mp: 5 },
           dynamicShape: { arch: 45, waves: 25, steady: 15, decrescendo: 15 },
-          phrasing: { long_breathed: 70, breathing: 30 },
         },
       },
       // Arabesque, Jardins sous la pluie, Doctor Gradus.
-      flowing_perpetual: {
+      {
+        name: 'perpetual',
         weight: 20,
         priors: {
-          form: { arch_return: 45, mosaic_pairs: 35, spinning_out: 20 },
+          form: { sentence: 35, arch: 45, chain: 20 },
           meter: { nine_eight: 30, six_eight: 28, four_four: 24, three_four: 18 },
-          texture: { wash_arpeggio: 40, broken_chord_prelude: 25, toccata_perpetual: 20, displaced_arpeggio: 15 },
+          register: { mid: 45, high: 55 },
+          motion: { florid: 70, flowing: 30 },
+          accompaniment: { broken: 90, pulse: 10 },
           palette: { pentatonic: 45, modal: 30, diatonic: 25 },
-          phrasing: { on_the_beat: 85, long_breathed: 15 },
           tempo: { andante: 35, moderato: 45, allegro: 20 },
           dynamics: { p: 55, pp: 25, mp: 20 },
-          contour: { fall: 30, wave: 25, arch: 25, rise: 12, dip: 8 },
+          contour: { rise: 12, fall: 30, arch: 25, dip: 8, wave: 25 },
         },
       },
       // Des pas sur la neige, La cathédrale engloutie.
-      meditative_stillness: {
+      {
+        name: 'still',
         weight: 20,
         priors: {
-          form: { arch_return: 45, mosaic_pairs: 30, layered_build: 25 },
-          texture: { melody_over_ostinato: 40, bell_organum: 40, parallel_planing: 20 },
+          form: { sentence: 30, arch: 45, chain: 25 },
+          register: { low: 20, mid: 35, high: 45 },
+          motion: { sustained: 55, walking: 45 },
+          accompaniment: { sustained: 75, broken: 25 },
           palette: { modal_dark: 30, modal: 25, pentatonic: 25, diatonic: 20 },
           tempo: { largo: 50, adagio: 45, andante: 5 },
           dynamics: { pp: 65, p: 35 },
           dynamicShape: { arch: 35, steady: 30, late_surge: 20, decrescendo: 15 },
-          contour: { static: 30, arch: 25, fall: 20, rise: 15, dip: 10 },
+          contour: { rise: 15, fall: 20, arch: 25, dip: 10, wave: 30 },
         },
       },
       // La fille aux cheveux de lin, Rêverie.
-      lyrical_song: {
+      {
+        name: 'singing',
         weight: 16,
         priors: {
-          form: { arch_return: 40, mosaic_pairs: 35, period: 25 },
-          texture: { chordal_melody: 35, melody_over_ostinato: 35, wash_arpeggio: 20, lush_voicings: 10 },
+          form: { period: 25, sentence: 35, arch: 40 },
+          register: { high: 70, mid: 30 },
+          motion: { walking: 35, flowing: 45, sustained: 20 },
+          accompaniment: { broken: 70, sustained: 30 },
           palette: { pentatonic: 60, diatonic: 20, modal: 20 },
           tempo: { adagio: 50, andante: 50 },
-          contour: { arch: 35, fall: 25, wave: 20, rise: 12, dip: 8 },
+          contour: { rise: 12, fall: 25, arch: 35, dip: 8, wave: 20 },
         },
       },
       // Golliwogg's Cakewalk, Minstrels.
-      playful_wit: {
+      {
+        name: 'witty',
         weight: 8,
         priors: {
-          form: { call_and_response: 40, arch_return: 40, period: 20 },
+          form: { period: 60, arch: 40 },
           key: { Eb_major: 30, Gb_major: 20, G_major: 20, F_major: 15, C_major: 15 },
           meter: { four_four: 80, three_four: 10, six_eight: 10 },
-          texture: { stride_dance: 50, scherzo_staccato: 50 },
+          register: { mid: 40, high: 60 },
+          motion: { florid: 60, flowing: 40 },
+          accompaniment: { stride: 45, broken: 40, pulse: 15 },
           palette: { pentatonic: 40, chromatic_approach: 40, blues: 20 },
           tempo: { moderato: 50, allegro: 50 },
           dynamics: { p: 40, mf: 30, f: 30 },
           dynamicShape: { sudden_contrast: 60, terraced: 40 },
-          contour: { leap_fall: 25, rise: 20, fall: 20, wave: 20, arch: 15 },
+          contour: { rise: 20, fall: 20, arch: 15, wave: 20, leap_fall: 25 },
         },
       },
       // Voiles: whole-tone veils over a pedal.
-      restless_searching: {
+      {
+        name: 'restless',
         weight: 6,
         priors: {
-          form: { arch_return: 60, mosaic_pairs: 40 },
-          texture: { parallel_planing: 60, melody_over_ostinato: 40 },
+          form: { sentence: 40, arch: 60 },
+          register: { mid: 55, high: 45 },
+          motion: { flowing: 50, florid: 30, walking: 20 },
+          accompaniment: { broken: 50, pulse: 30, sustained: 20 },
           palette: { whole_tone: 80, pentatonic: 20 },
           tempo: { andante: 60, adagio: 40 },
           dynamics: { pp: 55, p: 45 },
         },
       },
-    },
+    ],
     holds: true,
     harmony: {
       major: {
@@ -754,75 +791,82 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'American minimalism, c. 1980. A small cell changes a little each pass — a note added, the figure rotated to start one note later — over a two-to-eight-chord cycle related by thirds and common tones; the next pass takes a new inversion (new bass), and about every eight bars a different cycle takes over. Rocking thirds and two-against-three over a slow bass; pieces stop on a low tonic or tonic 6/4 rather than cadence. Terraced blocks, mostly minor: a process of rotation and addition, not the same ostinato getting louder, not colour-planing haze.',
     priors: {
-      form: { additive_loop: 40, layered_build: 30, arch_return: 18, call_and_response: 12 },
+      form: { period: 25, sentence: 45, arch: 20, chain: 10 },
       key: { F_minor: 16, A_minor: 14, D_minor: 12, G_minor: 12, C_minor: 10, E_minor: 10, C_major: 8, F_major: 8, A_major: 4, Eb_major: 3, Ab_major: 3 },
       meter: { four_four: 45, six_eight: 30, three_four: 25 },
-      texture: { melody_over_ostinato: 22, minimal_cells: 20, displaced_arpeggio: 14, pulsing_chords: 12, interlocking_hands: 10, wash_arpeggio: 8, toccata_perpetual: 8, broken_chord_prelude: 6 },
+      register: { low: 40, mid: 50, high: 10 },
+      motion: { sustained: 30, flowing: 60, florid: 10 },
+      accompaniment: { broken: 50, pulse: 45, counterline: 5 },
       palette: { diatonic: 70, modal: 20, modal_dark: 10 },
       tempo: { moderato: 36, allegro: 22, andante: 24, adagio: 10, vivace: 6, larghetto: 2 },
       dynamics: { mp: 40, mf: 30, p: 25, f: 5 },
       dynamicShape: { terraced: 35, steady: 30, waves: 15, build_then_drop: 20 },
-      defaultInstrument: { grand_piano: 55, church_organ: 20, strings: 15, choir: 5, electric_piano: 5 },
-      contour: { static: 28, rise: 22, wave: 18, arch: 16, fall: 16 },
-      arrangement: { terraced_blocks: 55, build: 25, constant: 15, peak_then_bare: 5 },
-      opening: { vamp_intro: 65, straight_in: 30, pickup: 5 },
-      pedal: { half: 45, dry: 40, full: 15 },
-      phrasing: { on_the_beat: 85, long_breathed: 15 },
-      hookBars: { '4': 80, '2': 15, '8': 5 },
+      contour: { rise: 22, fall: 16, arch: 16, wave: 46 },
     },
-    archetypes: {
-      hypnotic_pulse: {
+    variants: [
+      {
+        name: 'hypnotic',
         weight: 34,
         priors: {
-          form: { additive_loop: 65, layered_build: 35 },
-          texture: { minimal_cells: 28, displaced_arpeggio: 22, interlocking_hands: 20, pulsing_chords: 18, broken_chord_prelude: 12 },
+          form: { sentence: 60, period: 30, chain: 10 },
+          register: { low: 45, mid: 45, high: 10 },
+          motion: { sustained: 18, flowing: 70, florid: 12 },
+          accompaniment: { broken: 55, pulse: 45 },
           tempo: { moderato: 45, allegro: 40, andante: 15 },
           dynamicShape: { terraced: 35, steady: 35, waves: 15, build_then_drop: 15 },
-          phrasing: { on_the_beat: 90, long_breathed: 10 },
-          hookBars: { '4': 90, '2': 10 },
         },
       },
       // Metamorphosis: a rocking accompaniment under a slow bare melody.
-      meditative_stillness: {
+      {
+        name: 'still',
         weight: 26,
         priors: {
-          form: { additive_loop: 55, arch_return: 30, layered_build: 15 },
-          texture: { melody_over_ostinato: 55, minimal_cells: 25, pulsing_chords: 20 },
+          form: { arch: 50, sentence: 30, chain: 20 },
+          register: { low: 55, mid: 45 },
+          motion: { sustained: 75, flowing: 25 },
+          accompaniment: { pulse: 100 },
           tempo: { andante: 50, adagio: 35, largo: 15 },
           dynamics: { p: 50, mp: 35, pp: 15 },
-          contour: { static: 35, fall: 30, rise: 20, arch: 15 },
-          phrasing: { long_breathed: 70, on_the_beat: 30 },
+          contour: { rise: 20, fall: 30, arch: 15, wave: 35 },
         },
       },
       // Mad Rush's fast sections.
-      flowing_perpetual: {
+      {
+        name: 'perpetual',
         weight: 16,
         priors: {
-          form: { additive_loop: 50, call_and_response: 25, layered_build: 25 },
-          texture: { minimal_cells: 30, wash_arpeggio: 25, toccata_perpetual: 25, displaced_arpeggio: 20 },
+          form: { sentence: 50, period: 30, chain: 20 },
+          register: { low: 30, mid: 55, high: 15 },
+          motion: { flowing: 75, florid: 25 },
+          accompaniment: { broken: 45, pulse: 30, counterline: 25 },
           tempo: { allegro: 55, presto: 25, moderato: 20 },
           dynamics: { mf: 45, f: 35, mp: 20 },
         },
       },
-      solemn_hymn: {
+      {
+        name: 'hymn',
         weight: 14,
         priors: {
-          form: { additive_loop: 60, layered_build: 40 },
-          texture: { minimal_cells: 30, chorale: 25, pulsing_chords: 25, bell_organum: 20 },
+          form: { period: 50, arch: 30, sentence: 20 },
+          register: { low: 20, mid: 80 },
+          motion: { sustained: 45, walking: 25, flowing: 30 },
+          accompaniment: { sustained: 45, pulse: 55 },
           tempo: { adagio: 50, largo: 30, andante: 20 },
-          defaultInstrument: { church_organ: 55, strings: 25, choir: 20 },
         },
       },
-      restless_searching: {
+      {
+        name: 'restless',
         weight: 10,
         priors: {
-          form: { layered_build: 50, additive_loop: 50 },
-          texture: { pulsing_chords: 45, minimal_cells: 35, tremolo_storm: 20 },
+          form: { sentence: 60, chain: 40 },
+          register: { low: 30, mid: 70 },
+          motion: { sustained: 45, flowing: 55 },
+          accompaniment: { pulse: 100 },
           tempo: { allegro: 60, presto: 40 },
           dynamics: { f: 50, mf: 50 },
         },
       },
-    },
+    ],
     holds: true,
     harmony: {
       minor: {
@@ -893,105 +937,114 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'Film-score piano and hybrid, 2000s–2020s. A slow long-note chant rides a left-hand ostinato that keeps the same figure while layers thicken and the dynamic climbs — loops of i–bVI–bVII–V or i–iv–bVI–V, or a tonic drone held across the barline; harmony never moves faster than the bar. Eight to sixteen bars vamp, add weight, surge late, then often drop to bare. Four-four pulse, piano and strings: a layered build, not cell rotation, not a 4+4 song period.',
     priors: {
-      form: { layered_build: 32, additive_loop: 22, vamp_and_tag: 18, arch_return: 16, period: 8, sentence: 4 },
+      form: { period: 15, sentence: 35, arch: 30, chain: 20 },
       key: { D_minor: 14, A_minor: 12, C_minor: 12, G_minor: 10, F_minor: 8, E_minor: 6, C_major: 8, Eb_major: 8, F_major: 6, G_major: 6, D_major: 5, Ab_major: 5 },
       meter: { four_four: 70, three_four: 18, six_eight: 12 },
-      texture: { melody_over_ostinato: 28, pulsing_chords: 22, dramatic_chords: 16, wash_arpeggio: 12, minimal_cells: 10, chorale: 8, rolling_nocturne: 4 },
+      register: { low: 30, mid: 48, high: 22 },
+      motion: { sustained: 44, walking: 34, flowing: 22 },
+      accompaniment: { pulse: 52, sustained: 24, broken: 20, stride: 4 },
       palette: { diatonic: 55, modal: 20, modal_dark: 15, chromatic_approach: 10 },
       tempo: { andante: 26, adagio: 18, moderato: 20, largo: 10, grave: 6, larghissimo: 4, allegro: 8, presto: 3, vivace: 3, larghetto: 2 },
       dynamics: { p: 30, mp: 25, mf: 20, pp: 15, f: 8, ff: 2 },
       dynamicShape: { crescendo: 30, late_surge: 25, build_then_drop: 15, arch: 15, waves: 10, steady: 5 },
-      defaultInstrument: { grand_piano: 55, strings: 30, electric_piano: 10, choir: 5 },
-      contour: { static: 26, rise: 22, arch: 16, fall: 14, wave: 10, leap_fall: 6, dip: 6 },
-      arrangement: { peak_then_bare: 50, build: 35, lift_on_return: 10, constant: 5 },
-      opening: { vamp_intro: 70, straight_in: 25, pickup: 5 },
-      pedal: { full: 50, half: 35, dry: 15 },
-      phrasing: { long_breathed: 45, on_the_beat: 40, breathing: 15 },
-      hookBars: { '4': 75, '8': 15, '2': 10 },
+      contour: { rise: 22, fall: 14, arch: 16, dip: 6, wave: 36, leap_fall: 6 },
     },
-    archetypes: {
+    variants: [
       // Layered ostinato that thickens without becoming a cell-process étude.
-      hypnotic_pulse: {
+      {
+        name: 'hypnotic',
         weight: 24,
         priors: {
-          form: { layered_build: 45, additive_loop: 35, vamp_and_tag: 20 },
-          texture: { pulsing_chords: 35, melody_over_ostinato: 30, minimal_cells: 20, wash_arpeggio: 15 },
+          form: { sentence: 50, arch: 30, chain: 20 },
+          register: { low: 25, mid: 55, high: 20 },
+          motion: { sustained: 50, walking: 35, flowing: 15 },
+          accompaniment: { pulse: 80, broken: 20 },
           tempo: { andante: 40, moderato: 35, adagio: 15, allegro: 10 },
           dynamics: { p: 35, mp: 35, mf: 20, f: 10 },
           dynamicShape: { crescendo: 40, late_surge: 30, waves: 15, build_then_drop: 15 },
-          contour: { static: 40, rise: 25, wave: 15, arch: 12, fall: 8 },
-          phrasing: { long_breathed: 70, on_the_beat: 30 },
-          hookBars: { '4': 80, '8': 15, '2': 5 },
+          contour: { rise: 25, fall: 8, arch: 12, wave: 55 },
         },
       },
       // Warm major anthems.
-      heroic_bright: {
+      {
+        name: 'heroic',
         weight: 16,
         priors: {
-          form: { layered_build: 40, arch_return: 30, period: 20, sentence: 10 },
+          form: { period: 30, sentence: 25, arch: 45 },
           key: { C_major: 22, Eb_major: 18, D_major: 16, G_major: 14, F_major: 12, Ab_major: 10, A_minor: 8 },
-          texture: { dramatic_chords: 35, pulsing_chords: 25, chorale: 20, wash_arpeggio: 20 },
+          register: { mid: 55, high: 45 },
+          motion: { sustained: 40, walking: 45, flowing: 15 },
+          accompaniment: { pulse: 70, sustained: 15, broken: 15 },
           tempo: { moderato: 40, andante: 25, allegro: 25, adagio: 10 },
           dynamics: { mf: 35, f: 25, mp: 20, p: 12, ff: 8 },
           dynamicShape: { crescendo: 35, late_surge: 30, arch: 20, build_then_drop: 15 },
-          defaultInstrument: { strings: 40, grand_piano: 40, choir: 15, electric_piano: 5 },
-          contour: { rise: 35, arch: 25, leap_fall: 15, fall: 15, static: 10 },
+          contour: { rise: 35, fall: 15, arch: 25, wave: 10, leap_fall: 15 },
         },
       },
       // Processional cues and hymn-like cues.
-      solemn_hymn: {
+      {
+        name: 'hymn',
         weight: 16,
         priors: {
-          form: { layered_build: 40, arch_return: 30, vamp_and_tag: 20, period: 10 },
+          form: { period: 40, arch: 40, chain: 20 },
           key: { D_minor: 20, A_minor: 16, C_minor: 14, G_minor: 12, F_minor: 10, Ab_major: 14, Eb_major: 14 },
-          texture: { chorale: 35, pulsing_chords: 25, melody_over_ostinato: 25, bell_organum: 15 },
+          register: { low: 40, mid: 60 },
+          motion: { sustained: 55, walking: 45 },
+          accompaniment: { sustained: 80, pulse: 20 },
           tempo: { adagio: 40, andante: 35, largo: 20, moderato: 5 },
           dynamics: { p: 40, pp: 25, mp: 25, mf: 10 },
           dynamicShape: { crescendo: 30, late_surge: 25, arch: 25, steady: 20 },
-          defaultInstrument: { strings: 35, choir: 25, grand_piano: 30, church_organ: 10 },
-          contour: { static: 35, arch: 25, rise: 20, fall: 15, dip: 5 },
+          contour: { rise: 20, fall: 15, arch: 25, dip: 5, wave: 35 },
         },
       },
       // Sparse drones and held colour.
-      meditative_stillness: {
+      {
+        name: 'still',
         weight: 16,
         priors: {
-          form: { vamp_and_tag: 40, additive_loop: 25, arch_return: 25, layered_build: 10 },
-          texture: { melody_over_ostinato: 50, rolling_nocturne: 20, wash_arpeggio: 15, pulsing_chords: 15 },
+          form: { sentence: 30, arch: 50, chain: 20 },
+          register: { low: 45, mid: 45, high: 10 },
+          motion: { sustained: 75, walking: 25 },
+          accompaniment: { sustained: 55, pulse: 25, broken: 20 },
           tempo: { largo: 40, adagio: 40, andante: 20 },
           dynamics: { pp: 50, p: 40, mp: 10 },
           dynamicShape: { late_surge: 30, steady: 25, crescendo: 25, arch: 20 },
-          defaultInstrument: { grand_piano: 45, strings: 35, electric_piano: 15, choir: 5 },
-          contour: { static: 45, fall: 20, arch: 15, rise: 12, dip: 8 },
+          contour: { rise: 12, fall: 20, arch: 15, dip: 8, wave: 45 },
         },
       },
       // Crescendo drama, action cues.
-      stormy_drama: {
+      {
+        name: 'stormy',
         weight: 16,
         priors: {
-          form: { layered_build: 50, additive_loop: 25, free_fantasia: 15, sentence: 10 },
+          form: { sentence: 55, chain: 45 },
           key: { D_minor: 22, C_minor: 20, G_minor: 16, F_minor: 14, A_minor: 12, E_minor: 10, Eb_major: 6 },
-          texture: { dramatic_chords: 35, pulsing_chords: 25, tremolo_storm: 20, wash_arpeggio: 20 },
+          register: { low: 20, mid: 55, high: 25 },
+          motion: { walking: 40, flowing: 45, florid: 15 },
+          accompaniment: { pulse: 85, broken: 15 },
           tempo: { allegro: 40, moderato: 30, andante: 15, presto: 15 },
           dynamics: { f: 30, mf: 25, p: 20, ff: 15, mp: 10 },
           dynamicShape: { crescendo: 35, late_surge: 25, build_then_drop: 25, sudden_contrast: 15 },
-          contour: { rise: 35, leap_fall: 18, drop_rise: 15, arch: 15, fall: 12, static: 5 },
+          contour: { rise: 35, fall: 12, arch: 15, dip: 15, wave: 5, leap_fall: 18 },
         },
       },
       // Uneasy cues that keep adding weight.
-      restless_searching: {
+      {
+        name: 'restless',
         weight: 12,
         priors: {
-          form: { layered_build: 45, additive_loop: 30, vamp_and_tag: 25 },
-          texture: { pulsing_chords: 35, melody_over_ostinato: 30, minimal_cells: 20, dramatic_chords: 15 },
+          form: { sentence: 40, chain: 60 },
+          register: { mid: 50, high: 50 },
+          motion: { flowing: 55, walking: 30, florid: 15 },
+          accompaniment: { broken: 45, pulse: 45, sustained: 10 },
           tempo: { andante: 40, moderato: 30, adagio: 20, allegro: 10 },
           dynamics: { p: 35, mp: 30, mf: 20, pp: 15 },
           dynamicShape: { crescendo: 40, late_surge: 30, waves: 15, build_then_drop: 15 },
           palette: { modal_dark: 35, diatonic: 35, modal: 20, chromatic_approach: 10 },
-          contour: { static: 30, rise: 25, wave: 20, fall: 15, arch: 10 },
+          contour: { rise: 25, fall: 15, arch: 10, wave: 50 },
         },
       },
-    },
+    ],
     holds: true,
     harmony: {
       minor: {
@@ -1061,87 +1114,95 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'Jazz-pop singer-songwriter piano, 2020s. A vocal-range hook in even four-bar phrases (period, returning A, or vamp-and-tag) over a bossa-nova comp (bass on 1 and the and of 2, shells on partido-alto), mid-register close voicings, or a soft stride — not a wide nocturne arpeggio and not sixteenths grouped 5+5+6. Harmony is song-form jazz: I–vi–ii–V, inverted ii–V–I, a ii9–V13 hook, major sevenths, and borrowed-iv phrases (I–V7/IV–vi7–iv6); no dense modern-jazz stacks, no planing, no drone-loop build. Intimate, unhurried, mostly major; acoustic piano first.',
     priors: {
-      form: { period: 32, arch_return: 26, vamp_and_tag: 26, call_and_response: 16 },
+      form: { period: 48, arch: 26, chain: 26 },
       key: { F_major: 12, Bb_major: 11, Eb_major: 10, C_major: 10, Ab_major: 8, G_major: 7, A_major: 6, D_major: 5, D_minor: 8, A_minor: 7, C_minor: 6, F_minor: 5, G_minor: 5 },
       meter: { four_four: 62, three_four: 26, six_eight: 12 },
-      texture: { bossa_comp: 24, chordal_melody: 18, alberti_melody: 14, stride_dance: 14, lush_voicings: 12, rolling_nocturne: 8, aria_walking_bass: 6, syncopated_ostinato: 4 },
+      register: { low: 18, mid: 60, high: 22 },
+      motion: { sustained: 12, walking: 74, flowing: 14 },
+      accompaniment: { sustained: 30, broken: 22, pulse: 4, stride: 38, counterline: 6 },
       palette: { diatonic: 50, chromatic_approach: 32, modal: 10, blues: 8 },
       tempo: { andante: 34, adagio: 24, moderato: 20, largo: 6, larghetto: 8, allegro: 4, grave: 2, vivace: 2 },
       dynamics: { p: 42, mp: 32, pp: 16, mf: 10 },
       dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 12, terraced: 8 },
-      defaultInstrument: { grand_piano: 82, electric_piano: 18 },
-      contour: { arch: 26, fall: 20, wave: 16, rise: 14, dip: 10, leap_fall: 8, static: 6 },
-      arrangement: { lift_on_return: 55, build: 20, constant: 15, peak_then_bare: 10 },
-      opening: { vamp_intro: 55, pickup: 25, straight_in: 20 },
-      pedal: { half: 50, full: 30, dry: 20 },
-      phrasing: { breathing: 50, upbeat: 30, long_breathed: 15, on_the_beat: 5 },
-      hookBars: { '4': 55, '2': 30, '8': 15 },
+      contour: { rise: 14, fall: 20, arch: 26, dip: 10, wave: 22, leap_fall: 8 },
     },
-    archetypes: {
+    variants: [
       // Standards-shaped songs: a sung tune over piano accompaniment.
-      lyrical_song: {
+      {
+        name: 'singing',
         weight: 32,
         priors: {
-          form: { period: 50, arch_return: 35, vamp_and_tag: 15 },
-          texture: { bossa_comp: 38, chordal_melody: 28, alberti_melody: 20, lush_voicings: 14 },
-          phrasing: { breathing: 70, upbeat: 20, long_breathed: 10 },
+          form: { period: 50, arch: 35, chain: 15 },
+          register: { low: 28, mid: 72 },
+          motion: { sustained: 14, walking: 86 },
+          accompaniment: { sustained: 42, broken: 20, stride: 38 },
           meter: { four_four: 60, three_four: 30, six_eight: 10 },
           tempo: { adagio: 40, andante: 45, largo: 15 },
           dynamics: { p: 50, mp: 35, pp: 15 },
           dynamicShape: { arch: 45, waves: 30, steady: 25 },
-          contour: { arch: 35, fall: 25, wave: 20, rise: 12, dip: 8 },
+          contour: { rise: 12, fall: 25, arch: 35, dip: 8, wave: 20 },
         },
       },
       // Light swing and bossa-adjacent groove; still a song, not a vamp miniature.
-      warm_groove: {
+      {
+        name: 'groove',
         weight: 28,
         priors: {
-          form: { vamp_and_tag: 45, call_and_response: 30, period: 25 },
+          form: { period: 55, chain: 45 },
           meter: { four_four: 80, six_eight: 20 },
-          texture: { bossa_comp: 45, stride_dance: 22, lush_voicings: 18, alberti_melody: 15 },
-          phrasing: { breathing: 55, upbeat: 35, long_breathed: 10 },
+          register: { mid: 78, high: 22 },
+          motion: { sustained: 18, walking: 82 },
+          accompaniment: { sustained: 18, broken: 15, stride: 67 },
           palette: { diatonic: 40, chromatic_approach: 35, blues: 15, modal: 10 },
           tempo: { andante: 45, moderato: 40, adagio: 15 },
           dynamics: { mp: 50, p: 30, mf: 20 },
-          defaultInstrument: { grand_piano: 70, electric_piano: 30 },
-          contour: { wave: 24, arch: 22, leap_fall: 18, rise: 16, fall: 14, dip: 6 },
+          contour: { rise: 16, fall: 14, arch: 22, dip: 6, wave: 24, leap_fall: 18 },
         },
       },
-      dreamy_haze: {
+      {
+        name: 'hazy',
         weight: 18,
         priors: {
-          form: { arch_return: 45, vamp_and_tag: 35, period: 20 },
-          texture: { rolling_nocturne: 35, chordal_melody: 30, lush_voicings: 20, melody_over_ostinato: 15 },
+          form: { period: 20, arch: 45, chain: 35 },
+          register: { low: 35, mid: 55, high: 10 },
+          motion: { sustained: 35, walking: 30, flowing: 35 },
+          accompaniment: { sustained: 50, broken: 35, pulse: 15 },
           tempo: { adagio: 50, andante: 35, largo: 15 },
           dynamics: { p: 45, pp: 35, mp: 20 },
           palette: { diatonic: 40, chromatic_approach: 30, modal: 30 },
-          contour: { arch: 28, fall: 24, wave: 20, static: 16, dip: 12 },
+          contour: { fall: 24, arch: 28, dip: 12, wave: 36 },
         },
       },
-      playful_wit: {
+      {
+        name: 'witty',
         weight: 14,
         priors: {
-          form: { call_and_response: 40, period: 30, vamp_and_tag: 30 },
+          form: { period: 70, chain: 30 },
           meter: { four_four: 55, three_four: 35, six_eight: 10 },
-          texture: { stride_dance: 40, scherzo_staccato: 25, alberti_melody: 20, aria_walking_bass: 15 },
+          register: { mid: 35, high: 65 },
+          motion: { walking: 60, flowing: 40 },
+          accompaniment: { broken: 20, stride: 65, counterline: 15 },
           tempo: { moderato: 50, allegro: 35, andante: 15 },
           dynamics: { mp: 45, mf: 35, p: 20 },
           dynamicShape: { terraced: 40, waves: 30, sudden_contrast: 30 },
-          contour: { leap_fall: 24, wave: 22, rise: 18, fall: 18, arch: 18 },
+          contour: { rise: 18, fall: 18, arch: 18, wave: 22, leap_fall: 24 },
         },
       },
-      meditative_stillness: {
+      {
+        name: 'still',
         weight: 8,
         priors: {
-          form: { arch_return: 40, vamp_and_tag: 35, period: 25 },
-          texture: { rolling_nocturne: 40, melody_over_ostinato: 35, chordal_melody: 25 },
+          form: { period: 25, arch: 40, chain: 35 },
+          register: { low: 45, mid: 55 },
+          motion: { sustained: 35, walking: 25, flowing: 40 },
+          accompaniment: { sustained: 25, broken: 40, pulse: 35 },
           tempo: { largo: 50, adagio: 50 },
           dynamics: { pp: 55, p: 45 },
           dynamicShape: { steady: 40, arch: 35, decrescendo: 25 },
-          contour: { static: 35, arch: 30, fall: 25, rise: 10 },
+          contour: { rise: 10, fall: 25, arch: 30, wave: 35 },
         },
       },
-    },
+    ],
     holds: true,
     harmony: {
       major: {
@@ -1196,78 +1257,91 @@ export const STYLE_PROFILES: Record<StyleId, StyleProfile> = {
     brief:
       'Jazz-trained pianist-producer, 2020s: solo-piano miniatures, not sung song forms. Continuous sixteenths whose accents fall in uneven groups (5+5+6, 7+5+4); modal mixture as the hook — bVImaj7 set against IVmaj7, maj7(#5) against add6 — with sliding inner voices and endings left hanging on colour chords (maj7#11, 6/9). Short vamps are varied, not spun into an additive process and not a clear vocal hook over stride; no parallel planing or whole-tone veils; soft, unhurried, piano or Wurlitzer.',
     priors: {
-      form: { vamp_and_tag: 40, arch_return: 25, mosaic_pairs: 12, additive_loop: 10, free_fantasia: 8, period: 5 },
+      form: { period: 10, sentence: 30, arch: 30, chain: 30 },
       key: { C_major: 12, Db_major: 10, D_major: 10, E_major: 10, B_major: 8, Ab_major: 8, Eb_major: 8, F_major: 6, G_major: 5, Fs_minor: 10, C_minor: 6, F_minor: 4, Cs_minor: 3 },
       meter: { three_four: 35, four_four: 45, six_eight: 20 },
-      texture: { displaced_arpeggio: 25, chordal_melody: 22, lush_voicings: 18, melody_over_ostinato: 12, wash_arpeggio: 10, rolling_nocturne: 5, stride_dance: 4, syncopated_ostinato: 4 },
+      register: { low: 10, mid: 50, high: 40 },
+      motion: { sustained: 15, walking: 20, flowing: 35, florid: 30 },
+      accompaniment: { sustained: 40, broken: 40, pulse: 16, stride: 4 },
       palette: { pentatonic: 35, diatonic: 20, blues: 15, chromatic_approach: 15, modal: 15 },
       tempo: { andante: 36, adagio: 26, moderato: 22, largo: 4, larghetto: 8, grave: 2, vivace: 2 },
       dynamics: { p: 45, mp: 35, pp: 15, mf: 5 },
       dynamicShape: { arch: 35, waves: 25, steady: 20, decrescendo: 20 },
-      defaultInstrument: { grand_piano: 55, electric_piano: 35, strings: 5, choir: 5 },
-      contour: { arch: 22, fall: 20, wave: 18, rise: 14, static: 10, leap_fall: 8, dip: 8 },
-      arrangement: { build: 40, lift_on_return: 35, peak_then_bare: 15, terraced_blocks: 10 },
-      opening: { vamp_intro: 45, straight_in: 35, pickup: 20 },
-      pedal: { full: 50, half: 40, dry: 10 },
-      phrasing: { long_breathed: 50, breathing: 30, on_the_beat: 20 },
-      hookBars: { '2': 55, '4': 35, '8': 10 },
+      contour: { rise: 14, fall: 20, arch: 22, dip: 8, wave: 28, leap_fall: 8 },
     },
-    archetypes: {
-      dreamy_haze: {
+    variants: [
+      {
+        name: 'hazy',
         weight: 28,
         priors: {
-          form: { vamp_and_tag: 45, arch_return: 25, mosaic_pairs: 15, free_fantasia: 15 },
+          form: { sentence: 15, arch: 25, chain: 60 },
           meter: { three_four: 40, four_four: 40, six_eight: 20 },
-          texture: { displaced_arpeggio: 40, wash_arpeggio: 25, chordal_melody: 20, lush_voicings: 15 },
+          register: { low: 20, mid: 15, high: 65 },
+          motion: { walking: 10, flowing: 30, florid: 60 },
+          accompaniment: { sustained: 35, broken: 65 },
           tempo: { andante: 50, moderato: 30, adagio: 20 },
           dynamics: { p: 50, mp: 35, pp: 15 },
-          phrasing: { long_breathed: 75, breathing: 25 },
         },
       },
-      lyrical_song: {
-        weight: 24,
+      {
+        name: 'singing',
+        weight: 20,
         priors: {
-          form: { arch_return: 45, vamp_and_tag: 35, period: 20 },
-          texture: { chordal_melody: 45, lush_voicings: 30, melody_over_ostinato: 25 },
+          form: { period: 20, arch: 45, chain: 35 },
+          register: { low: 30, mid: 70 },
+          motion: { walking: 50, flowing: 35, sustained: 15 },
+          accompaniment: { sustained: 75, pulse: 25 },
           tempo: { adagio: 45, andante: 45, largo: 10 },
-          contour: { arch: 32, fall: 25, wave: 20, rise: 13, dip: 10 },
+          contour: { rise: 13, fall: 25, arch: 32, dip: 10, wave: 20 },
         },
       },
       // The neo-soul side: a secondary flavour in his bios, mostly in production work.
-      warm_groove: {
-        weight: 20,
+      {
+        name: 'groove',
+        weight: 16,
         priors: {
-          form: { vamp_and_tag: 70, call_and_response: 30 },
+          form: { period: 30, chain: 70 },
           meter: { four_four: 75, six_eight: 25 },
-          texture: { lush_voicings: 35, bossa_comp: 25, syncopated_ostinato: 20, stride_dance: 20 },
+          register: { mid: 80, high: 20 },
+          motion: { walking: 45, flowing: 35, florid: 20 },
+          accompaniment: { sustained: 35, pulse: 20, stride: 45 },
           palette: { pentatonic: 40, blues: 35, chromatic_approach: 25 },
           tempo: { andante: 50, moderato: 40, adagio: 10 },
-          defaultInstrument: { electric_piano: 65, grand_piano: 35 },
           dynamics: { mp: 50, p: 30, mf: 20 },
         },
       },
-      flowing_perpetual: {
-        weight: 16,
+      // His displacement lesson: continuous sixteenths regrouped 5+5+6 and
+      // 7+5+4, sixteen to the bar. "Wyoming" (local transcription) runs at
+      // 16.4 attacks a 4/4 bar. The one rhythmic fact from his own teaching,
+      // so it is not the rarest thing he plays.
+      {
+        name: 'perpetual',
+        weight: 24,
         priors: {
-          form: { vamp_and_tag: 40, additive_loop: 30, arch_return: 30 },
-          texture: { displaced_arpeggio: 60, rolling_nocturne: 20, minimal_cells: 20 },
+          form: { arch: 30, chain: 70 },
+          meter: { four_four: 85, three_four: 15 },
+          register: { mid: 20, high: 80 },
+          motion: { flowing: 10, florid: 90 },
+          accompaniment: { broken: 80, pulse: 20 },
           tempo: { moderato: 55, andante: 30, allegro: 15 },
-          contour: { wave: 30, arch: 25, rise: 20, fall: 15, static: 10 },
+          contour: { rise: 20, fall: 15, arch: 25, wave: 40 },
         },
       },
       // The ambient keyboard records.
-      meditative_stillness: {
+      {
+        name: 'still',
         weight: 12,
         priors: {
-          form: { vamp_and_tag: 40, additive_loop: 30, mosaic_pairs: 30 },
-          texture: { melody_over_ostinato: 40, lush_voicings: 30, wash_arpeggio: 30 },
+          form: { sentence: 30, chain: 70 },
+          register: { low: 40, mid: 30, high: 30 },
+          motion: { sustained: 70, flowing: 30 },
+          accompaniment: { sustained: 30, broken: 30, pulse: 40 },
           tempo: { largo: 45, adagio: 55 },
           dynamics: { pp: 55, p: 45 },
           dynamicShape: { steady: 35, arch: 35, decrescendo: 30 },
-          defaultInstrument: { electric_piano: 40, grand_piano: 30, strings: 15, choir: 15 },
         },
       },
-    },
+    ],
     holds: true,
     harmony: {
       major: {

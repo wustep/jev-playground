@@ -1,73 +1,57 @@
 {
   "id": "zimmer-cornfield-chase",
-  "piece": "Hans Zimmer, Cornfield Chase (Interstellar) \u2014 piano-reduction sketch",
-  "whyHere": "4-bar I\u2013V\u2013vi\u2013V loop; melody is one repeated interval; theme \u2192 pulse \u2192 high layer \u2192 fade.",
+  "piece": "Hans Zimmer, Cornfield Chase (Interstellar) — piano-reduction sketch",
+  "whyHere": "4-bar I–V–vi–V loop; melody is one repeated interval; theme → pulse → high layer → fade.",
   "evidence": "inferred",
   "midi": null,
   "midiSource": null,
   "midiLicense": null,
-  "notes": "NO MIDI. F\u2013G\u2013Am\u2013G is I\u2013V\u2013vi\u2013V, legal (not the banned I\u2013V\u2013vi\u2013IV). Key F major inferred from the Berklee scoring paper cited in FIDELITY. Melody = one interval: contour static.",
-  "_stretch": [
-    "proposed phrasing: long_breathed",
-    "chant_interval figure (Notes:guide cannot name a one-interval tune)",
-    "same-figure layer add"
-  ],
+  "notes": "NO MIDI. F–G–Am–G is I–V–vi–V, legal (not the banned I–V–vi–IV). Key F major inferred from the Berklee scoring paper cited in FIDELITY. Melody = one interval: contour static.",
   "plan": {
-    "version": 1,
+    "version": 2,
     "style": "hans_zimmer",
-    "character": "heroic_bright",
-    "form": "layered_build",
+    "register": "mid",
+    "motion": "sustained",
+    "accompaniment": "pulse",
+    "form": "chain",
     "key": "F_major",
     "meter": "four_four",
-    "texture": "melody_over_ostinato",
     "palette": "diatonic",
     "tempo": "moderato",
     "dynamics": "mp",
     "dynamicShape": "late_surge",
-    "defaultInstrument": "grand_piano",
-    "arrangement": "peak_then_bare",
-    "opening": "vamp_intro",
-    "pedal": "full",
     "bars": [
       {
         "chord": "I",
-        "role": "statement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "V",
-        "role": "restatement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "vi",
-        "role": "development",
-        "contour": "pendulum"
+        "contour": "leap_fall"
       },
       {
         "chord": "V",
-        "role": "restatement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "I",
-        "role": "restatement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "V",
-        "role": "development",
         "contour": "rise"
       },
       {
         "chord": "vi",
-        "role": "climax",
-        "contour": "pendulum"
+        "contour": "leap_fall"
       },
       {
         "chord": "V",
-        "role": "cadence",
-        "contour": "static"
+        "contour": "wave"
       }
     ]
   }

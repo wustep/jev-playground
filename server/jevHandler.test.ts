@@ -20,7 +20,7 @@ describe('rate limiting', () => {
   it('answers 429 with Retry-After once a client is over the limit, and only that client', async () => {
     vi.stubGlobal('fetch', upstream(200, { model: 'jev-1.13.0', answers: {}, usage: { input_tokens: 1, output_tokens: 0 } }))
     const limiter = createRateLimiter(3)
-    const from = (ip: string) => post({ op: 'concept', style: 'bach', brief: true }, { 'x-vercel-forwarded-for': ip })
+    const from = (ip: string) => post({ op: 'globals', style: 'bach', brief: true }, { 'x-vercel-forwarded-for': ip })
     for (let i = 0; i < 3; i++) expect((await handleJev(from('203.0.113.7'), env, limiter)).status).toBe(200)
 
     const blocked = await handleJev(from('203.0.113.7'), env, limiter)
@@ -76,7 +76,7 @@ describe('allowlist and request hygiene', () => {
     expect(put.status).toBe(405)
     expect(put.headers.get('Allow')).toBe('GET, POST')
     expect((await handleJev(post('x'.repeat(20_000)), env, limiter())).status).toBe(413)
-    expect((await handleJev(post({ op: 'concept', style: 'bach' }), {}, limiter())).status).toBe(503)
+    expect((await handleJev(post({ op: 'globals', style: 'bach' }), {}, limiter())).status).toBe(503)
   })
 })
 
@@ -100,7 +100,7 @@ describe('nothing secret leaves the server', () => {
   it('never relays an upstream error body', async () => {
     for (const status of [401, 403, 422, 500]) {
       vi.stubGlobal('fetch', upstream(status, `upstream trace: key=${KEY} account=acct_42 internal-host-7`))
-      const response = await handleJev(post({ op: 'concept', style: 'bach', brief: false }), env, createRateLimiter(10))
+      const response = await handleJev(post({ op: 'globals', style: 'bach', brief: false }), env, createRateLimiter(10))
       const text = await response.text()
       expect(response.status).toBe(502)
       expect(text).not.toContain(KEY)

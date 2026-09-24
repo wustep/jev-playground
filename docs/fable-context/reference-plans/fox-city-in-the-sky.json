@@ -1,73 +1,57 @@
 {
   "id": "fox-city-in-the-sky",
   "piece": "Elijah Fox, City in the Sky (lesson reduction)",
-  "whyHere": "Modal mixture as the hook \u2014 his own teaching, not a shop-score transcription.",
+  "whyHere": "Modal mixture as the hook — his own teaching, not a shop-score transcription.",
   "evidence": "own_words",
   "midi": null,
   "midiSource": null,
   "midiLicense": null,
-  "notes": "NO MIDI. Shop scores exist; contents not seen (STYLE_NOTES). Flypaper/Soundfly: Abmaj7 (bVI) against Fmaj7 (IV), then Cmaj7(#5) with F6, close vi\u2013V\u2013#iv\u00f87\u2013biii\u2013ii.",
-  "_stretch": [
-    "proposed phrasing: long_breathed",
-    "close: stop on a colour chord (Imaj7s11 / I6_9) \u2014 last role is still cadence",
-    "shop-score voicings unseen"
-  ],
+  "notes": "NO MIDI. Shop scores exist; contents not seen (STYLE_NOTES). Flypaper/Soundfly: Abmaj7 (bVI) against Fmaj7 (IV), then Cmaj7(#5) with F6, close vi–V–#ivø7–biii–ii.",
   "plan": {
-    "version": 1,
+    "version": 2,
     "style": "elijah_fox",
-    "character": "dreamy_haze",
-    "form": "vamp_and_tag",
+    "register": "mid",
+    "motion": "walking",
+    "accompaniment": "sustained",
+    "form": "chain",
     "key": "C_major",
     "meter": "four_four",
-    "texture": "chordal_melody",
     "palette": "modal",
     "tempo": "andante",
     "dynamics": "p",
     "dynamicShape": "arch",
-    "defaultInstrument": "grand_piano",
-    "arrangement": "build",
-    "opening": "vamp_intro",
-    "pedal": "full",
     "bars": [
       {
         "chord": "bVImaj7",
-        "role": "statement",
         "contour": "arch"
       },
       {
         "chord": "IVmaj7",
-        "role": "restatement",
         "contour": "wave"
       },
       {
         "chord": "bVImaj7",
-        "role": "development",
         "contour": "arch"
       },
       {
         "chord": "IVmaj7",
-        "role": "restatement",
         "contour": "wave"
       },
       {
         "chord": "Imaj7s5",
-        "role": "contrast",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "IVadd6",
-        "role": "development",
         "contour": "dip"
       },
       {
         "chord": "vi",
-        "role": "development",
         "contour": "fall",
         "chord2": "V"
       },
       {
         "chord": "sharp_iv_half_dim7",
-        "role": "surprise",
         "contour": "fall"
       }
     ]

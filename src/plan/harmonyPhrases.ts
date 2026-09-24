@@ -1,14 +1,14 @@
 // Closed catalog of 4-bar harmony phrases, built from a style's HarmonyBook.
 //
-// Jev picks one option per form slot (src/plan/forms.ts). Code expands the id
+// Jev picks one option per form slot (src/plan/phrase.ts). Code expands the id
 // into four roman numerals and then applies the book's cadence splits — so the
 // live planner asks ~4× fewer chord questions than a per-bar Choice, while
 // staying inside the same vocabulary the HeuristicPlanner already uses.
 //
 // Imported by the /api/jev serverless chain → explicit `.js` extensions.
 
-import { CHORDS, PlanValidationError, type ChordId, type KeyId, type StyleId } from './schema.js'
-import type { PhraseEnd, PhraseSlot } from './forms.js'
+import { CHORDS, PlanValidationError, type BarCount, type ChordId, type KeyId, type PlanGlobals, type StyleId } from './schema.js'
+import { BARS_PER_PHRASE, formSlots, type PhraseEnd, type PhraseSlot } from './phrase.js'
 import { STYLE_PROFILES, type HarmonyBook } from './styles.js'
 
 export const PHRASE_ENDS: Record<PhraseEnd, string> = {
@@ -119,12 +119,36 @@ export function phraseOptions(book: HarmonyBook, slot: PhraseSlot): PhraseOption
   return [option('cd:0', [tonic, tonic, tonic, tonic], slot.end)]
 }
 
-export function phraseCriteria(book: HarmonyBook, slot: PhraseSlot): Record<string, string> {
-  return Object.fromEntries(phraseOptions(book, slot).map((entry) => [entry.id, entry.label]))
+/**
+ * The phrase Choice for one form slot of one piece: the slot, the book it
+ * draws on, and the options on offer.
+ *
+ * Both ends of /api/jev go through this one function. The server turns it
+ * into the question's criteria; JevPlanner validates and expands Jev's answer
+ * against it. They used to derive the slot separately, and on `main` that
+ * drifted (#58): the server offered one layout's ids, the client checked
+ * another's, and a valid live answer was rejected as unknown.
+ */
+export interface SlotCatalog {
+  slot: PhraseSlot
+  book: HarmonyBook
+  options: PhraseOption[]
 }
 
-export function expandPhrase(id: string, book: HarmonyBook, slot: PhraseSlot): readonly [ChordId, ChordId, ChordId, ChordId] {
-  const found = phraseOptions(book, slot).find((entry) => entry.id === id)
+export function slotCatalog(style: StyleId, globals: Pick<PlanGlobals, 'form' | 'key'>, barCount: BarCount, slotIndex: number): SlotCatalog {
+  const slot = formSlots(globals.form, barCount)[slotIndex]
+  if (!slot) throw new PlanValidationError(`phrase: slot ${slotIndex} is out of range for ${barCount} bars of ${globals.form}`)
+  const book = bookFor(style, globals.key)
+  return { slot, book, options: phraseOptions(book, slot) }
+}
+
+/** Option id → description: the Choice criteria, and the table an answer is checked against. */
+export function phraseCriteria(options: readonly PhraseOption[]): Record<string, string> {
+  return Object.fromEntries(options.map((entry) => [entry.id, entry.label]))
+}
+
+export function expandPhrase(id: string, options: readonly PhraseOption[]): readonly [ChordId, ChordId, ChordId, ChordId] {
+  const found = options.find((entry) => entry.id === id)
   if (!found) throw new PlanValidationError(`phrase: unknown option "${id}" for this slot`)
   return found.chords
 }
@@ -145,8 +169,22 @@ export function withPhraseNovelty(probabilities: Record<string, number>, previou
 }
 
 /**
+ * The bar where slot `slotIndex` takes two harmonies: a half cadence splits
+ * its own last bar (I6/4 | V); a phrase that closes, or runs on, splits the
+ * bar before its arrival (ii6/5–V7 | I).
+ */
+export const splitBarOf = (slot: PhraseSlot, slotIndex: number) => slotIndex * BARS_PER_PHRASE + (slot.end === 'half' ? 3 : 2)
+
+/** The book's approaches into the chord at `at` — never one that restates the bar before. */
+export function approachesInto(book: HarmonyBook, chords: readonly ChordId[], at: number): readonly (readonly [ChordId, ChordId])[] {
+  return book.splits.filter(([approach, target]) => target === chords[at] && approach !== chords[at - 1])
+}
+
+/**
  * Cadence ornament of the harmony book: the bar that arrives on a split's
- * target takes the approach in its first half. Same rule the heuristic uses.
+ * target takes the approach in its first half. The heuristic stub applies
+ * the same `splitBarOf` / `approachesInto` rule, choosing among approaches
+ * by its own sampling policy.
  */
 export function applyBookSplits(
   chords: readonly ChordId[],
@@ -155,17 +193,14 @@ export function applyBookSplits(
 ): { chords: ChordId[]; seconds: (ChordId | undefined)[] } {
   const next = [...chords]
   const seconds: (ChordId | undefined)[] = next.map(() => undefined)
-  if (!book.splits.length) return { chords: next, seconds }
   const end = next.length - 1
   slots.forEach((slot, s) => {
-    const at = slot.end === 'half' ? s * 4 + 3 : s * 4 + 2
-    if (at >= end || at < 0) return
-    const arrival = next[at]
-    const options = book.splits.filter(([approach, target]) => target === arrival && approach !== next[at - 1])
+    const at = splitBarOf(slot, s)
+    if (at >= end) return
+    const options = approachesInto(book, next, at)
     if (!options.length) return
-    const [approach] = options[0]
-    next[at] = approach
-    seconds[at] = arrival
+    seconds[at] = next[at]
+    next[at] = options[0][0]
   })
   return { chords: next, seconds }
 }

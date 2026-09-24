@@ -20,7 +20,11 @@ export interface RateLimiter {
   take(key: string, now?: number): RateLimitResult
 }
 
-/** A 16-bar plan is 18 requests plus one score; 90 a minute is four or five pieces. */
+/**
+ * A live plan is one globals request plus one per four-bar phrase — five at 16
+ * bars, seventeen at 64 — and one score. 90 a minute is fifteen 16-bar pieces
+ * or five 64-bar ones.
+ */
 export const DEFAULT_LIMIT_PER_MINUTE = 90
 const WINDOW_MS = 60_000
 /** Cap on tracked clients, so the map itself can't be used to exhaust memory. */

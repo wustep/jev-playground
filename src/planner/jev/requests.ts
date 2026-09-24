@@ -5,135 +5,63 @@
 // with these same functions. That keeps /api/jev from being an open relay for
 // whoever finds the URL.
 //
+// Three ops, down from six. `concept` asked for a `character` that turned out
+// to change no sounding note; `bar` was superseded by `phrase`; `notes` was
+// the two experimental note-writing paths, which are gone with the modes they
+// served. What is left is: decide the piece, decide its phrases, judge it.
+//
 // Design notes (from docs.typesafe.ai, and from watching live distributions):
 //  • Questions in one request run in parallel and cannot see each other, so
 //    everything independent is fanned out in ONE call (all the globals).
-//  • Asked "what is most characteristic of Beethoven?", Jev is — rightly —
-//    sure: C minor, block chords, allegro, every time. So the first request
-//    asks only about the CHARACTER of the piece, two ways at once: a Choice
-//    (which is most typical — 95 % "stormy" for Beethoven) and one Noul per
-//    character (is this a real part of their output — yes for stormy, lyrical,
-//    heroic, playful, solemn; no for "warm groove"). Several characters apply
-//    at once, which is what Nouls are for; alone they are too flat, and the
-//    Choice alone too peaked. Code combines the two (JevPlanner) and draws
-//    one; every later question is conditioned on it. Variety comes from the
-//    composer's range, coherence from one shared premise in state.
-//  • Phrase layout is ONE Choice between whole forms (src/plan/forms.ts), not
-//    a role question per bar: parallel per-bar marginals can't see each other
-//    and came back as "half cadence" four bars running.
+//  • Register, motion and accompaniment lead the globals question set. They
+//    are the three that decide what a listener actually hears, and they are
+//    the three the old schema had no way to say at all.
+//  • Phrase layout is ONE Choice between whole forms, not a role question per
+//    bar: parallel per-bar marginals can't see each other and came back as
+//    "half cadence" four bars running.
 //  • Harmony is one Choice per 4-bar form slot, whose options are that style's
 //    HarmonyBook heads / seqs / tails / verified phrases for the slot's
-//    PhraseEnd. Per-bar `bar` ops stay parseable (chord2 / notes tests).
+//    PhraseEnd.
 //  • Choice criteria are the enum descriptions from schema.ts; Score levels
 //    describe standalone situations because the model never sees the ordering.
 
-import { formSlots } from '../../plan/forms.js'
-import { bookFor, phraseCriteria, PHRASE_ENDS, slotContourQuestionId } from '../../plan/harmonyPhrases.js'
+import { BARS_PER_PHRASE, formSlots, barPositions, type BarRole } from '../../plan/phrase.js'
+import { phraseCriteria, PHRASE_ENDS, slotCatalog, slotContourQuestionId } from '../../plan/harmonyPhrases.js'
 import {
-  BASS_PATTERNS,
-  BASS_PATTERN_QUESTION_ID,
-  FIGURE_QUESTION_ID,
-  GOAL_QUESTION_ID,
-  MELODY_DEGREES,
-  MELODY_FIGURES,
-  MELODY_GOALS,
-  NOTES_WRITE_MODES,
-  PHRASE_NOTE_COUNT,
-  parseBassSoFar,
-  parseGuideSoFar,
-  parseMelodyFigure,
-  parseMelodyGoal,
-  parseMelodySoFar,
-  parseNotesWriteMode,
-  pitchQuestionId,
-  rhythmCriteriaFor,
-  type BassPatternId,
-  type GuideMemoryBar,
-  type MelodyFigureId,
-  type MelodyGoalId,
-  type MelodyMemoryBar,
-  type NotesWriteMode,
-} from '../../plan/notes.js'
-import {
+  ACCOMPANIMENTS,
   BAR_COUNT_VALUES,
-  BAR_ROLES,
-  CHARACTERS,
-  CHARACTER_IDS,
   CHORDS,
   CONTOURS,
+  DYNAMIC_SHAPES,
+  DYNAMICS,
   FORMS,
   GLOBAL_FIELDS,
   GLOBAL_FIELD_IDS,
   KEYS,
   METERS,
+  MOTIONS,
   PALETTES,
-  STYLE_IDS,
+  PlanValidationError,
+  parseOption,
+  REGISTERS,
   STYLE_LABELS,
   TEMPOS,
-  TEXTURES,
-  INSTRUMENTS,
-  DYNAMICS,
-  DYNAMIC_SHAPES,
-  ARRANGEMENTS,
-  PEDALS,
-  PHRASINGS,
-  HOOK_BARS,
-  OPENINGS,
-  defaultPhrasing,
-  defaultHookBars,
-  PlanValidationError,
-  parseBarPlan,
   parseGlobals,
-  parseOption,
   parsePlan,
   parseStyle,
   type BarCount,
-  type BarPlan,
-  type BarRoleId,
-  type ArrangementId,
-  type CharacterId,
   type ChordId,
   type CompositionPlan,
   type ContourId,
   type GlobalField,
-  type KeyId,
-  type MeterId,
-  type PaletteId,
   type PlanGlobals,
   type StyleId,
-  type TempoId,
-  type TextureId,
 } from '../../plan/schema.js'
 import { STYLE_PROFILES } from '../../plan/styles.js'
-import {
-  bassPatternInstructions,
-  melodyFigureInstructions,
-  melodyGoalInstructions,
-  melodyPitchInstructions,
-  melodyRhythmInstructions,
-  notesContinuityState,
-  notesGuideContinuityState,
-  notesGuideTask,
-  notesTask,
-} from './notesContinuity.js'
-import { prefersLongAndRest } from './notesPriors.js'
-import type { ChoiceQuestion, Json, NoulQuestion, Question, ScoreQuestion, SystemOneRequest } from './systemOne.js'
+import type { ChoiceQuestion, Json, Question, ScoreQuestion, SystemOneRequest } from './systemOne.js'
 
 export type JevOp =
-  | { op: 'concept'; style: StyleId; brief: boolean }
-  | { op: 'globals'; style: StyleId; brief: boolean; character: CharacterId }
-  | {
-      op: 'bar'
-      style: StyleId
-      brief: boolean
-      globals: PlanGlobals
-      roles: BarRoleId[]
-      /** chords already fixed for bars 0..index-1 */
-      chords: ChordId[]
-      /** their second-half harmonies, where a bar has one (same length as `chords`; omitted = none) */
-      chord2s?: (ChordId | null)[]
-      index: number
-    }
+  | { op: 'globals'; style: StyleId; brief: boolean }
   | {
       op: 'phrase'
       style: StyleId
@@ -148,115 +76,48 @@ export type JevOp =
       contours: ContourId[]
     }
   | { op: 'score'; plan: CompositionPlan; styles: StyleId[] }
-  /**
-   * Debug-only: one bar of closed-schema RH. Callers repeat per new plan bar.
-   * Optional `mode` / `figure` / `goal` stay on this op so Coder’s allowlist
-   * does not need a new verb. Omitted `mode` = `line` (rhythm + pitch_1..4).
-   * `guide` asks figure + goal only — no parallel degrees.
-   */
-  | {
-      op: 'notes'
-      style: StyleId
-      brief: boolean
-      character: CharacterId
-      key: KeyId
-      meter: MeterId
-      tempo: TempoId
-      texture: TextureId
-      palette: PaletteId
-      /** Optional so a Coder allowlist that only knows the original notes shape still validates. */
-      arrangement?: ArrangementId
-      bar: BarPlan
-      /** 0-based plan bar this request writes. Omitted = bar 1 (legacy). */
-      barIndex?: number
-      /**
-       * `guide` = D1 figure+goal. `line` (or omitted) = today’s 4-slot
-       * rhythm+degrees. Parse against NOTES_WRITE_MODES when present.
-       */
-      mode?: NotesWriteMode
-      /** Closed figure id. Optional; guide mode asks this as a question. */
-      figure?: MelodyFigureId
-      /** Closed chord-tone goal. Optional; guide mode asks this as a question. */
-      goal?: MelodyGoalId
-      /**
-       * Prior bars’ closed picks. Line: rhythm + four degree ids.
-       * Guide: figure + goal ids.
-       */
-      melodySoFar?: MelodyMemoryBar[] | GuideMemoryBar[]
-      /** Prior bars’ closed bass pattern ids. Line mode only; unused on the score. */
-      bassSoFar?: BassPatternId[]
-      /** Next plan bar’s chord, when known. */
-      nextChord?: ChordId
-    }
 
 // ── State helpers ───────────────────────────────────────────────────────────
 
 function styleState(style: StyleId, brief: boolean): Json {
-  return brief
-    ? { name: STYLE_LABELS[style], description: STYLE_PROFILES[style].brief }
-    : { name: STYLE_LABELS[style] }
+  return brief ? { name: STYLE_LABELS[style], description: STYLE_PROFILES[style].brief } : { name: STYLE_LABELS[style] }
 }
 
 /** Enum ids mean nothing to the model; state always carries the descriptions. */
 function describeGlobals(globals: PlanGlobals): Json {
   return {
-    character: CHARACTERS[globals.character],
+    melody_register: REGISTERS[globals.register],
+    melody_motion: MOTIONS[globals.motion],
+    accompaniment: ACCOMPANIMENTS[globals.accompaniment],
     phrase_layout: FORMS[globals.form],
     key: KEYS[globals.key],
     meter: METERS[globals.meter],
-    texture: TEXTURES[globals.texture],
     melodic_palette: PALETTES[globals.palette],
     tempo: TEMPOS[globals.tempo],
     dynamics: DYNAMICS[globals.dynamics],
     dynamic_shape: DYNAMIC_SHAPES[globals.dynamicShape],
-    instrument: INSTRUMENTS[globals.defaultInstrument],
-    arrangement: ARRANGEMENTS[globals.arrangement ?? 'lift_on_return'],
-    opening: OPENINGS[globals.opening ?? 'straight_in'],
-    ...(globals.pedal ? { sustain_pedal: PEDALS[globals.pedal] } : {}),
-    phrasing: PHRASINGS[globals.phrasing ?? defaultPhrasing(globals.character)],
-    hook_bars: HOOK_BARS[globals.hookBars ?? defaultHookBars(globals.character, globals.form)],
   }
 }
 
 const TASK =
-  'Plan a short piece for solo keyboard in the requested style. A composer writes many kinds of piece; this one has the character given in `piece_character`. Software will expand the plan into notes, so choose what that composer would plausibly write for a piece of this character.'
-
-const CONCEPT_TASK = 'Plan a short piece for solo keyboard in the requested style. First decide what kind of piece it is.'
+  'Plan a short piece for solo keyboard in the requested style. Software will expand the plan into notes: it writes the singing line first, in the register and at the motion you choose, and then accompanies it with the pattern you choose. Choose what that composer would plausibly write.'
 
 // ── Question wording ────────────────────────────────────────────────────────
 
-const CHARACTER_INSTRUCTIONS =
-  'Which character is most typical of a short keyboard piece in the style of `requested_style.name`?'
-
-/** Question ids of the character fan-out, e.g. `writes_dance_lilt`. */
-export const characterQuestionId = (character: CharacterId) => `writes_${character}`
-
-const characterQuestion = (character: CharacterId): NoulQuestion => ({
-  type: 'noul',
-  instructions: `A composer writes pieces of many different characters, not only the one they are most famous for. Is a short keyboard piece with the following character a recognisable part of what \`requested_style.name\` wrote or plays? Character: ${CHARACTERS[character]}`,
-  criteria: {
-    true: 'Yes — pieces of this character are a real part of that musician\'s output, even if not the most famous part',
-    false: 'No — this character is foreign to that musician\'s music',
-  },
-})
-
-const GLOBAL_INSTRUCTIONS: Record<Exclude<GlobalField, 'character'>, string> = {
-  form: 'How would `requested_style.name` most plausibly lay out the phrases of a short piece with the character in `piece_character`?',
-  key: 'Which key would `requested_style.name` plausibly choose for a piece with the character in `piece_character`?',
-  meter: 'Which meter suits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
-  texture: 'Which keyboard texture best realises the character in `piece_character` the way `requested_style.name` would write it?',
-  palette: 'Which pool of melody and passing notes fits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
-  tempo: 'Which tempo suits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
-  dynamics: 'Which overall dynamic level suits a piece with the character in `piece_character`, in the style of `requested_style.name`?',
-  dynamicShape: 'How would the dynamics behave over a piece with the character in `piece_character`, in the style of `requested_style.name`?',
-  defaultInstrument: 'Which of these instruments would `requested_style.name` most plausibly use for a piece with the character in `piece_character`?',
-  arrangement: 'How would the keyboard arrangement change as phrases return in a piece with the character in `piece_character`, in the style of `requested_style.name`? The options describe density over the form, not which notes to write.',
-  opening: 'How would a short piece with the character in `piece_character` begin, in the style of `requested_style.name`? Straight in, a bar or two of accompaniment alone, or a short pickup into the first downbeat.',
-  pedal: 'How much sustain pedal would a piece with the character in `piece_character` use, in the style of `requested_style.name`? Dry cuts notes at their written length; half lets chords overlap a little; full holds the pedal so sonorities ring through the bar.',
-  phrasing:
-    'How would the singing line treat phrase ends in a piece with the character in `piece_character`, in the style of `requested_style.name`? On the beat never rests; an upbeat leans in from an anacrusis; breathing lands early and rests; long-breathed leaves two beats of air. Independent of character — a stormy piece may still breathe.',
-  hookBars:
-    'How many bars of the opening idea should return in the singing line of a piece with the character in `piece_character`, in the style of `requested_style.name`? Two is a short cell; four is a phrase or loop cell; eight is a full slow-movement theme. The accompaniment may keep a shorter pattern.',
+const GLOBAL_INSTRUCTIONS: Record<GlobalField, string> = {
+  register:
+    'Where would the singing line of a short keyboard piece by `requested_style.name` sit? Low is a covered cantabile around and just above middle C; mid is a plain soprano; high is a bright vocal line with air under it. Answer for the tune itself, not for the accompaniment or the instrument\'s range.',
+  motion:
+    'How fast would that singing line move, in notes per beat? Sustained is one or two long notes to a bar; walking is about one note a beat; flowing is about two; florid is running figuration decorating a slower skeleton.',
+  accompaniment:
+    'What holds the tune up in a short keyboard piece by `requested_style.name`? Held chords, a chord broken and rolled continuously, a repeated pulse, a bass-then-chords dance pattern, or a second independent line of equal weight.',
+  form: 'How would `requested_style.name` most plausibly lay out the phrases of a short piece?',
+  key: 'Which key would `requested_style.name` plausibly choose for a short piece?',
+  meter: 'Which meter suits a short piece in the style of `requested_style.name`?',
+  palette: 'Which pool of melody and passing notes fits a short piece in the style of `requested_style.name`?',
+  tempo: 'Which tempo suits a short piece in the style of `requested_style.name`?',
+  dynamics: 'Which overall dynamic level suits a short piece in the style of `requested_style.name`?',
+  dynamicShape: 'How would the dynamics behave over a short piece in the style of `requested_style.name`?',
 }
 
 const choice = (instructions: string, criteria: Record<string, string>): ChoiceQuestion => ({
@@ -265,82 +126,40 @@ const choice = (instructions: string, criteria: Record<string, string>): ChoiceQ
   criteria,
 })
 
-function conceptRequest(op: Extract<JevOp, { op: 'concept' }>, model: string): SystemOneRequest {
-  return {
-    model,
-    state: { task: CONCEPT_TASK, requested_style: styleState(op.style, op.brief) },
-    questions: {
-      character: choice(CHARACTER_INSTRUCTIONS, CHARACTERS),
-      ...Object.fromEntries(CHARACTER_IDS.map((character) => [characterQuestionId(character), characterQuestion(character)])),
-    },
-  }
-}
-
 function globalsRequest(op: Extract<JevOp, { op: 'globals' }>, model: string): SystemOneRequest {
   const questions: Record<string, Question> = {}
-  for (const field of GLOBAL_FIELD_IDS) {
-    if (field === 'character') continue
-    questions[field] = choice(GLOBAL_INSTRUCTIONS[field], GLOBAL_FIELDS[field])
-  }
-  return {
-    model,
-    state: { task: TASK, requested_style: styleState(op.style, op.brief), piece_character: CHARACTERS[op.character] },
-    questions,
-  }
-}
-
-// Labels that only make sense in one mode are not offered in the other: the
-// model can't pick what it isn't shown, and ~25 fewer options is ~25 fewer
-// ways to go wrong. The root-position tonic triads of BOTH modes stay in
-// (Picardy thirds, mode flips), as do the borrowed chords that are the point
-// of modal mixture.
-const MAJOR_ONLY: ReadonlySet<ChordId> = new Set<ChordId>(['I6', 'I64', 'iii', 'iii6', 'iii64', 'iii7', 'iii9', 'vi', 'vi6', 'vi7', 'vi9', 'vi11', 'Imaj42', 'ii6', 'ii65', 'ii42', 'ii7', 'ii9', 'V7_of_ii', 'V7_of_vi', 'sharp_i_dim7', 'biii7', 'I6_9', 'Imaj9', 'Iadd9', 'Iadd6', 'Imaj7s5', 'Imaj7s11', 'II_over_I', 'IVmaj7s11'])
-const MINOR_ONLY: ReadonlySet<ChordId> = new Set<ChordId>(['i6', 'i64', 'i42', 'i9', 'i11', 'i_add9', 'i_maj7', 'i_add6', 'ii_dim', 'ii_dim6', 'ii_half_dim65', 'iv64', 'v6', 'iv9'])
-
-/** The chord labels offered to Jev in `key`. */
-export function chordOptionsFor(key: KeyId): Record<string, string> {
-  const hidden = key.endsWith('_minor') ? MAJOR_ONLY : MINOR_ONLY
-  return Object.fromEntries(Object.entries(CHORDS).filter(([id]) => !hidden.has(id as ChordId)))
-}
-
-/**
- * Chords offered as the first half of a bar that arrives on a cadence chord in
- * its second half: the cadential six-four and the pre-dominants. Asked only on
- * the bar before a cadence and on a half-cadence bar, in the same request as
- * that bar's chord, so a two-chord cadence costs no extra round trip.
- */
-const APPROACHES: readonly ChordId[] = ['I64', 'i64', 'ii6', 'ii65', 'ii7', 'ii_dim6', 'ii_half_dim65', 'ii_half_dim7', 'IV', 'iv', 'IV6', 'iv6', 'IVmaj7', 'vi', 'bII6', 'bVI', 'V7_of_V', 'V65_of_V']
-export const NO_APPROACH = 'none'
-
-/** Options for the approach question in `key`, `none` first. */
-export function approachOptionsFor(key: KeyId): Record<string, string> {
-  const offered = chordOptionsFor(key)
-  return {
-    [NO_APPROACH]: 'One harmony for the whole bar',
-    ...Object.fromEntries(APPROACHES.filter((id) => id in offered).map((id) => [id, `First half of the bar only: ${CHORDS[id]}, the chosen chord arriving in the second half`])),
-  }
-}
-
-/** Whether bar `index` is asked for an approach chord: it pauses on a half cadence, or leads straight into the cadence bar. */
-export function asksApproach(roles: readonly BarRoleId[], index: number): boolean {
-  return index < roles.length - 1 && (roles[index] === 'half_cadence' || roles[index + 1] === 'cadence')
+  for (const field of GLOBAL_FIELD_IDS) questions[field] = choice(GLOBAL_INSTRUCTIONS[field], GLOBAL_FIELDS[field])
+  return { model, state: { task: TASK, requested_style: styleState(op.style, op.brief) }, questions }
 }
 
 const describeChord = (chord: ChordId, chord2: ChordId | null | undefined) =>
   `${chord} — ${CHORDS[chord]}` + (chord2 ? `; second half of the bar: ${chord2} — ${CHORDS[chord2]}` : '')
 
+/** What a bar is doing, in words — derived from the form, never planned. */
+const ROLE_WORDS: Record<BarRole, string> = {
+  statement: 'presents the idea',
+  continuation: 'carries it on',
+  sequence: 'the previous bar\'s figure on a new harmony',
+  contrast: 'departs — new register or colour',
+  climax: 'the peak of the piece',
+  half_cadence: 'pauses, unresolved',
+  cadence: 'closes',
+}
+
 function phraseRequest(op: Extract<JevOp, { op: 'phrase' }>, model: string): SystemOneRequest {
+  const { slot, options } = slotCatalog(op.style, op.globals, op.barCount, op.slotIndex)
   const slots = formSlots(op.globals.form, op.barCount)
-  const slot = slots[op.slotIndex]
-  const start = op.slotIndex * 4
+  const positions = barPositions(op.globals.form, op.barCount)
+  const start = op.slotIndex * BARS_PER_PHRASE
+  const roleAt = (bar: number) => positions[bar]?.role ?? 'continuation'
   const priorSlots = slots.slice(0, op.slotIndex).map((earlier, s) => ({
     slot: s + 1,
     how_it_ends: PHRASE_ENDS[earlier.end],
-    bars: earlier.roles.map((role, k) => {
-      const bar = s * 4 + k
+    bars: [0, 1, 2, 3].map((k) => {
+      const bar = s * BARS_PER_PHRASE + k
       return {
         bar: bar + 1,
-        role: `${role} — ${BAR_ROLES[role]}`,
+        role: `${roleAt(bar)} — ${ROLE_WORDS[roleAt(bar)]}`,
         chord: describeChord(op.chords[bar], undefined),
         melodic_shape: CONTOURS[op.contours[bar]],
       }
@@ -354,77 +173,37 @@ function phraseRequest(op: Extract<JevOp, { op: 'phrase' }>, model: string): Sys
     current_slot: {
       slot: op.slotIndex + 1,
       bars: `${start + 1}–${start + 4}`,
-      roles: slot.roles.map((role) => `${role} — ${BAR_ROLES[role]}`),
+      roles: [0, 1, 2, 3].map((k) => `${roleAt(start + k)} — ${ROLE_WORDS[roleAt(start + k)]}`),
       how_it_ends: PHRASE_ENDS[slot.end],
+      ...(slot.returnsFrom !== undefined ? { brings_back_phrase: slot.returnsFrom + 1 } : {}),
       prior_melodic_shapes: op.contours.slice(-4).map((contour) => CONTOURS[contour]),
     },
   }
   const questions: Record<string, Question> = {
     phrase: choice(
       'Which four-bar harmonic phrase should occupy `current_slot` so the progression in `phrases_so_far` continues in this style? Options are stock openings, travelling units, cadences and verified phrases from the style book, described functionally. Match the close described in `current_slot.how_it_ends`. Do not name composers.',
-      phraseCriteria(bookFor(op.style, op.globals.key), slot),
+      phraseCriteria(options),
     ),
   }
-  slot.roles.forEach((role, k) => {
+  for (let k = 0; k < 4; k++) {
+    const role = roleAt(start + k)
     questions[slotContourQuestionId(k)] = choice(
-      `Which melodic shape should bar ${start + k + 1} have? Its role is ${role} — ${BAR_ROLES[role]}. Take the shapes already chosen in \`current_slot.prior_melodic_shapes\` and \`phrases_so_far\` into account.`,
+      `Which shape should the singing line have in bar ${start + k + 1}? That bar ${ROLE_WORDS[role]}. Take the shapes already chosen in \`current_slot.prior_melodic_shapes\` and \`phrases_so_far\` into account.`,
       CONTOURS,
     )
-  })
+  }
   return { model, state, questions }
 }
 
-function barRequest(op: Extract<JevOp, { op: 'bar' }>, model: string): SystemOneRequest {
-  const bars: Json[] = op.roles.map((role, i) => ({
-    bar: i + 1,
-    role: `${role} — ${BAR_ROLES[role]}`,
-    chord:
-      i < op.index
-        ? describeChord(op.chords[i], op.chord2s?.[i])
-        : i === op.index
-          ? '(to be decided now)'
-          : '(not decided yet)',
-  }))
-  const state: Json = {
-    task: TASK,
-    requested_style: styleState(op.style, op.brief),
-    piece: { ...(describeGlobals(op.globals) as Record<string, Json>), length_in_bars: op.roles.length },
-    bars,
-    current_bar: op.index + 1,
-  }
-  return {
-    model,
-    state,
-    questions: {
-      chord: choice(
-        'Which chord should bar `current_bar` use so that the progression in `bars` continues the way `requested_style.name` would write a piece of this character? Chords are roman numerals relative to the key in `piece.key`. Take the role of the current bar and the chords already chosen into account; a restated idea may be reharmonised, and the bass may move by step through inverted chords.',
-        chordOptionsFor(op.globals.key),
-      ),
-      contour: choice(
-        'Which melodic shape should bar `current_bar` have, given its role in `bars` and the way `requested_style.name` typically shapes lines?',
-        CONTOURS,
-      ),
-      ...(asksApproach(op.roles, op.index)
-        ? {
-            approach: choice(
-              'Bar `current_bar` closes or pauses a phrase. Would `requested_style.name` give it two harmonies — an approach chord in its first half, with the chord chosen for this bar arriving in the second half (a cadential six-four resolving to the dominant, ii–V in one bar) — or keep one harmony for the whole bar?',
-              approachOptionsFor(op.globals.key),
-            ),
-          }
-        : {}),
-    },
-  }
-}
-
-/** Readable, id-free rendering of a plan — also handy for debugging. */
 export function describePlan(plan: CompositionPlan): Json {
+  const positions = barPositions(plan.form, plan.bars.length as BarCount)
   return {
     ...(describeGlobals(plan) as Record<string, Json>),
     length_in_bars: plan.bars.length,
     bars: plan.bars.map((bar, i) => ({
       bar: i + 1,
       chord: describeChord(bar.chord, bar.chord2),
-      role: BAR_ROLES[bar.role],
+      role: ROLE_WORDS[positions[i]?.role ?? 'continuation'],
       melodic_shape: CONTOURS[bar.contour],
     })),
   }
@@ -432,110 +211,39 @@ export function describePlan(plan: CompositionPlan): Json {
 
 export const scoreQuestionId = (style: StyleId) => `match_${style}`
 
-/** Song-quality Score on the existing `score` op — Appendix B. Not a new op. */
+/** Song-quality Score on the existing `score` op. Not a new op. */
 export const SONG_SCORE_QUESTION_ID = 'song_quality'
 
 function styleMatchQuestion(style: StyleId): ScoreQuestion {
   const name = STYLE_LABELS[style]
   return {
     type: 'score',
-    instructions: `How closely does \`plan\` match the musical style of ${name}? Judge character, phrase layout, texture, harmony, arrangement, opening, tempo and dynamics together. The style name is not written on the plan; do not reward a lucky guess at the label.`,
+    instructions: `How closely does \`plan\` match the musical style of ${name}? Judge where the tune sings, how fast it moves, what holds it up, the harmony and the phrase layout together. The style name is not written on the plan; do not reward a lucky guess at the label.`,
     criteria: [
-      "A different tradition: texture, phrase layout and harmony would not be recognised as this musician's.",
-      'Partial: some globals fit, but the form, arrangement or chord vocabulary point elsewhere or at a generic étude.',
-      'Immediate: someone who knows the music would recognise the kind of piece, the texture, the harmony and how it opens and returns.',
+      "A different tradition: the register, the accompaniment and the harmony would not be recognised as this musician's.",
+      'Partial: some choices fit, but the accompaniment, the phrase layout or the chord vocabulary points elsewhere, or at a generic étude.',
+      'Immediate: someone who knows the music would recognise the kind of piece — where the tune sits, how it moves, what is under it, and how it returns.',
     ],
   }
 }
 
-/** Appendix B.3 — copy the locked criteria; four standalone levels, raw 0–3. */
+/**
+ * Song-quality Score. The criteria used to be written in terms of
+ * `character`, `texture`, `opening` and `arrangement`, none of which reached
+ * the melody — so a plan could score well here and still sound like an étude.
+ * They are now written in terms of the fields that decide the sound.
+ */
 function songQualityQuestion(): ScoreQuestion {
   return {
     type: 'score',
     instructions:
-      'How song-like is the composition plan in `plan`? Judge only the labels in `plan` — character, phrase_layout, texture, arrangement, opening, dynamic_shape, length_in_bars, and each bar\'s role. Do not imagine notes, rests, MIDI, or a performance. A song here means a short keyboard piece a listener would hear as a tune that returns, can breathe, and changes clothes; an étude means unbroken figuration that starts again every bar. Loop-and-layer plans (a short cycle that builds or peaks then drops, often with a vamp) count as songs in the film-score and minimal sense.',
+      'How song-like is the composition plan in `plan`? Judge only the labels in `plan` — where the melody sings, how fast it moves, what accompanies it, the phrase layout, the dynamic shape, the length, and each bar\'s role. Do not imagine notes, rests, MIDI, or a performance. A song here means a short keyboard piece a listener would hear as a tune that returns, can breathe, and changes clothes; an étude means unbroken figuration with no line above it.',
     criteria: [
-      'Étude / perpetual study. The character is continuous figuration or a motor pulse, the texture is two-hand perpetual motion or unbroken broken-chord / cell figuration, the opening is straight in (or omitted), and the arrangement is constant. The phrase layout does not bring a three-to-four-bar idea back — it spins, fantasises, or loops without a sung line on top. Bar roles have no single late peak: no climax, or climaxes scattered through the middle. Realising this plan would attack every downbeat and never change clothes.',
-      "A finished piece, not yet a song. There is a real character, texture and phrase layout, but the song cues are missing or they fight each other. Either the layout does not return a phrase-length idea (a fantasia, or a loop/spin with a constant arrangement and no melody riding an ostinato), or a returning layout is paired with a straight-in opening, a perpetual or on-the-beat character, and a constant arrangement. Dynamics may swell, but climaxes sit at the midpoint or repeat. Someone would hear a coherent miniature, still an étude's cousin.",
-      'Song-shaped. The phrase layout is one where a three-to-four-bar idea comes back (question and answer, sentence, arch with return, call and response, vamp and tag, or a binary that returns home), or it is a loop/layer form whose texture is a tune over a repeating figure. The character and texture are a singing line over accompaniment — lyrical, hymn, dance, warm groove, searching, still, or hazy; nocturne, alberti, chordal melody, aria, stride, chorale, ostinato-under-tune, pulsing chords — not a two-hand perpetual. The opening is a vamp or a pickup, or the character is one that lands and rests at phrase ends. Arrangement may still be constant. At most one clear climax, and it is not early. On the page this is a short song without words, even if the return is not yet dressed.',
-      'A song that returns in new clothes. Song-shaped, and the plan also marks the return and the peak. Arrangement is lift-on-return, a build, peak-then-bare, or terraced blocks — not constant. There is one summit late in the piece: a climax role in the last third of the bars, or a late-surge / arch dynamic shape whose climax is past the midpoint, not a climax at half-time and again at the end. A film-score or minimal plan qualifies at this level when a short loop accumulates layers or peaks then drops to a bare texture, the opening is a vamp, and a melody sits on the ostinato. A straight-in perpetual texture with a constant arrangement cannot be this level.',
+      'Étude or study. There is no singing line to speak of: the melody runs continuously at the same rate as its accompaniment, or the accompaniment is a second line of equal weight so no voice is the tune. The phrase layout brings nothing back. Realising this plan would attack every beat of every bar and never land.',
+      'A finished piece, not yet a song. There is a real melodic register and something supporting it, but the song cues are missing or fight each other: the layout does not bring a phrase back, or a returning layout is paired with a line so busy it cannot breathe. Someone would hear a coherent miniature, still an étude\'s cousin.',
+      'Song-shaped. A melody in a definite register, moving slowly enough to land and rest, over an accompaniment that supports rather than competes — and a phrase layout that brings a four-bar idea back. The return may still be literal. On the page this is a short song without words.',
+      'A song that returns in new clothes. Song-shaped, and the return is decorated rather than repeated, with one summit late in the piece: a climax bar in the last third, or an arch or late-surge shape peaking past the midpoint — not a climax at half-time and again at the end.',
     ],
-  }
-}
-
-function notesRequest(op: Extract<JevOp, { op: 'notes' }>, model: string): SystemOneRequest {
-  const barIndex = op.barIndex ?? 0
-  const barNumber = barIndex + 1
-  const lyrical = prefersLongAndRest(op.character)
-  const guide = op.mode === 'guide'
-  const memory = guide
-    ? notesGuideContinuityState({
-        barIndex,
-        bar: op.bar,
-        nextChord: op.nextChord,
-        melodySoFar: (op.melodySoFar ?? []) as GuideMemoryBar[],
-        character: op.character,
-        texture: op.texture,
-        arrangement: op.arrangement,
-      })
-    : notesContinuityState({
-        barIndex,
-        bar: op.bar,
-        nextChord: op.nextChord,
-        melodySoFar: (op.melodySoFar ?? []) as MelodyMemoryBar[],
-        bassSoFar: op.bassSoFar ?? [],
-        character: op.character,
-        texture: op.texture,
-        arrangement: op.arrangement,
-      })
-  const hint = memory.melody_motion
-  const questions: Record<string, Question> = guide
-    ? {
-        [FIGURE_QUESTION_ID]: choice(melodyFigureInstructions(barNumber, hint), MELODY_FIGURES),
-        [GOAL_QUESTION_ID]: choice(melodyGoalInstructions(barNumber), MELODY_GOALS),
-      }
-    : (() => {
-        const line: Record<string, Question> = {
-          rhythm: choice(melodyRhythmInstructions(barNumber, hint, lyrical), rhythmCriteriaFor(op.meter, lyrical)),
-        }
-        for (let i = 0; i < PHRASE_NOTE_COUNT; i++) {
-          line[pitchQuestionId(i)] = choice(melodyPitchInstructions(i + 1, hint), MELODY_DEGREES)
-        }
-        line[BASS_PATTERN_QUESTION_ID] = choice(bassPatternInstructions(barNumber), BASS_PATTERNS)
-        return line
-      })()
-  return {
-    model,
-    state: {
-      task: guide
-        ? notesGuideTask(barNumber, (op.melodySoFar?.length ?? 0) > 0, lyrical)
-        : notesTask(barNumber, (op.melodySoFar?.length ?? 0) > 0, lyrical),
-      notes_mode: guide ? NOTES_WRITE_MODES.guide : NOTES_WRITE_MODES.line,
-      requested_style: styleState(op.style, op.brief),
-      piece_character: CHARACTERS[op.character],
-      piece: {
-        character: CHARACTERS[op.character],
-        key: KEYS[op.key],
-        meter: METERS[op.meter],
-        tempo: TEMPOS[op.tempo],
-        texture: TEXTURES[op.texture],
-        arrangement: ARRANGEMENTS[op.arrangement ?? 'lift_on_return'],
-        melodic_palette: PALETTES[op.palette],
-      },
-      melody_so_far: memory.melody_so_far,
-      last_sounding_degree: memory.last_sounding_degree,
-      ...(guide ? {} : { bass_so_far: memory.bass_so_far }),
-      this_bar: memory.this_bar,
-      melody_motion: memory.melody_motion,
-      ...(memory.motif_echo ? { motif_echo: memory.motif_echo } : {}),
-      voices: {
-        treble: guide
-          ? `right-hand singing line of bar ${barNumber}, guided by figure + goal, continuing melody_so_far`
-          : `right-hand melody of bar ${barNumber}, continuing melody_so_far`,
-        ...(guide ? {} : { bass: `left-hand bass of bar ${barNumber}, continuing bass_so_far` }),
-      },
-    },
-    questions,
   }
 }
 
@@ -555,18 +263,12 @@ function scoreRequest(op: Extract<JevOp, { op: 'score' }>, model: string): Syste
 
 export function buildRequest(op: JevOp, model: string): SystemOneRequest {
   switch (op.op) {
-    case 'concept':
-      return conceptRequest(op, model)
     case 'globals':
       return globalsRequest(op, model)
-    case 'bar':
-      return barRequest(op, model)
     case 'phrase':
       return phraseRequest(op, model)
     case 'score':
       return scoreRequest(op, model)
-    case 'notes':
-      return notesRequest(op, model)
   }
 }
 
@@ -576,50 +278,23 @@ export function parseOp(raw: unknown): JevOp {
   if (!raw || typeof raw !== 'object') throw new PlanValidationError('op: expected an object')
   const obj = raw as Record<string, unknown>
   switch (obj.op) {
-    case 'concept':
-      return { op: 'concept', style: parseStyle(obj.style), brief: obj.brief === true }
     case 'globals':
-      return { op: 'globals', style: parseStyle(obj.style), brief: obj.brief === true, character: parseOption(CHARACTERS, obj.character, 'op.character') }
-    case 'bar': {
-      const roles = Array.isArray(obj.roles) ? obj.roles : []
-      if (!(BAR_COUNT_VALUES as readonly number[]).includes(roles.length)) {
-        throw new PlanValidationError(`op.roles: expected ${BAR_COUNT_VALUES.join(', ')} roles`)
-      }
-      const chords = Array.isArray(obj.chords) ? obj.chords : []
-      const index = obj.index
-      if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= roles.length) {
-        throw new PlanValidationError('op.index: out of range')
-      }
-      if (chords.length !== index) throw new PlanValidationError('op.chords: expected one chord per earlier bar')
-      const chord2s = obj.chord2s === undefined ? undefined : obj.chord2s
-      if (chord2s !== undefined && (!Array.isArray(chord2s) || chord2s.length !== index)) throw new PlanValidationError('op.chord2s: expected one entry (chord or null) per earlier bar')
-      return {
-        op: 'bar',
-        style: parseStyle(obj.style),
-        brief: obj.brief === true,
-        globals: parseGlobals(obj.globals, 'op.globals'),
-        roles: roles.map((role, i) => parseOption(BAR_ROLES, role, `op.roles[${i}]`)),
-        chords: chords.map((chord, i) => parseOption(CHORDS, chord, `op.chords[${i}]`)),
-        ...(chord2s ? { chord2s: chord2s.map((chord, i) => (chord == null ? null : parseOption(CHORDS, chord, `op.chord2s[${i}]`))) } : {}),
-        index,
-      }
-    }
+      return { op: 'globals', style: parseStyle(obj.style), brief: obj.brief === true }
     case 'phrase': {
-      const globals = parseGlobals(obj.globals, 'op.globals')
       const barCount = obj.barCount
       if (typeof barCount !== 'number' || !(BAR_COUNT_VALUES as readonly number[]).includes(barCount)) {
-        throw new PlanValidationError(`op.barCount: expected ${BAR_COUNT_VALUES.join(', ')}`)
+        throw new PlanValidationError(`op.barCount: expected one of ${BAR_COUNT_VALUES.join(', ')}`)
       }
+      const globals = parseGlobals(obj.globals, 'op.globals')
       const slots = formSlots(globals.form, barCount as BarCount)
       const slotIndex = obj.slotIndex
       if (typeof slotIndex !== 'number' || !Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) {
         throw new PlanValidationError('op.slotIndex: out of range')
       }
-      const expected = slotIndex * 4
       const chords = Array.isArray(obj.chords) ? obj.chords : []
       const contours = Array.isArray(obj.contours) ? obj.contours : []
-      if (chords.length !== expected) throw new PlanValidationError('op.chords: expected one chord per earlier bar')
-      if (contours.length !== expected) throw new PlanValidationError('op.contours: expected one contour per earlier bar')
+      if (chords.length !== slotIndex * BARS_PER_PHRASE) throw new PlanValidationError('op.chords: expected one chord per earlier bar')
+      if (contours.length !== slotIndex * BARS_PER_PHRASE) throw new PlanValidationError('op.contours: expected one contour per earlier bar')
       return {
         op: 'phrase',
         style: parseStyle(obj.style),
@@ -632,53 +307,11 @@ export function parseOp(raw: unknown): JevOp {
       }
     }
     case 'score': {
-      const styles = Array.isArray(obj.styles) ? obj.styles.map((style) => parseStyle(style)) : []
-      const unique = STYLE_IDS.filter((style) => styles.includes(style))
-      if (unique.length === 0) throw new PlanValidationError('op.styles: expected at least one style')
+      const styles = Array.isArray(obj.styles) ? obj.styles : []
+      const unique = [...new Set(styles.map((style, i) => parseStyle(style, `op.styles[${i}]`)))]
+      if (!unique.length) throw new PlanValidationError('op.styles: expected at least one style')
       return { op: 'score', plan: parsePlan(obj.plan), styles: unique }
     }
-    case 'notes': {
-      const barIndex = obj.barIndex
-      if (barIndex !== undefined && (typeof barIndex !== 'number' || !Number.isInteger(barIndex) || barIndex < 0)) {
-        throw new PlanValidationError('op.barIndex: expected a non-negative integer')
-      }
-      const meter = parseOption(METERS, obj.meter, 'op.meter')
-      // New fields are optional so a Coder allowlist that only knows the
-      // original notes shape still validates. When present, check them
-      // against the closed note enums and (if barIndex is set) the prior count.
-      const priorLength = typeof barIndex === 'number' ? barIndex : 0
-      const mode = obj.mode === undefined ? undefined : parseNotesWriteMode(obj.mode, 'op.mode')
-      const figure = obj.figure === undefined ? undefined : parseMelodyFigure(obj.figure, 'op.figure')
-      const goal = obj.goal === undefined ? undefined : parseMelodyGoal(obj.goal, 'op.goal')
-      const melodySoFar =
-        mode === 'guide'
-          ? parseGuideSoFar(obj.melodySoFar, obj.melodySoFar === undefined ? undefined : priorLength)
-          : parseMelodySoFar(obj.melodySoFar, meter, obj.melodySoFar === undefined ? undefined : priorLength)
-      const bassSoFar = parseBassSoFar(obj.bassSoFar, obj.bassSoFar === undefined ? undefined : priorLength)
-      const nextChord = obj.nextChord === undefined ? undefined : parseOption(CHORDS, obj.nextChord, 'op.nextChord')
-      const arrangement = obj.arrangement === undefined ? undefined : parseOption(ARRANGEMENTS, obj.arrangement, 'op.arrangement')
-      return {
-        op: 'notes',
-        style: parseStyle(obj.style),
-        brief: obj.brief === true,
-        character: parseOption(CHARACTERS, obj.character, 'op.character'),
-        key: parseOption(KEYS, obj.key, 'op.key'),
-        meter,
-        tempo: parseOption(TEMPOS, obj.tempo, 'op.tempo'),
-        texture: parseOption(TEXTURES, obj.texture, 'op.texture'),
-        palette: parseOption(PALETTES, obj.palette, 'op.palette'),
-        bar: parseBarPlan(obj.bar, 'op.bar'),
-        ...(barIndex !== undefined ? { barIndex } : {}),
-        ...(mode ? { mode } : {}),
-        ...(figure ? { figure } : {}),
-        ...(goal ? { goal } : {}),
-        ...(melodySoFar && melodySoFar.length > 0 ? { melodySoFar } : {}),
-        ...(bassSoFar && bassSoFar.length > 0 ? { bassSoFar } : {}),
-        ...(nextChord ? { nextChord } : {}),
-        ...(arrangement ? { arrangement } : {}),
-      }
-    }
-    default:
-      throw new PlanValidationError('op.op: expected "concept", "globals", "bar", "phrase", "score" or "notes"')
   }
+  throw new PlanValidationError(`op: unknown op "${String(obj.op)}"`)
 }

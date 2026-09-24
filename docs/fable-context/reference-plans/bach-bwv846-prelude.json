@@ -6,68 +6,52 @@
   "midi": "docs/ref-midi/public/bach-bwv846-wtk1-prelude1.mid",
   "midiSource": "https://www.mutopiaproject.org/ftp/BachJS/BWV846/wtk1-prelude1/wtk1-prelude1.mid",
   "midiLicense": "Public Domain (Mutopia-2011/09/12-5)",
-  "notes": "First 8 sounding bars. Contour static because there is no singing line \u2014 the figure does not climb. phrasing is not on the schema.",
-  "_stretch": [
-    "proposed phrasing: on_the_beat (not on schema)",
-    "pedal-point as a standing bass (bars 24\u201331) is not a bar role; plan.pedal means sustain",
-    "dominant/tonic pedals need a build type or role, not just harmony-book pedals"
-  ],
+  "notes": "First 8 sounding bars. Contour static because there is no singing line — the figure does not climb. phrasing is not on the schema.",
   "plan": {
-    "version": 1,
+    "version": 2,
     "style": "bach",
-    "character": "flowing_perpetual",
-    "form": "spinning_out",
+    "register": "mid",
+    "motion": "florid",
+    "accompaniment": "broken",
+    "form": "chain",
     "key": "C_major",
     "meter": "four_four",
-    "texture": "broken_chord_prelude",
     "palette": "diatonic",
     "tempo": "moderato",
     "dynamics": "mp",
     "dynamicShape": "steady",
-    "defaultInstrument": "harpsichord",
-    "arrangement": "constant",
-    "opening": "straight_in",
-    "pedal": "dry",
     "bars": [
       {
         "chord": "I",
-        "role": "statement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "ii42",
-        "role": "development",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "V65",
-        "role": "sequence",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "I",
-        "role": "restatement",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "vi6",
-        "role": "sequence",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "V7_of_V",
-        "role": "sequence",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "V6",
-        "role": "development",
-        "contour": "static"
+        "contour": "wave"
       },
       {
         "chord": "Imaj42",
-        "role": "development",
-        "contour": "static"
+        "contour": "wave"
       }
     ]
   }

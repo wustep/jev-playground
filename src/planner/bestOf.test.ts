@@ -45,7 +45,7 @@ describe('contrastiveScore', () => {
   it('uses raw, not the coarse match label', () => {
     const highVsHigher = {
       bach: { match: 'high' as const, confidence: 0.9, raw: 1.6 },
-      glass: { match: 'high' as const, confidence: 0.9, raw: 1.95 },
+      debussy: { match: 'high' as const, confidence: 0.9, raw: 1.95 },
     }
     expect(contrastiveScore(highVsHigher, 'bach')).toBeCloseTo(-0.35)
   })
