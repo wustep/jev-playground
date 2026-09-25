@@ -16,11 +16,12 @@
 // under it (src/render/accompaniment.ts).
 
 import { Note as TonalNote } from 'tonal'
+import { BARS_PER_PHRASE } from '../plan/phrase'
 import { REGISTER_RANGE, type CompositionPlan, type ContourId, type RegisterId } from '../plan/schema'
 import { melodyRhythm } from './melodyRhythm'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 import type { Note } from './score'
-import { beatsPerBar, chordAt, note, type BarView, type Slot } from './voice'
+import { beatsPerBar, chordAt, note, type BarView, type Remembered, type Slot } from './voice'
 
 /** One finished bar of the tune. */
 export interface MelodyBar {
@@ -130,18 +131,21 @@ function transposeFigure(bar: BarView, pitches: readonly string[], semitones: nu
   const rungs = ladder(bar.scale, Math.max(0, lo - 14), Math.min(127, hi + 14))
   if (rungs.length === 0 || pitches.length === 0) return [...pitches]
   const reference = midiOf(pitches[0])
-  let steps = nearestIndex(rungs, reference + semitones) - nearestIndex(rungs, reference)
-  const moved = () => pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + steps, 0, rungs.length - 1)])
-  let out = moved()
+  const steps = nearestIndex(rungs, reference + semitones) - nearestIndex(rungs, reference)
+  const moved = (by: number) => pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + by, 0, rungs.length - 1)])
+  let out = moved(steps)
   const top = Math.max(...out.map(midiOf))
   const bottom = Math.min(...out.map(midiOf))
-  // A figure that has left the register comes back by the octave, not by being squashed.
-  if (top > hi && bottom - 12 >= lo) {
-    steps -= bar.scale.length
-    out = moved()
-  } else if (bottom < lo && top + 12 <= hi) {
-    steps += bar.scale.length
-    out = moved()
+  if (top > hi || bottom < lo) {
+    // A figure that has left the register comes back by the octave, not by
+    // being squashed — or stays where it was, on the new harmony, where the
+    // octave would leap away from the note the line just sang. A figure one
+    // semitone over the ceiling used to drop a ninth at the barline.
+    const octave = top > hi ? steps - bar.scale.length : steps + bar.scale.length
+    const fits = (figure: string[]) => figure.every((pitch) => midiOf(pitch) >= lo && midiOf(pitch) <= hi)
+    const last = bar.memory.melodyLast ?? (lo + hi) / 2
+    const candidates = [moved(octave), moved(0)].filter(fits)
+    if (candidates.length) out = candidates.reduce((best, figure) => (Math.abs(midiOf(figure[0]) - last) < Math.abs(midiOf(best[0]) - last) ? figure : best))
   }
   return keepSteps(pitches, reconcile(bar, out, slots, isStrong, lo, hi), ladder(bar.scale, lo, hi), slots, isStrong)
 }
@@ -409,8 +413,25 @@ function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) 
   return out.every(Boolean) ? out : out.filter(Boolean)
 }
 
-/** One spelled pitch per slot. */
-function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterId): string[] {
+/**
+ * How far a sequence moves its model: the root's move, or that move an
+ * octave the other way, whichever keeps the figure nearer the middle of the
+ * register. The nearest root move alone climbed a fourth a bar through a
+ * circle of fifths and left the register by the third link.
+ */
+function sequenceShift(model: Remembered, bar: BarView, centre: number): number {
+  const root = rootShift(model.root, bar.chord.root)
+  const mean = model.pitches.reduce((sum, pitch) => sum + midiOf(pitch), 0) / model.pitches.length
+  const cost = (shift: number) => Math.abs(shift) + 0.6 * Math.abs(mean + shift - centre)
+  return [root, root - 12, root + 12].reduce((best, shift) => (cost(shift) < cost(best) ? shift : best))
+}
+
+/**
+ * One spelled pitch per slot. `model` is the bar a sequence repeats: its
+ * figure is carried onto this bar's harmony, the way a return carries its
+ * source, but by the root's move and without decoration.
+ */
+function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterId, model?: Remembered): string[] {
   if (!slots.length) return []
   const { lo, hi, centre } = windowFor(register, bar)
   const isStrong = (slot: Slot) => stressed(bar, slot)
@@ -418,7 +439,9 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
   const source = bar.position.returnsFrom === undefined ? undefined : bar.memory.melody[bar.position.returnsFrom]
   let pitches: string[]
 
-  if (source && source.pitches.length) {
+  if (!source && model && model.pitches.length === slots.length) {
+    pitches = transposeFigure(bar, model.pitches, sequenceShift(model, bar, centre), model.slots, isStrong, lo, hi)
+  } else if (source && source.pitches.length) {
     // The tune as it comes back: the source's notes on the source's onsets,
     // moved onto this bar's harmony — and, where the return is dressed,
     // decorated between them.
@@ -562,6 +585,56 @@ export function silenceUntil(notes: readonly Note[], entry: number): Note[] {
   return notes.flatMap((n) => (n.start >= entry ? [n] : n.start + n.dur > entry ? [{ ...n, start: entry, dur: n.start + n.dur - entry }] : []))
 }
 
+/** How a bar that does not return carries on the phrase's idea. */
+interface Development {
+  /** A rhythm repeated exactly: the bar a sequence repeats. */
+  recall?: Slot[]
+  /** That bar's figure, when the sequence has its shape as well. */
+  model?: Remembered
+  /** A rhythm developed: kept up to `keep`, fresh after it. */
+  motif?: { slots: readonly Slot[]; keep: number }
+}
+
+/**
+ * What a bar that does not return does with the phrase's idea.
+ *
+ * Every such bar used to draw its rhythm fresh, beat by beat, so a phrase
+ * had no rhythmic identity, and a `sequence` — which the stub plans as the
+ * bar before on a new harmony, with the same contour — came out as a
+ * different figure altogether.
+ *
+ *   • A sequence repeats the bar before it: its rhythm always, and its
+ *     figure too, moved by the root, where the plan gives it the same
+ *     contour. A contour of its own is still heard, on the repeated rhythm.
+ *   • A continuation or the climax develops the phrase's opening bar: its
+ *     rhythm whole, or its first half with a fresh second half.
+ *   • In a chain each phrase grows from the last, so its opening keeps the
+ *     first half of the previous phrase's idea.
+ */
+function development(plan: CompositionPlan, bars: readonly BarView[], index: number): Development {
+  const bar = bars[index]
+  const { position, memory, meter } = bar
+  if (position.returnsFrom !== undefined || position.phraseFinal) return {}
+  const opening = position.phrase * BARS_PER_PHRASE
+  if (position.role === 'sequence') {
+    const model = memory.melody[index - 1]
+    if (!model) return {}
+    return { recall: model.slots, model: bars[index - 1].contour === bar.contour ? model : undefined }
+  }
+  if (position.role === 'continuation' || position.role === 'climax') {
+    const idea = memory.melody[opening]
+    if (!idea || opening === index) return {}
+    const draw = bar.rand()
+    const keep = draw < 0.5 ? meter.ticksPerBar : draw < 0.85 ? meter.splitTick : 0
+    return keep ? { motif: { slots: idea.slots, keep } } : {}
+  }
+  if (plan.form === 'chain' && index === opening && position.phrase > 0) {
+    const idea = memory.melody[opening - BARS_PER_PHRASE]
+    return idea ? { motif: { slots: idea.slots, keep: meter.splitTick } } : {}
+  }
+  return {}
+}
+
 /**
  * Write the whole singing line, bar by bar, before anything accompanies it.
  * `hold` is a random stream of its own, so holding over a barline never
@@ -570,16 +643,18 @@ export function silenceUntil(notes: readonly Note[], entry: number): Note[] {
 export function writeMelody(plan: CompositionPlan, bars: readonly BarView[], hold: () => number): MelodyBar[] {
   const written = bars.map((bar, index) => {
     const recalled = bar.position.returnsFrom === undefined ? undefined : bar.memory.melody[bar.position.returnsFrom]
+    const developed = recalled ? {} : development(plan, bars, index)
     const slots = melodyRhythm({
       motion: plan.motion,
       meter: bar.meter,
       position: bar.position,
       isLast: bar.isLast,
       rand: bar.rand,
-      recall: recalled?.slots,
-      ornament: bar.ornament,
+      recall: recalled?.slots ?? developed.recall,
+      ornament: Boolean(recalled) && bar.ornament,
+      motif: developed.motif,
     })
-    const pitches = melodyPitches(bar, slots, plan.register)
+    const pitches = melodyPitches(bar, slots, plan.register, developed.model)
     const sung = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))
     const notes = silenceUntil([...sung, ...pickupInto(bar, bars[index + 1], sung, plan)], enteringAfter(plan, bar))
     if (pitches.length) {

@@ -73,6 +73,12 @@ export interface RhythmOptions {
   recall?: Slot[]
   /** Decorate the recalled rhythm instead of repeating it literally. */
   ornament?: boolean
+  /**
+   * The phrase's rhythmic idea, for a bar that develops it rather than
+   * returning: its slots before `keep` (in ticks) are kept, the rest of the
+   * bar is written fresh.
+   */
+  motif?: { slots: readonly Slot[]; keep: number }
 }
 
 /**
@@ -110,8 +116,24 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   }
 
   // ── ordinary bars ────────────────────────────────────────────────────────
+  // A bar that develops the phrase's idea keeps its opening feet. A kept
+  // rhythm that ended in a breath runs on instead: only the statement stops
+  // to shape its head.
+  const kept = options.motif ? options.motif.slots.filter((slot) => slot.start < options.motif!.keep) : []
+  const from = kept.length ? Math.ceil(Math.max(options.motif!.keep, kept[kept.length - 1].start + 1) / meter.beatTicks) : 0
+  if (kept.length && from >= beats) {
+    const whole = kept.map((slot) => ({ ...slot }))
+    const tail = whole[whole.length - 1]
+    tail.dur = meter.ticksPerBar - tail.start
+    return whole
+  }
   const rhythm: number[] = []
-  for (let beat = 0; beat < beats; beat++) {
+  if (kept.length) {
+    const edge = from * meter.beatTicks
+    if (kept[0].start > 0) rhythm.push(-kept[0].start)
+    kept.forEach((slot, k) => rhythm.push(Math.min(kept[k + 1]?.start ?? edge, edge) - slot.start))
+  }
+  for (let beat = from; beat < beats; beat++) {
     const wanted = attacksForBeat(motion, beat, beats, rand)
     if (wanted === 0) {
       // A sustained line ties through: extend the note already sounding.

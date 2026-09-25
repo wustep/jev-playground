@@ -257,6 +257,66 @@ describe('the singing line', () => {
     expect(pitchesAt(7), 'but the cadence is written fresh, not quoted').not.toEqual(pitchesAt(3))
   })
 
+  // period at 16 bars: bars 8–10 are a departure — a contrast bar and two sequences of it.
+  const departure = (contours: CompositionPlan['bars'][number]['contour'][]) =>
+    renderPlan(
+      plan({
+        motion: 'flowing',
+        form: 'period',
+        bars: Array.from({ length: 16 }, (_, i) => ({
+          chord: (['I', 'IV', 'V', 'I', 'I', 'IV', 'V', 'I', 'vi', 'ii', 'V', 'V', 'I', 'IV', 'V', 'I'] as const)[i],
+          contour: i >= 8 && i <= 10 ? contours[i - 8] : ('arch' as const),
+        })),
+      }),
+      7,
+    )
+  const rhythmOf = (notes: { start: number; dur: number }[]) => notes.map((n) => `${n.start}:${n.dur}`).join()
+  const turnsOf = (notes: { pitches: string[] }[]) => {
+    const line = midisOf(notes)
+    return line.slice(1).map((midi, k) => Math.sign(midi - line[k]))
+  }
+
+  it('repeats a figure on the next harmony where the form says sequence', () => {
+    const score = departure(['arch', 'arch', 'arch'])
+    expect(barPositions('period', 16).slice(8, 11).map((p) => p.role)).toEqual(['contrast', 'sequence', 'sequence'])
+    for (const bar of [9, 10]) {
+      expect(rhythmOf(melody(score, bar)), `bar ${bar + 1} keeps the model's rhythm`).toBe(rhythmOf(melody(score, bar - 1)))
+      const same = turnsOf(melody(score, bar)).filter((turn, k) => turn === turnsOf(melody(score, bar - 1))[k]).length
+      expect(same / turnsOf(melody(score, bar)).length, `bar ${bar + 1} keeps the model's shape`).toBeGreaterThanOrEqual(0.75)
+      expect(midisOf(melody(score, bar)), 'on its own harmony, not a copy').not.toEqual(midisOf(melody(score, bar - 1)))
+    }
+  })
+
+  it('keeps the rhythm of a sequence whose contour is its own, and sings that contour', () => {
+    const score = departure(['arch', 'fall', 'rise'])
+    for (const bar of [9, 10]) expect(rhythmOf(melody(score, bar))).toBe(rhythmOf(melody(score, bar - 1)))
+    const line = midisOf(melody(score, 10))
+    expect(line[line.length - 1], 'bar 11 rises').toBeGreaterThan(line[0])
+  })
+
+  it('develops the rhythm of the bar that opened the phrase', async () => {
+    const planner = new HeuristicPlanner()
+    let developed = 0
+    let continuations = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const made = { ...drawn, motion: 'flowing' as const }
+        const score = renderPlan(made, seed)
+        barPositions(made.form, 16).forEach((position, i) => {
+          if (position.role !== 'continuation' || position.phraseFinal || position.returnsFrom !== undefined) return
+          const opening = score.bars[position.phrase * 4].treble[0] ?? []
+          if (!opening.length || i === position.phrase * 4) return
+          const head = (notes: { start: number; dur: number }[]) => rhythmOf(notes.filter((n) => n.start < score.meter.splitTick).slice(0, -1))
+          continuations++
+          if (head(melody(score, i)) === head(opening)) developed++
+        })
+      }
+    }
+    // Drawn fresh beat by beat, two flowing bars share their first half's rhythm about one time in four.
+    expect(developed / continuations).toBeGreaterThan(0.6)
+  })
+
   it('dresses the first answer where the style does, keeping every note of the tune', () => {
     // Op. 9/2 answers its question at 12.5 attacks a bar against 7.25.
     const score = period('chopin')
