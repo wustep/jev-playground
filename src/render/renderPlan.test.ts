@@ -222,6 +222,47 @@ describe('the singing line', () => {
     expect(trills / bars, 'six notes rocking between two pitches').toBeLessThan(0.02)
   })
 
+  it('runs a florid line on through an inner cadence, arriving on the tonic first', () => {
+    const score = renderPlan(
+      plan({
+        motion: 'florid',
+        form: 'period',
+        bars: Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V7', 'I'] as const)[i % 4], contour: 'wave' as const })),
+      }),
+      5,
+    )
+    const positions = barPositions('period', 16)
+    const inner = positions.flatMap((position, i) => (position.phraseFinal && i < 15 && position.phraseEnd !== 'open' ? [i] : []))
+    expect(inner.length).toBeGreaterThan(0)
+    for (const i of inner) {
+      const bar = melody(score, i)
+      expect(bar[0].start).toBe(0)
+      expect(bar[0].dur, `bar ${i + 1} holds its arrival a beat`).toBe(score.meter.beatTicks)
+      expect(bar.length, `bar ${i + 1} runs on`).toBeGreaterThan(2 * 3)
+      if (positions[i].role === 'cadence') expect(bar[0].pitches[0].replace(/\d/, ''), `bar ${i + 1} arrives on the tonic`).toBe('C')
+    }
+    const last = melody(score, 15)
+    expect(last, 'the end still lands and rings').toHaveLength(1)
+  })
+
+  it("runs Fox's florid line nearly unbroken, as his displacement lesson does", async () => {
+    const planner = new HeuristicPlanner()
+    const rate = async (style: CompositionPlan['style']) => {
+      let attacks = 0
+      let bars = 0
+      for (let seed = 1; seed <= 8; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, motion: 'florid', meter: 'four_four' }, seed)
+        attacks += score.bars.reduce((n, _, i) => n + melody(score, i).filter((note) => !note.tied).length, 0)
+        bars += score.bars.length
+      }
+      return attacks / bars
+    }
+    // "Wyoming" plays 16.4 attacks a bar; the shared florid rate alone gave him about 12.
+    expect(await rate('elijah_fox')).toBeGreaterThan(14)
+    expect(await rate('chopin')).toBeLessThan(await rate('elijah_fox'))
+  })
+
   it('rings out at the very end rather than resting', () => {
     const score = renderPlan(plan({ motion: 'walking' }), 4)
     const last = melody(score, 3)

@@ -97,8 +97,8 @@ function anticipate(rhythm: number[], meter: MeterInfo): number[] {
 }
 
 /** How many attacks this beat gets, given the motion's target rate and where we are in the bar. */
-function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () => number): number {
-  const rate = MOTION_RATE[motion]
+function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () => number, lilt: Lilt = PLAIN): number {
+  const rate = motion === 'florid' && lilt.run ? lilt.run : MOTION_RATE[motion]
   if (motion === 'sustained') {
     // Fewer than one attack a beat: spread them evenly, but always sound the
     // downbeat. A long-note tune is two or three held notes in a wide bar, not
@@ -113,6 +113,12 @@ function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () 
   // The line leans forward: the middle of the bar is busier than its edges.
   const arc = beats > 1 ? 1 + 0.25 * Math.sin((Math.PI * beat) / (beats - 1 || 1)) : 1
   return Math.max(1, Math.round(rate * arc + jitter * 0.8))
+}
+
+/** The cell size nearest the attacks a beat wants. */
+function nearestCell(cells: Record<number, Cell[]>, wanted: number): number {
+  const available = Object.keys(cells).map(Number).sort((a, b) => a - b)
+  return available.reduce((best, n) => (Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best), available[0])
 }
 
 /** Longest available cell for a beat: used where the line should hold rather than move. */
@@ -159,6 +165,16 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   // thought runs on, so the line runs on with it: a spun-out prelude, a Glass
   // cycle or a displaced-sixteenth vamp has no business stopping every four
   // bars. The last bar always lands, whatever its phrase says.
+  if (position.phraseFinal && (position.phraseEnd !== 'open' || isLast) && motion === 'florid' && !isLast && beats > 1) {
+    // Running figuration does not stop for an inner cadence: a prelude, an
+    // étude or a displaced-sixteenth vamp arrives on the downbeat, holds it a
+    // beat so the arrival is heard, and runs on into the next phrase. It used
+    // to hold half the bar and rest, which is most of why a perpetual-motion
+    // piece came out at twelve attacks a bar against "Wyoming"'s sixteen.
+    const rhythm = [meter.beatTicks]
+    for (let beat = 1; beat < beats; beat++) rhythm.push(...drawCell(cells[nearestCell(cells, attacksForBeat(motion, beat, beats, rand, lilt))], lilt, rand))
+    return slotsFrom(rhythm)
+  }
   if (position.phraseFinal && (position.phraseEnd !== 'open' || isLast)) {
     // Closed phrases land on the downbeat and hold; half cadences get a beat
     // of approach first, so the pause sounds like a question and not a stop.
@@ -192,7 +208,7 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
     kept.forEach((slot, k) => rhythm.push(Math.min(kept[k + 1]?.start ?? edge, edge) - slot.start))
   }
   for (let beat = from; beat < beats; beat++) {
-    const wanted = attacksForBeat(motion, beat, beats, rand)
+    const wanted = attacksForBeat(motion, beat, beats, rand, lilt)
     if (wanted === 0) {
       // A sustained line ties through: extend the note already sounding.
       const lastIndex = rhythm.length - 1
@@ -200,9 +216,7 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
       else rhythm.push(meter.beatTicks)
       continue
     }
-    const available = Object.keys(cells).map(Number).sort((a, b) => a - b)
-    const nearest = available.reduce((best, n) => (Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best), available[0])
-    rhythm.push(...drawCell(cells[nearest], lilt, rand))
+    rhythm.push(...drawCell(cells[nearestCell(cells, wanted)], lilt, rand))
   }
   const syncopates = !kept.length && motion !== 'florid' && meter.beatTicks === 4 && beats % 2 === 0
   if (syncopates && lilt.anticipate > 0 && rand() < lilt.anticipate) rhythm.splice(0, rhythm.length, ...anticipate(rhythm, meter))

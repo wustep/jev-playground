@@ -55,8 +55,12 @@ export interface StyleVoice {
    * eighth), which the renderer used to play on a third of its two-note
    * beats. Laufey has no reference; her anticipations are the one row value
    * here that rests on the style notes, not a measurement.
+   *
+   * `run`, where set, is the attacks a florid beat aims at in place of the
+   * shared 3.5: a style whose running line never lets up. Fox's displacement
+   * lesson is sixteen sixteenths to the bar, and "Wyoming" plays 16.4.
    */
-  lilt: { dotted: number; anticipate: number }
+  lilt: { dotted: number; anticipate: number; run?: number }
   /**
    * Accents that regroup a running bar of sixteenths against the metre, one
    * grouping per bar in turn: Fox's 5+5+6 and 7+5+4. Absent: the metre
@@ -73,5 +77,5 @@ export const STYLE_VOICES: Record<StyleId, StyleVoice> = {
   glass: { accent: 0.9, articulation: 0.92, humanize: 1, rubato: 'two_against_three', answers: 'literal', lilt: { dotted: 0, anticipate: 0 } },
   hans_zimmer: { accent: 1, articulation: 1, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.1, anticipate: 0.1 } },
   laufey: { accent: 1.1, articulation: 0.9, humanize: 5, rubato: 'swung', answers: 'literal', lilt: { dotted: 0.15, anticipate: 0.35 } },
-  elijah_fox: { accent: 0.8, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15 }, grouping: [[5, 5, 6], [7, 5, 4]] },
+  elijah_fox: { accent: 0.8, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15, run: 4 }, grouping: [[5, 5, 6], [7, 5, 4]] },
 }

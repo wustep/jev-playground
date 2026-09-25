@@ -368,7 +368,7 @@ function applyChromaticApproach(bar: BarView, slots: readonly Slot[], pitches: s
  * A running bar, more than two notes a beat, puts a chord tone on every beat,
  * as figuration outlines its harmony; a flowing one only where it is stressed.
  */
-function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number, centre: number): string[] {
+function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number, centre: number, arrival?: readonly string[]): string[] {
   const { contour, meter } = bar
   const beat = meter.beatTicks
   const figured = slots.length >= 1.5 * beatsPerBar(meter)
@@ -388,7 +388,8 @@ function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) 
     const slot = slots[k]
     const chord = chordAt(bar, slot.start)
     const desired = desiredAt(tOf(slot), j)
-    const rungs = running || isStrong(slot) ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
+    const pinned = j === 0 && arrival?.length ? ladder(arrival, lo, hi) : []
+    const rungs = pinned.length ? pinned : running || isStrong(slot) ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
     if (!rungs.length) return
     let index = nearestIndex(rungs, desired)
     if (previous !== undefined && midiOf(rungs[index]) === previous) {
@@ -447,6 +448,16 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
   const source = bar.position.returnsFrom === undefined ? undefined : bar.memory.melody[bar.position.returnsFrom]
   let pitches: string[]
 
+  // A closing bar lands on the tonic, if the chord has it. Its landing is its
+  // longest note: the last, where the bar holds and breathes; the first, where
+  // running figuration arrives and runs on — and there the arrival is chosen
+  // before the run is written, so the run leads away from it.
+  const lands = bar.position.role === 'cadence' || bar.isLast
+  const longest = slots.reduce((best, slot, k) => (slot.dur > slots[best].dur ? k : best), 0)
+  const runsOn = lands && slots.length > 1 && longest === 0 && !source
+  const landingChord = chordAt(bar, slots[runsOn ? 0 : slots.length - 1].start)
+  const goal = landingChord.pcs.find((pc) => TonalNote.chroma(pc) === TonalNote.chroma(bar.key.tonic)) ?? landingChord.root
+
   if (!source && model && model.pitches.length === slots.length) {
     pitches = transposeFigure(bar, model.pitches, sequenceShift(model, bar, centre), model.slots, isStrong, lo, hi)
   } else if (source && source.pitches.length) {
@@ -464,17 +475,15 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
     }
     pitches = bar.ornament ? dress(bar, tune, source.slots, slots, lo, hi) : fitTo(tune, slots.length)
   } else {
-    pitches = freshLine(bar, slots, isStrong, lo, hi, centre)
+    pitches = freshLine(bar, slots, isStrong, lo, hi, centre, runsOn ? [goal] : undefined)
     if (bar.palette === 'chromatic_approach') applyChromaticApproach(bar, slots, pitches, isStrong)
   }
 
   breakRepeats(bar, pitches, slots, isStrong, lo, hi)
 
   // Closing bars land where the ear expects: the tonic, if the chord has it.
-  if ((bar.position.role === 'cadence' || bar.isLast) && pitches.length) {
-    const chord = chordAt(bar, slots[slots.length - 1].start)
-    const tonic = chord.pcs.find((pc) => TonalNote.chroma(pc) === TonalNote.chroma(bar.key.tonic))
-    const landing = ladder([tonic ?? chord.root], lo, hi)
+  if (lands && !runsOn && pitches.length) {
+    const landing = ladder([goal], lo, hi)
     if (landing.length) {
       const around = midiOf(pitches[pitches.length - 2] ?? pitches[pitches.length - 1])
       pitches[pitches.length - 1] = landing[nearestIndex(landing, around)]
