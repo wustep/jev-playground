@@ -846,6 +846,29 @@ describe('the accompaniment', () => {
     expect(missing / sevenths).toBeLessThan(0.05)
   })
 
+  it('strides in four as a stride does, bass and chord in turn', () => {
+    // A stride, a march or a two-feel ballad alternates: bass on one and
+    // three, chords on two and four. Four-four used to go bass, chord, chord,
+    // chord, the waltz's pattern with a beat added.
+    const bars = (['I', 'IV', 'V7', 'I', 'vi', 'ii', 'V7', 'I'] as const).map((chord) => ({ chord, contour: 'arch' as const }))
+    for (const meter of ['four_four', 'twelve_eight'] as const) {
+      const score = renderPlan(plan({ style: 'laufey', accompaniment: 'stride', motion: 'walking', meter, dynamics: 'mf', bars }), 2)
+      const beat = score.meter.beatTicks
+      for (const bar of score.bars) {
+        const [basses, chords] = bar.bass
+        expect(basses.map((n) => n.start), `${meter} bar ${bar.index + 1}: bass on one and three`).toEqual([0, 2 * beat])
+        expect(chords.map((n) => n.start), `${meter} bar ${bar.index + 1}: chords on two and four`).toEqual([beat, 3 * beat])
+        const chord = resolveChord(keyInfo('C_major'), bar.plan.chord)
+        const [one, three] = basses.map((n) => midisOf([n])[0] % 12)
+        expect(three, `${meter} bar ${bar.index + 1}: the bass alternates to the fifth`).toBe(midiOf(`${chord.core[2]}4`) % 12)
+        expect(one).not.toBe(three)
+      }
+    }
+    // A waltz is still bass, chord, chord.
+    const waltz = renderPlan(plan({ accompaniment: 'stride', meter: 'three_four', dynamics: 'mf', bars }), 2)
+    for (const bar of waltz.bars) expect(bar.bass.map((voice) => voice.map((n) => n.start))).toEqual([[0], [4, 8]])
+  })
+
   it('changes the accompaniment without changing the tune', () => {
     const tuneOf = (score: Score) => score.bars.map((_, i) => melody(score, i).map((n) => `${n.start}:${n.dur}:${n.pitches}`).join()).join('/')
     const reference = renderPlan(plan({ accompaniment: 'broken' }), 5)

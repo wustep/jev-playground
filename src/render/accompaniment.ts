@@ -333,19 +333,35 @@ function pulse(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
 
 // ── stride ──────────────────────────────────────────────────────────────────
 
+/**
+ * The bass a stride answers itself with on the half-bar of a four-beat bar:
+ * the chord's fifth, nearest the bass it struck on one — or, where the label
+ * fixes the bass (an inversion, a pedal), that bass again.
+ */
+function alternateBass(chord: ResolvedChord, struck: string, lo: number, hi: number): string {
+  return chord.fixedBass ? struck : nearestNote([chord.core[2]], midiOf(struck), lo, hi)
+}
+
 function stride(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   const { meter } = bar
   const top = headroom(options.ceiling)
   const beats = beatsPerBar(meter)
+  const lo = Math.min(31, top - 28)
+  const hi = Math.min(50, top - 16)
   const bassVoice: Voice = []
   const chordVoice: Voice = []
   for (let beat = 0; beat < beats; beat++) {
     const tick = beat * meter.beatTicks
     const chord = chordAt(bar, tick)
-    if (beat === 0 || (bar.chord2 && tick === meter.splitTick)) {
-      const low = bassFor(chord, bar.memory.bass, { lo: Math.min(31, top - 28), hi: Math.min(50, top - 16), allowInversion: !bar.isLast && bar.index > 0 })
+    const arrives = beat === 0 || (bar.chord2 && tick === meter.splitTick)
+    // In four, bass and chord take turns: a stride, a march and a two-feel
+    // ballad all go bass, chord, bass, chord — not the waltz's bass, chord,
+    // chord with a beat added. The barest bar keeps its rest on three.
+    const answers = !arrives && beats === 4 && tick === meter.splitTick && options.density > 0 && bar.memory.bass !== undefined
+    if (arrives || answers) {
+      const low = arrives ? bassFor(chord, bar.memory.bass, { lo, hi, allowInversion: !bar.isLast && bar.index > 0 }) : alternateBass(chord, bar.memory.bass!, lo, hi)
       bar.memory.bass = low
-      bassVoice.push(note(tick, meter.beatTicks, withOctave(low, options.density), bar.velocity))
+      bassVoice.push(note(tick, meter.beatTicks, withOctave(low, options.density), bar.velocity - (arrives ? 0 : 6)))
       continue
     }
     if (options.density === 0 && beat % 2 === 0) continue
