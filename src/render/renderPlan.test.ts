@@ -22,7 +22,7 @@ import { rng } from '../planner/pick'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { midiOf } from './pitch'
 import { renderPlan, timeline } from './renderPlan'
-import { enteringAfter, fioritura, silenceUntil } from './melody'
+import { enteringAfter, figureBetween, fioritura, silenceUntil } from './melody'
 import { barPositions } from '../plan/phrase'
 import type { Score } from './score'
 
@@ -124,6 +124,27 @@ describe('resolveChord', () => {
     expect(scale, 'the leading tone of a dominant seventh reaches the line').toContain('G#')
   })
 
+  it('leaves no augmented second for a line to step across, unless the chord owns it', () => {
+    const chromas = (pcs: string[]) => pcs.map((pc) => midiOf(`${pc}4`) % 12)
+    // C minor over V7: the melodic minor, A natural under the leading tone.
+    expect(scaleFor(keyInfo('C_minor'), 'diatonic', resolveChord(keyInfo('C_minor'), 'V7'))).toEqual(['C', 'D', 'Eb', 'F', 'G', 'A', 'B'])
+    // C major over a borrowed iv: B♭ over its A♭, not B.
+    expect(chromas(scaleFor(keyInfo('C_major'), 'diatonic', resolveChord(keyInfo('C_major'), 'iv')))).toContain(10)
+    // A diminished seventh's augmented second is its own.
+    expect(scaleFor(keyInfo('C_minor'), 'diatonic', resolveChord(keyInfo('C_minor'), 'vii_dim7'))).toContain('Ab')
+    let stray = 0
+    for (const key of KEY_IDS) {
+      for (const chord of CHORD_IDS) {
+        const resolved = resolveChord(keyInfo(key), chord)
+        const owned = new Set(chromas(resolved.pcs))
+        const scale = [...chromas(scaleFor(keyInfo(key), 'diatonic', resolved))].sort((a, b) => a - b)
+        if (scale.length < 7) continue
+        if (scale.some((c, i) => (scale[(i + 1) % scale.length] - c + 12) % 12 === 3 && !(owned.has(c) && owned.has(scale[(i + 1) % scale.length])))) stray++
+      }
+    }
+    expect(stray, 'of every diatonic scale bent to every chord in every key').toBeLessThanOrEqual(3)
+  })
+
   it('spells chords relative to the key', () => {
     expect(resolveChord(keyInfo('Eb_major'), 'V7').symbol).toBe('Bb7')
     expect(resolveChord(keyInfo('Db_major'), 'IV').root).toBe('Gb')
@@ -180,6 +201,133 @@ describe('the singing line', () => {
     expect(into).not.toBe(0)
   })
 
+  /** Every note-to-note move of the tune, in semitones, over many drawn plans at one motion. */
+  const movesAt = async (motion: CompositionPlan['motion']) => {
+    const planner = new HeuristicPlanner()
+    const moves: number[] = []
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, motion }, seed)
+        const line = score.bars.flatMap((_, i) => midisOf(melody(score, i).filter((n) => !n.tied)))
+        for (let k = 1; k < line.length; k++) moves.push(line[k] - line[k - 1])
+      }
+    }
+    return moves
+  }
+
+  it('walks by step, not by the notes of the chord', async () => {
+    // Every beat used to be a chord tone, so a walking tune was an arpeggio:
+    // 38% of its moves by step, against 52–70% in the reference tunes.
+    const moving = (await movesAt('walking')).filter((move) => move !== 0)
+    const steps = moving.filter((move) => Math.abs(move) <= 2).length
+    expect(steps / moving.length).toBeGreaterThan(0.5)
+  })
+
+  it('runs through a florid bar instead of trilling on two notes', async () => {
+    const planner = new HeuristicPlanner()
+    let trills = 0
+    let bars = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, motion: 'florid', form: 'chain' }, seed)
+        for (const bar of score.bars) {
+          const line = midisOf(bar.treble[0] ?? [])
+          bars++
+          const alternates = line.some((_, k) => k >= 5 && new Set(line.slice(k - 5, k + 1)).size === 2 && line.slice(k - 4, k + 1).every((m, i) => m !== line[k - 5 + i]))
+          if (alternates) trills++
+        }
+      }
+    }
+    expect(trills / bars, 'six notes rocking between two pitches').toBeLessThan(0.02)
+  })
+
+  it('runs a florid line on through an inner cadence, arriving on the tonic first', () => {
+    const score = renderPlan(
+      plan({
+        motion: 'florid',
+        form: 'period',
+        bars: Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V7', 'I'] as const)[i % 4], contour: 'wave' as const })),
+      }),
+      5,
+    )
+    const positions = barPositions('period', 16)
+    const inner = positions.flatMap((position, i) => (position.phraseFinal && i < 15 && position.phraseEnd !== 'open' ? [i] : []))
+    expect(inner.length).toBeGreaterThan(0)
+    for (const i of inner) {
+      const bar = melody(score, i)
+      expect(bar[0].start).toBe(0)
+      expect(bar[0].dur, `bar ${i + 1} holds its arrival a beat`).toBe(score.meter.beatTicks)
+      expect(bar.length, `bar ${i + 1} runs on`).toBeGreaterThan(2 * 3)
+      if (positions[i].role === 'cadence') expect(bar[0].pitches[0].replace(/\d/, ''), `bar ${i + 1} arrives on the tonic`).toBe('C')
+    }
+    const last = melody(score, 15)
+    expect(last, 'the end still lands and rings').toHaveLength(1)
+  })
+
+  it('passes over a second chord through its own scale', () => {
+    // i6/4 then V7 in one bar, C minor: the second half is heard over B, D, F.
+    const score = renderPlan(
+      plan({
+        key: 'C_minor',
+        motion: 'florid',
+        form: 'chain',
+        bars: Array.from({ length: 8 }, (_, i) => (i % 2 === 1 ? { chord: 'i64' as const, chord2: 'V7' as const, contour: 'wave' as const } : { chord: 'i' as const, contour: 'arch' as const })),
+      }),
+      3,
+    )
+    for (let i = 1; i < 8; i += 2) {
+      const second = melody(score, i).filter((n) => n.start >= score.meter.splitTick)
+      for (const n of second) expect(n.pitches[0], `bar ${i + 1} runs B♭ against the V7's B`).not.toMatch(/^Bb/)
+    }
+  })
+
+  it('steps into its closes', async () => {
+    const planner = new HeuristicPlanner()
+    let closes = 0
+    let stepped = 0
+    let struckAgain = 0
+    for (const style of ['bach', 'beethoven', 'chopin', 'laufey'] as const) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan(drawn, seed)
+        barPositions(drawn.form, 16).forEach((position, i) => {
+          if (position.role !== 'cadence' && i !== 15) return
+          const bar = melody(score, i)
+          const k = bar.reduce((best, n, j) => (n.dur > bar[best].dur ? j : best), 0)
+          const before = k > 0 ? bar[k - 1] : melody(score, i - 1).slice(-1)[0]
+          if (!before || !bar[k]) return
+          const move = Math.abs(midisOf([bar[k]])[0] - midisOf([before])[0])
+          closes++
+          if (move > 0 && move <= 2) stepped++
+          if (move === 0) struckAgain++
+        })
+      }
+    }
+    // A quarter used to arrive by step, and one in six by the tonic struck again.
+    expect(stepped / closes).toBeGreaterThan(0.7)
+    expect(struckAgain / closes).toBeLessThan(0.08)
+  })
+
+  it("runs Fox's florid line nearly unbroken, as his displacement lesson does", async () => {
+    const planner = new HeuristicPlanner()
+    const rate = async (style: CompositionPlan['style']) => {
+      let attacks = 0
+      let bars = 0
+      for (let seed = 1; seed <= 8; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, motion: 'florid', meter: 'four_four' }, seed)
+        attacks += score.bars.reduce((n, _, i) => n + melody(score, i).filter((note) => !note.tied).length, 0)
+        bars += score.bars.length
+      }
+      return attacks / bars
+    }
+    // "Wyoming" plays 16.4 attacks a bar; the shared florid rate alone gave him about 12.
+    expect(await rate('elijah_fox')).toBeGreaterThan(14)
+    expect(await rate('chopin')).toBeLessThan(await rate('elijah_fox'))
+  })
+
   it('rings out at the very end rather than resting', () => {
     const score = renderPlan(plan({ motion: 'walking' }), 4)
     const last = melody(score, 3)
@@ -215,6 +363,66 @@ describe('the singing line', () => {
     expect(pitchesAt(7), 'but the cadence is written fresh, not quoted').not.toEqual(pitchesAt(3))
   })
 
+  // period at 16 bars: bars 8–10 are a departure — a contrast bar and two sequences of it.
+  const departure = (contours: CompositionPlan['bars'][number]['contour'][]) =>
+    renderPlan(
+      plan({
+        motion: 'flowing',
+        form: 'period',
+        bars: Array.from({ length: 16 }, (_, i) => ({
+          chord: (['I', 'IV', 'V', 'I', 'I', 'IV', 'V', 'I', 'vi', 'ii', 'V', 'V', 'I', 'IV', 'V', 'I'] as const)[i],
+          contour: i >= 8 && i <= 10 ? contours[i - 8] : ('arch' as const),
+        })),
+      }),
+      7,
+    )
+  const rhythmOf = (notes: { start: number; dur: number }[]) => notes.map((n) => `${n.start}:${n.dur}`).join()
+  const turnsOf = (notes: { pitches: string[] }[]) => {
+    const line = midisOf(notes)
+    return line.slice(1).map((midi, k) => Math.sign(midi - line[k]))
+  }
+
+  it('repeats a figure on the next harmony where the form says sequence', () => {
+    const score = departure(['arch', 'arch', 'arch'])
+    expect(barPositions('period', 16).slice(8, 11).map((p) => p.role)).toEqual(['contrast', 'sequence', 'sequence'])
+    for (const bar of [9, 10]) {
+      expect(rhythmOf(melody(score, bar)), `bar ${bar + 1} keeps the model's rhythm`).toBe(rhythmOf(melody(score, bar - 1)))
+      const same = turnsOf(melody(score, bar)).filter((turn, k) => turn === turnsOf(melody(score, bar - 1))[k]).length
+      expect(same / turnsOf(melody(score, bar)).length, `bar ${bar + 1} keeps the model's shape`).toBeGreaterThanOrEqual(0.75)
+      expect(midisOf(melody(score, bar)), 'on its own harmony, not a copy').not.toEqual(midisOf(melody(score, bar - 1)))
+    }
+  })
+
+  it('keeps the rhythm of a sequence whose contour is its own, and sings that contour', () => {
+    const score = departure(['arch', 'fall', 'rise'])
+    for (const bar of [9, 10]) expect(rhythmOf(melody(score, bar))).toBe(rhythmOf(melody(score, bar - 1)))
+    const line = midisOf(melody(score, 10))
+    expect(line[line.length - 1], 'bar 11 rises').toBeGreaterThan(line[0])
+  })
+
+  it('develops the rhythm of the bar that opened the phrase', async () => {
+    const planner = new HeuristicPlanner()
+    let developed = 0
+    let continuations = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const made = { ...drawn, motion: 'flowing' as const }
+        const score = renderPlan(made, seed)
+        barPositions(made.form, 16).forEach((position, i) => {
+          if (position.role !== 'continuation' || position.phraseFinal || position.returnsFrom !== undefined) return
+          const opening = score.bars[position.phrase * 4].treble[0] ?? []
+          if (!opening.length || i === position.phrase * 4) return
+          const head = (notes: { start: number; dur: number }[]) => rhythmOf(notes.filter((n) => n.start < score.meter.splitTick).slice(0, -1))
+          continuations++
+          if (head(melody(score, i)) === head(opening)) developed++
+        })
+      }
+    }
+    // Drawn fresh beat by beat, two flowing bars share their first half's rhythm about one time in four.
+    expect(developed / continuations).toBeGreaterThan(0.6)
+  })
+
   it('dresses the first answer where the style does, keeping every note of the tune', () => {
     // Op. 9/2 answers its question at 12.5 attacks a bar against 7.25.
     const score = period('chopin')
@@ -245,6 +453,104 @@ describe('fioritura', () => {
     }
     // Three notes around one pitch is the textbook turn: above, on, below.
     expect(fioritura(15, 7, 7, 3)).toEqual([8, 7, 6])
+  })
+})
+
+describe('figureBetween', () => {
+  it('arrives on the next beat by step or skip, never striking a pitch twice', () => {
+    for (let count = 1; count <= 6; count++) {
+      for (let from = 0; from < 12; from++) {
+        for (let to = 0; to < 12; to++) {
+          const figure = figureBetween(12, from, to, count)
+          expect(figure).toHaveLength(count)
+          const line = [from, ...figure, to]
+          for (let k = 1; k < line.length; k++) expect(line[k], `${from}→${to} in ${count}: ${line.join(' ')}`).not.toBe(line[k - 1])
+          for (const rung of figure) expect(rung >= 0 && rung < 12).toBe(true)
+          if (Math.abs(to - from) <= 2 * (count + 1)) {
+            for (let k = 1; k < line.length; k++) expect(Math.abs(line[k] - line[k - 1]), `${from}→${to} in ${count}: ${line.join(' ')}`).toBeLessThanOrEqual(2)
+          }
+        }
+      }
+    }
+  })
+
+  it('runs where a run fits, and repeats the figure it is offered', () => {
+    // G to D in three sixteenths is a scale: G F♯ E | D.
+    expect(figureBetween(12, 7, 3, 3)).toEqual([6, 5, 4])
+    const turn = figureBetween(12, 5, 5, 3)
+    expect(figureBetween(12, 8, 8, 3, [turn[0] - 5, turn[1] - turn[0], turn[2] - turn[1], 5 - turn[2]])).toEqual(turn.map((rung) => rung + 3))
+  })
+})
+
+describe('how a style divides the beat', () => {
+  /** Every beat of the tune in simple metres, as its attack offsets within the beat. */
+  const beatsOf = async (style: CompositionPlan['style'], over: Partial<CompositionPlan> = {}) => {
+    const planner = new HeuristicPlanner()
+    const beats: { onsets: string; bar: number; score: Score }[] = []
+    for (let seed = 1; seed <= 16; seed++) {
+      const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+      const score = renderPlan({ ...drawn, meter: 'four_four', ...over }, seed)
+      score.bars.forEach((bar, index) => {
+        const tune = (bar.treble[0] ?? []).filter((n) => !n.tied)
+        for (let beat = 0; beat < 4; beat++) {
+          const onsets = tune.filter((n) => n.start >= beat * 4 && n.start < beat * 4 + 4).map((n) => n.start - beat * 4)
+          if (onsets.length) beats.push({ onsets: onsets.join(), bar: index, score })
+        }
+      })
+    }
+    return beats
+  }
+  const share = (beats: { onsets: string }[], onsets: string) => beats.filter((b) => b.onsets === onsets).length / beats.length
+
+  it('never snaps a beat, which no reference tune does', async () => {
+    for (const style of STYLE_IDS) expect(share(await beatsOf(style, { motion: 'flowing' }), '0,1'), style).toBe(0)
+  })
+
+  it('dots where the style does, and Glass never', async () => {
+    const dotted = async (style: CompositionPlan['style']) => share(await beatsOf(style, { motion: 'flowing' }), '0,3')
+    expect(await dotted('glass')).toBe(0)
+    expect(await dotted('chopin')).toBeGreaterThan(2 * (await dotted('bach')))
+    expect(await dotted('beethoven')).toBeGreaterThan(2 * (await dotted('bach')))
+  })
+
+  it('anticipates the half-bar in a song, and not in an invention', async () => {
+    const anticipated = async (style: CompositionPlan['style']) => {
+      const planner = new HeuristicPlanner()
+      let bars = 0
+      for (let seed = 1; seed <= 16; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, meter: 'four_four', motion: 'walking' }, seed)
+        bars += score.bars.filter((bar) => (bar.treble[0] ?? []).some((n) => n.start === 6 && n.start + n.dur > 8)).length
+      }
+      return bars
+    }
+    expect(await anticipated('laufey')).toBeGreaterThan(10)
+    expect(await anticipated('bach')).toBe(0)
+  })
+
+  it("accents Fox's running sixteenths in his groupings, not on the beat", async () => {
+    const planner = new HeuristicPlanner()
+    const at = { group: [] as number[], beat: [] as number[] }
+    for (let seed = 1; seed <= 12; seed++) {
+      const { plan: drawn } = await planner.plan({ style: 'elijah_fox', bars: 16, pick: 'sample', seed, brief: true })
+      const score = renderPlan({ ...drawn, meter: 'four_four', motion: 'florid', form: 'chain' }, seed)
+      score.bars.forEach((bar, index) => {
+        const tune = bar.treble[0] ?? []
+        if (tune.length < 12) return
+        // 5+5+6 then 7+5+4, bar by bar: tick 5 or 7 starts a group; tick 4 or 8 is a beat inside one.
+        const [group, beat] = index % 2 === 0 ? [5, 4] : [7, 8]
+        const velocityAt = (tick: number) => tune.find((n) => n.start === tick)?.velocity
+        const g = velocityAt(group)
+        const b = velocityAt(beat)
+        if (g !== undefined && b !== undefined) {
+          at.group.push(g)
+          at.beat.push(b)
+        }
+      })
+    }
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+    expect(at.group.length).toBeGreaterThan(20)
+    expect(mean(at.group)).toBeGreaterThan(mean(at.beat) + 1.5)
   })
 })
 
@@ -292,6 +598,32 @@ describe('the accompaniment', () => {
         assertNothingCoversTheTune(renderPlan(plan({ accompaniment, register }), 6))
       }
     }
+  })
+
+  it('breaks a chord without holes, even under a low tune', async () => {
+    const planner = new HeuristicPlanner()
+    let moving = 0
+    let stumbling = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, accompaniment: 'broken', register: 'low' }, seed)
+        for (const bar of score.bars) {
+          const figure = bar.bass[bar.bass.length - 1] ?? []
+          if (!figure.some((n) => n.start % score.meter.beatTicks !== 0)) continue
+          moving++
+          const struck = new Set(figure.map((n) => n.start))
+          for (let tick = 0; tick < score.meter.ticksPerBar; tick += 2) {
+            if (!struck.has(tick)) {
+              stumbling++
+              break
+            }
+          }
+        }
+      }
+    }
+    expect(moving).toBeGreaterThan(100)
+    expect(stumbling, 'bars whose eighth-note figure drops a note').toBe(0)
   })
 
   it('changes the accompaniment without changing the tune', () => {

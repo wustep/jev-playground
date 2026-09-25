@@ -16,11 +16,13 @@
 // under it (src/render/accompaniment.ts).
 
 import { Note as TonalNote } from 'tonal'
+import { BARS_PER_PHRASE } from '../plan/phrase'
 import { REGISTER_RANGE, type CompositionPlan, type ContourId, type RegisterId } from '../plan/schema'
 import { melodyRhythm } from './melodyRhythm'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 import type { Note } from './score'
-import { chordAt, note, type BarView, type Slot } from './voice'
+import { STYLE_VOICES } from './styleVoice'
+import { beatsPerBar, chordAt, note, scaleAt, type BarView, type Remembered, type Slot } from './voice'
 
 /** One finished bar of the tune. */
 export interface MelodyBar {
@@ -31,6 +33,39 @@ export interface MelodyBar {
 
 /** Default semitone span of each contour. A climax bar stretches it. */
 const CONTOUR_SPAN: Record<ContourId, number> = { rise: 7, fall: 7, arch: 7, dip: 7, wave: 6, leap_fall: 10 }
+
+/**
+ * A contour's span, fitted to the notes that have to carry it. Two half
+ * notes asked to trace a fifth can only leap it.
+ */
+function contourSpan(bar: BarView, notes: number): number {
+  const base = CONTOUR_SPAN[bar.contour] + (bar.position.role === 'climax' ? 3 : 0)
+  return base * clamp((notes + 1) / 5, 0.5, 1)
+}
+
+/**
+ * How far a fresh bar leans back toward the middle of the register: once
+ * where it starts, and again across the bar.
+ */
+const PULL = 0.35
+
+/**
+ * Where the harmony has to be heard in the tune: the downbeat, the middle of
+ * a duple or quadruple bar, the arrival of a bar's second chord, and any
+ * note held two beats or more. Everywhere else the line may pass through.
+ *
+ * Where every beat counts, a walking line — one note a beat — snaps every
+ * note to a chord tone and comes out as a broken chord: A D F D | D F D A.
+ *
+ * A note held across the half-bar from an off-beat is the note heard there,
+ * so it counts too: an anticipation is a chord tone struck early.
+ */
+export function stressed(bar: Pick<BarView, 'meter' | 'chord2'>, slot: Slot): boolean {
+  const { meter } = bar
+  if (slot.start === 0 || slot.dur >= 2 * meter.beatTicks) return true
+  if (!bar.chord2 && beatsPerBar(meter) % 2 !== 0) return false
+  return slot.start === meter.splitTick || (slot.start < meter.splitTick && slot.start + slot.dur > meter.splitTick)
+}
 
 function contourOffset(contour: ContourId, t: number, span: number, k: number): number {
   switch (contour) {
@@ -98,20 +133,42 @@ function transposeFigure(bar: BarView, pitches: readonly string[], semitones: nu
   const rungs = ladder(bar.scale, Math.max(0, lo - 14), Math.min(127, hi + 14))
   if (rungs.length === 0 || pitches.length === 0) return [...pitches]
   const reference = midiOf(pitches[0])
-  let steps = nearestIndex(rungs, reference + semitones) - nearestIndex(rungs, reference)
-  const moved = () => pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + steps, 0, rungs.length - 1)])
-  let out = moved()
+  const steps = nearestIndex(rungs, reference + semitones) - nearestIndex(rungs, reference)
+  const moved = (by: number) => pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + by, 0, rungs.length - 1)])
+  let out = moved(steps)
   const top = Math.max(...out.map(midiOf))
   const bottom = Math.min(...out.map(midiOf))
-  // A figure that has left the register comes back by the octave, not by being squashed.
-  if (top > hi && bottom - 12 >= lo) {
-    steps -= bar.scale.length
-    out = moved()
-  } else if (bottom < lo && top + 12 <= hi) {
-    steps += bar.scale.length
-    out = moved()
+  if (top > hi || bottom < lo) {
+    // A figure that has left the register comes back by the octave, not by
+    // being squashed — or stays where it was, on the new harmony, where the
+    // octave would leap away from the note the line just sang.
+    const octave = top > hi ? steps - bar.scale.length : steps + bar.scale.length
+    const fits = (figure: string[]) => figure.every((pitch) => midiOf(pitch) >= lo && midiOf(pitch) <= hi)
+    const last = bar.memory.melodyLast ?? (lo + hi) / 2
+    const candidates = [moved(octave), moved(0)].filter(fits)
+    if (candidates.length) out = candidates.reduce((best, figure) => (Math.abs(midiOf(figure[0]) - last) < Math.abs(midiOf(best[0]) - last) ? figure : best))
   }
-  return reconcile(bar, out, slots, isStrong, lo, hi)
+  return keepSteps(pitches, reconcile(bar, out, slots, isStrong, lo, hi), ladder(bar.scale, lo, hi), slots, isStrong)
+}
+
+/**
+ * A moved figure keeps every step its source took. A chromatic note has no
+ * rung of its own, so moving it lands on its neighbour's, and reconciling a
+ * strong slot to the chord can do the same, striking a pitch twice where
+ * the original moved. The weaker of the two steps on again, the way the
+ * source went.
+ */
+function keepSteps(source: readonly string[], moved: string[], rungs: readonly string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean): string[] {
+  for (let k = 1; k < moved.length; k++) {
+    const went = Math.sign(midiOf(source[k]) - midiOf(source[k - 1]))
+    if (!went || midiOf(moved[k]) !== midiOf(moved[k - 1])) continue
+    const weak = slots[k] && !isStrong(slots[k]) ? k : k - 1
+    const direction = weak === k ? went : -went
+    const at = nearestIndex(rungs, midiOf(moved[weak]))
+    const next = rungs[at + direction]
+    if (next && (weak + 1 >= moved.length || midiOf(next) !== midiOf(moved[weak + 1]))) moved[weak] = next
+  }
+  return moved
 }
 
 /**
@@ -156,6 +213,59 @@ export function fioritura(size: number, from: number, to: number, count: number)
     out.push(next)
     at = next
   }
+  return out
+}
+
+/**
+ * `count` notes of figuration between two beats of a running line, as rung
+ * indices: every move a step or a skip, never a pitch struck twice, and the
+ * arrival on `to` one move after the last of them.
+ *
+ * Unlike `fioritura`, whose last note must sit a step from the next, this
+ * lets a skip absorb an odd step. Filling G to D in three sixteenths,
+ * `fioritura` leaps to E and wiggles — E D E | D — where a player runs
+ * G F♯ E | D.
+ *
+ * Fewest skips first, then fewest turns; `prefer` is the figure the beat
+ * before used, so a bar tends to repeat one shape on every beat.
+ */
+export function figureBetween(size: number, from: number, to: number, count: number, prefer?: readonly number[]): number[] {
+  const moves = count + 1
+  if (count <= 0) return []
+  if (moves > 7) return fioritura(size, from, to, count)
+  let best: number[] | undefined
+  let bestCost = Infinity
+  const path: number[] = []
+  const walk = (at: number, left: number) => {
+    if (left === 0) {
+      if (at !== to) return
+      let cost = 0
+      for (let i = 0; i < path.length; i++) {
+        if (Math.abs(path[i]) === 2) cost += 1.5
+        if (i > 0 && Math.sign(path[i]) !== Math.sign(path[i - 1])) cost += 1
+        if (prefer && prefer[i] !== undefined && prefer[i] !== path[i]) cost += 0.25
+      }
+      if (cost < bestCost) {
+        bestCost = cost
+        best = [...path]
+      }
+      return
+    }
+    // More distance than two rungs a move can cover: this branch cannot arrive.
+    if (Math.abs(to - at) > 2 * left) return
+    for (const move of [1, -1, 2, -2]) {
+      const next = at + move
+      if (next < 0 || next >= size) continue
+      path.push(move)
+      walk(next, left - 1)
+      path.pop()
+    }
+  }
+  walk(from, moves)
+  if (!best) return fioritura(size, from, to, count)
+  const out: number[] = []
+  let at = from
+  for (const move of best.slice(0, count)) out.push((at += move))
   return out
 }
 
@@ -215,7 +325,7 @@ function breakRepeats(bar: BarView, pitches: string[], slots: readonly Slot[], i
     const later = pitches.slice(k + 1).map(midiOf).find((midi) => midi !== here)
     const heading = later === undefined ? (k % 2 === 0 ? 1 : -1) : Math.sign(later - here)
     const strong = isStrong(slots[k])
-    const rungs = strong ? ladder(chordAt(bar, slots[k].start).core, lo, hi) : ladder(bar.scale, lo, hi)
+    const rungs = strong ? ladder(chordAt(bar, slots[k].start).core, lo, hi) : ladder(scaleAt(bar, slots[k].start), lo, hi)
     const at = rungs.findIndex((pitch) => midiOf(pitch) === here)
     const around = at >= 0 ? at : nearestIndex(rungs, here)
     const candidates = [around + heading, around - heading].filter((i) => i >= 0 && i < rungs.length && midiOf(rungs[i]) !== here)
@@ -223,25 +333,151 @@ function breakRepeats(bar: BarView, pitches: string[], slots: readonly Slot[], i
   }
 }
 
-/** Chromatic lower neighbours on the weak slot before a strong one. */
+/**
+ * Chromatic lower neighbours on the weak slot before a strong one — where
+ * the line can reach the neighbour without leaping to it. Put in place of a
+ * run's passing note, the semitone under its goal breaks the run with a
+ * fourth: B♭ A G F would become B♭ A E F.
+ */
 function applyChromaticApproach(bar: BarView, slots: readonly Slot[], pitches: string[], isStrong: (slot: Slot) => boolean): void {
   for (let k = 0; k < slots.length - 1; k++) {
     const approachable = !isStrong(slots[k]) && isStrong(slots[k + 1]) && slots[k].dur <= 2
-    if (approachable && bar.rand() < 0.45) pitches[k] = tidyNote(TonalNote.transpose(pitches[k + 1], '-2m'))
+    if (!approachable || bar.rand() >= 0.45) continue
+    const neighbour = tidyNote(TonalNote.transpose(pitches[k + 1], '-2m'))
+    const before = k > 0 ? midiOf(pitches[k - 1]) : bar.memory.melodyLast
+    if (before === undefined || Math.abs(midiOf(neighbour) - before) <= 4) pitches[k] = neighbour
   }
 }
 
-/** One spelled pitch per slot. */
-function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterId): string[] {
+/**
+ * A bar of new tune along its contour.
+ *
+ * The contour starts where the line left off and leans back toward the
+ * middle of the register as it goes. Centred between the last note and the
+ * middle instead, a `rise` after a `rise` drops a fifth at the barline to
+ * start climbing again.
+ *
+ * A bar that moves faster than the beat is written as a figure: a note on
+ * every beat along the contour, and between them the runs and turns of
+ * `figureBetween`. Sampled at every note, the contour moves less than a
+ * scale step a note, and the line trills — A♭ B♭ A♭ B♭ — instead of running.
+ * A running bar, more than two notes a beat, puts a chord tone on every beat,
+ * as figuration outlines its harmony; a flowing one only where it is stressed.
+ */
+function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number, centre: number, arrival?: readonly string[]): string[] {
+  const { contour, meter } = bar
+  const beat = meter.beatTicks
+  const figured = slots.length >= 1.5 * beatsPerBar(meter)
+  const running = slots.length > 2 * beatsPerBar(meter)
+  const skeleton = figured ? slots.flatMap((slot, k) => (k === 0 || slot.start % beat === 0 ? [k] : [])) : slots.map((_, k) => k)
+  const span = contourSpan(bar, skeleton.length)
+  const opening = contourOffset(contour, 0, span, 0)
+  const last = bar.memory.melodyLast
+  const anchor = last == null ? centre + opening : last + (centre - last) * PULL
+  const tOf = (slot: Slot) => (slots.length === 1 ? 0.5 : slot.start / meter.ticksPerBar)
+  const desiredAt = (t: number, k: number) => clamp(anchor - opening + contourOffset(contour, t, span, k) + (centre - anchor) * PULL * t, lo, hi)
+
+  const out: string[] = new Array(slots.length)
+  let previous = last
+  let previousDesired = last ?? desiredAt(0, 0)
+  skeleton.forEach((k, j) => {
+    const slot = slots[k]
+    const chord = chordAt(bar, slot.start)
+    const desired = desiredAt(tOf(slot), j)
+    const pinned = j === 0 && arrival?.length ? ladder(arrival, lo, hi) : []
+    const rungs = pinned.length ? pinned : running || isStrong(slot) ? ladder(chord.core, lo, hi) : ladder(scaleAt(bar, slot.start), lo, hi)
+    if (!rungs.length) return
+    // A pinned arrival is the one nearest where the line was, so it resolves.
+    let index = nearestIndex(rungs, pinned.length && previous !== undefined ? previous : desired)
+    if (!pinned.length && previous !== undefined && midiOf(rungs[index]) === previous) {
+      // Don't stutter: step on in the direction the contour is heading — and
+      // where the window's edge blocks that, turn around. A contour pressed
+      // against the ceiling at a climax otherwise strikes one note six times.
+      const heading = desired >= previousDesired ? 1 : -1
+      const onward = index + heading
+      index = onward >= 0 && onward < rungs.length ? onward : clamp(index - heading, 0, rungs.length - 1)
+    }
+    out[k] = rungs[index]
+    previous = midiOf(rungs[index])
+    previousDesired = desired
+  })
+  if (!figured) return out.filter(Boolean)
+
+  let shape: number[] | undefined
+  skeleton.forEach((k, j) => {
+    const until = skeleton[j + 1] ?? slots.length
+    const count = until - k - 1
+    const scale = ladder(scaleAt(bar, slots[k].start), lo, hi)
+    if (count <= 0 || !out[k] || !scale.length) return
+    const goal = until < slots.length ? out[until] : undefined
+    const from = nearestIndex(scale, midiOf(out[k]))
+    const to = nearestIndex(scale, goal ? midiOf(goal) : desiredAt(1, skeleton.length))
+    const figure = figureBetween(scale.length, from, to, count, shape)
+    figure.forEach((rung, i) => (out[k + 1 + i] = scale[rung]))
+    shape = [...figure, to].map((rung, i) => rung - (i ? figure[i - 1] : from))
+  })
+  return out.every(Boolean) ? out : out.filter(Boolean)
+}
+
+/**
+ * A remembered or moved figure bends to the chord each note sounds over: a
+ * note taken from the first chord's scale and heard over the second takes
+ * the second scale's degree of the same letter — B♭ becomes B under a V7 in
+ * C minor. Fresh lines draw from the right scale already; figures carried
+ * from another bar do not.
+ */
+function bendToSecond(bar: BarView, pitches: string[], slots: readonly Slot[]): void {
+  if (!bar.chord2 || !bar.scale2) return
+  const scale = new Set(bar.scale2.map((pc) => TonalNote.chroma(pc)))
+  const chord = new Set(bar.chord2.pcs.map((pc) => TonalNote.chroma(pc)))
+  pitches.forEach((pitch, k) => {
+    const chroma = TonalNote.chroma(pitch) ?? -1
+    if (!slots[k] || slots[k].start < bar.meter.splitTick || scale.has(chroma) || chord.has(chroma)) return
+    const degree = bar.scale2!.find((pc) => pc[0] === pitch[0] && Math.min((chroma - (TonalNote.chroma(pc) ?? 0) + 12) % 12, ((TonalNote.chroma(pc) ?? 0) - chroma + 12) % 12) === 1)
+    if (degree) pitches[k] = ladder([degree], midiOf(pitch) - 1, midiOf(pitch) + 1)[0] ?? pitch
+  })
+}
+
+/**
+ * How far a sequence moves its model: the root's move, or that move an
+ * octave the other way, whichever keeps the figure nearer the middle of the
+ * register. The nearest root move alone climbs a fourth a bar through a
+ * circle of fifths and leaves the register by the third link.
+ */
+function sequenceShift(model: Remembered, bar: BarView, centre: number): number {
+  const root = rootShift(model.root, bar.chord.root)
+  const mean = model.pitches.reduce((sum, pitch) => sum + midiOf(pitch), 0) / model.pitches.length
+  const cost = (shift: number) => Math.abs(shift) + 0.6 * Math.abs(mean + shift - centre)
+  return [root, root - 12, root + 12].reduce((best, shift) => (cost(shift) < cost(best) ? shift : best))
+}
+
+/**
+ * One spelled pitch per slot. `model` is the bar a sequence repeats: its
+ * figure is carried onto this bar's harmony, the way a return carries its
+ * source, but by the root's move and without decoration.
+ */
+function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterId, model?: Remembered): string[] {
   if (!slots.length) return []
   const { lo, hi, centre } = windowFor(register, bar)
-  const contour = bar.contour
-  const isStrong = (slot: Slot) => slot.start % bar.meter.beatTicks === 0 || slot.dur >= bar.meter.beatTicks
+  const isStrong = (slot: Slot) => stressed(bar, slot)
 
   const source = bar.position.returnsFrom === undefined ? undefined : bar.memory.melody[bar.position.returnsFrom]
   let pitches: string[]
 
-  if (source && source.pitches.length) {
+  // A closing bar lands on the tonic, if the chord has it. Its landing is its
+  // longest note: the last, where the bar holds and breathes; the first, where
+  // running figuration arrives and runs on — and there the arrival is chosen
+  // before the run is written, so the run leads away from it.
+  const lands = bar.position.role === 'cadence' || bar.isLast
+  const longest = slots.reduce((best, slot, k) => (slot.dur > slots[best].dur ? k : best), 0)
+  const runsOn = lands && slots.length > 1 && longest === 0 && !source
+  const landingChord = chordAt(bar, slots[runsOn ? 0 : slots.length - 1].start)
+  const goal = landingChord.pcs.find((pc) => TonalNote.chroma(pc) === TonalNote.chroma(bar.key.tonic)) ?? landingChord.root
+
+  if (!source && model && model.pitches.length === slots.length) {
+    pitches = transposeFigure(bar, model.pitches, sequenceShift(model, bar, centre), model.slots, isStrong, lo, hi)
+    bendToSecond(bar, pitches, slots)
+  } else if (source && source.pitches.length) {
     // The tune as it comes back: the source's notes on the source's onsets,
     // moved onto this bar's harmony — and, where the return is dressed,
     // decorated between them.
@@ -255,49 +491,48 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
       if (lifted.length && top(lifted) > top(tune)) tune = lifted
     }
     pitches = bar.ornament ? dress(bar, tune, source.slots, slots, lo, hi) : fitTo(tune, slots.length)
+    bendToSecond(bar, pitches, slots)
   } else {
-    // A fresh bar: continue from where the line left off, drifting back toward
-    // the middle of the register so eight rising bars do not climb off the staff.
-    const last = bar.memory.melodyLast
-    const reference = last == null ? centre : last * 0.55 + centre * 0.45
-    const span = CONTOUR_SPAN[contour] + (bar.position.role === 'climax' ? 3 : 0)
-    pitches = []
-    let previousDesired = reference
-    slots.forEach((slot, k) => {
-      const chord = chordAt(bar, slot.start)
-      const t = slots.length === 1 ? 0.5 : slot.start / bar.meter.ticksPerBar
-      const desired = clamp(reference + contourOffset(contour, t, span, k), lo, hi)
-      const rungs = isStrong(slot) ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
-      if (!rungs.length) return
-      let index = nearestIndex(rungs, desired)
-      const previous = pitches[k - 1]
-      if (previous && midiOf(rungs[index]) === midiOf(previous)) {
-        // Don't stutter: step on in the direction the contour is heading — and
-        // where the window's edge blocks that, turn around. A contour pressed
-        // against the ceiling at a climax otherwise strikes one note six times.
-        const heading = desired >= previousDesired ? 1 : -1
-        const onward = index + heading
-        index = onward >= 0 && onward < rungs.length ? onward : clamp(index - heading, 0, rungs.length - 1)
-      }
-      pitches.push(rungs[index])
-      previousDesired = desired
-    })
+    pitches = freshLine(bar, slots, isStrong, lo, hi, centre, runsOn ? [goal] : undefined)
     if (bar.palette === 'chromatic_approach') applyChromaticApproach(bar, slots, pitches, isStrong)
   }
 
   breakRepeats(bar, pitches, slots, isStrong, lo, hi)
 
-  // Closing bars land where the ear expects: the tonic, if the chord has it.
-  if ((bar.position.role === 'cadence' || bar.isLast) && pitches.length) {
-    const chord = chordAt(bar, slots[slots.length - 1].start)
-    const tonic = chord.pcs.find((pc) => TonalNote.chroma(pc) === TonalNote.chroma(bar.key.tonic))
-    const landing = ladder([tonic ?? chord.root], lo, hi)
+  // Closing bars land where the ear expects: the tonic, if the chord has it,
+  // on the one nearest the note before it — which `leadInto` has put a step
+  // away — so the close resolves rather than restriking its approach.
+  if (lands && !runsOn && pitches.length) {
+    const landing = ladder([goal], lo, hi)
     if (landing.length) {
-      const around = midiOf(pitches[pitches.length - 2] ?? pitches[pitches.length - 1])
+      const around = pitches.length >= 2 ? midiOf(pitches[pitches.length - 2]) : (bar.memory.melodyLast ?? midiOf(pitches[0]))
       pitches[pitches.length - 1] = landing[nearestIndex(landing, around)]
     }
   }
   return pitches
+}
+
+/**
+ * The note before a close steps into it: the bar before a cadence ends on
+ * a degree a step from the tonic — 2̂ or 7̂ — where the harmony allows it,
+ * and not by a leap.
+ */
+function leadInto(bar: BarView, pitches: string[], slots: readonly Slot[], register: RegisterId): void {
+  const k = pitches.length - 1
+  const slot = slots[k]
+  if (k < 0 || !slot) return
+  const { lo, hi } = windowFor(register, bar)
+  const tonics = ladder([bar.key.tonic], lo, hi).map(midiOf)
+  const chord = new Set(chordAt(bar, slot.start).pcs.map((pc) => TonalNote.chroma(pc)))
+  const neighbours = ladder(scaleAt(bar, slot.start), lo, hi).filter((pitch) => {
+    const midi = midiOf(pitch)
+    if (!tonics.some((tonic) => Math.abs(midi - tonic) >= 1 && Math.abs(midi - tonic) <= 2)) return false
+    return !stressed(bar, slot) || chord.has(TonalNote.chroma(pitch))
+  })
+  const before = k > 0 ? midiOf(pitches[k - 1]) : bar.memory.melodyLast
+  const usable = neighbours.filter((pitch) => before === undefined || (midiOf(pitch) !== before && Math.abs(midiOf(pitch) - before) <= 4))
+  if (!usable.length) return
+  pitches[k] = usable[nearestIndex(usable, midiOf(pitches[k]))]
 }
 
 /**
@@ -324,7 +559,7 @@ function pickupInto(bar: BarView, next: BarView | undefined, notes: Note[], plan
   const breath = Math.max(1, bar.meter.beatTicks / 2)
   if (bar.meter.ticksPerBar - restStart < length + breath) return []
   const [lo, hi] = REGISTER_RANGE[plan.register]
-  const rungs = ladder(bar.scale, lo - 5, hi)
+  const rungs = ladder(scaleAt(bar, bar.meter.ticksPerBar - length), lo - 5, hi)
   const goal = nearestIndex(rungs, midiOf(target))
   // Approach from below, as an upbeat does — from above only if there is no room under it.
   const direction = goal - count >= 0 ? -1 : 1
@@ -410,24 +645,81 @@ export function silenceUntil(notes: readonly Note[], entry: number): Note[] {
   return notes.flatMap((n) => (n.start >= entry ? [n] : n.start + n.dur > entry ? [{ ...n, start: entry, dur: n.start + n.dur - entry }] : []))
 }
 
+/** How a bar that does not return carries on the phrase's idea. */
+interface Development {
+  /** A rhythm repeated exactly: the bar a sequence repeats. */
+  recall?: Slot[]
+  /** That bar's figure, when the sequence has its shape as well. */
+  model?: Remembered
+  /** A rhythm developed: kept up to `keep`, fresh after it. */
+  motif?: { slots: readonly Slot[]; keep: number }
+}
+
+/**
+ * What a bar that does not return does with the phrase's idea.
+ *
+ * Drawn fresh beat by beat, such bars give a phrase no rhythmic identity,
+ * and a `sequence` — planned as the bar before on a new harmony, with the
+ * same contour — comes out as a different figure altogether.
+ *
+ *   • A sequence repeats the bar before it: its rhythm always, and its
+ *     figure too, moved by the root, where the plan gives it the same
+ *     contour. A contour of its own is still heard, on the repeated rhythm.
+ *   • A continuation or the climax develops the phrase's opening bar: its
+ *     rhythm whole, or its first half with a fresh second half.
+ *   • In a chain each phrase grows from the last, so its opening keeps the
+ *     first half of the previous phrase's idea.
+ */
+function development(plan: CompositionPlan, bars: readonly BarView[], index: number): Development {
+  const bar = bars[index]
+  const { position, memory, meter } = bar
+  if (position.returnsFrom !== undefined || position.phraseFinal) return {}
+  const opening = position.phrase * BARS_PER_PHRASE
+  if (position.role === 'sequence') {
+    const model = memory.melody[index - 1]
+    if (!model) return {}
+    return { recall: model.slots, model: bars[index - 1].contour === bar.contour ? model : undefined }
+  }
+  if (position.role === 'continuation' || position.role === 'climax') {
+    const idea = memory.melody[opening]
+    if (!idea || opening === index) return {}
+    const draw = bar.rand()
+    const keep = draw < 0.4 ? meter.ticksPerBar : draw < 0.8 ? meter.splitTick : 0
+    return keep ? { motif: { slots: idea.slots, keep } } : {}
+  }
+  if (plan.form === 'chain' && index === opening && position.phrase > 0) {
+    const idea = memory.melody[opening - BARS_PER_PHRASE]
+    return idea ? { motif: { slots: idea.slots, keep: meter.splitTick } } : {}
+  }
+  return {}
+}
+
 /**
  * Write the whole singing line, bar by bar, before anything accompanies it.
  * `hold` is a random stream of its own, so holding over a barline never
  * reshuffles the notes themselves.
  */
 export function writeMelody(plan: CompositionPlan, bars: readonly BarView[], hold: () => number): MelodyBar[] {
+  const { lilt } = STYLE_VOICES[plan.style]
   const written = bars.map((bar, index) => {
     const recalled = bar.position.returnsFrom === undefined ? undefined : bar.memory.melody[bar.position.returnsFrom]
+    const developed = recalled ? {} : development(plan, bars, index)
     const slots = melodyRhythm({
       motion: plan.motion,
       meter: bar.meter,
       position: bar.position,
       isLast: bar.isLast,
       rand: bar.rand,
-      recall: recalled?.slots,
-      ornament: bar.ornament,
+      recall: recalled?.slots ?? developed.recall,
+      ornament: Boolean(recalled) && bar.ornament,
+      motif: developed.motif,
+      // An anticipated half-bar belongs to the chord it anticipates; where the
+      // bar changes chord there, it would sound the old one early.
+      lilt: bar.chord2 ? { ...lilt, anticipate: 0 } : lilt,
     })
-    const pitches = melodyPitches(bar, slots, plan.register)
+    const pitches = melodyPitches(bar, slots, plan.register, developed.model)
+    const next = bars[index + 1]
+    if (next && (next.position.role === 'cadence' || next.isLast) && !bar.position.phraseFinal) leadInto(bar, pitches, slots, plan.register)
     const sung = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))
     const notes = silenceUntil([...sung, ...pickupInto(bar, bars[index + 1], sung, plan)], enteringAfter(plan, bar))
     if (pitches.length) {

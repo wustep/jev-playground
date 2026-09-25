@@ -140,6 +140,18 @@ describe('JevPlanner', () => {
     }
   }, 60_000)
 
+  it('gives a sequence the shape of the bar it repeats, as the stub does', async () => {
+    // Jev answers every contour question differently; the form still decides
+    // that a sequence has its model's shape, so the renderer can carry it.
+    const { transport } = fakeJev({ form: 'period', contour_0: 'arch', contour_1: 'fall', contour_2: 'rise', contour_3: 'dip' })
+    const { plan } = await new JevPlanner(transport).plan({ style: 'bach', bars: 16, pick: 'argmax', seed: 1, brief: true })
+    const positions = barPositions('period', 16)
+    expect(positions.slice(8, 11).map((p) => p.role)).toEqual(['contrast', 'sequence', 'sequence'])
+    expect(plan.bars.slice(8, 11).map((bar) => bar.contour)).toEqual(['arch', 'arch', 'arch'])
+    // Bars that are neither returns nor sequences keep what Jev chose.
+    expect(plan.bars.slice(0, 3).map((bar) => bar.contour)).toEqual(['arch', 'fall', 'rise'])
+  })
+
   it('hands every style brief to Jev when asked', () => {
     for (const [style, name, snippet] of [
       ['bach', 'Johann Sebastian Bach', 'ii4/2'],

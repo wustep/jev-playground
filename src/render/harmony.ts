@@ -227,6 +227,22 @@ export function scaleFor(key: KeyInfo, palette: PaletteId, chord: ResolvedChord)
     pcs[target.i] = tone
     chromas[target.i] = chroma
   }
+  // Bending opens augmented seconds — A♭–B in C minor over V, A♭–B in C major
+  // over a borrowed iv — which a line then steps across. Close each from the
+  // side the chord does not own: the melodic minor raises the sixth under a
+  // leading tone; mixture lowers the seventh over a borrowed sixth. Where the
+  // chord owns both, as a diminished seventh does, the second is its own.
+  const chordChromas = new Set(chord.pcs.map((pc) => Note.chroma(pc)))
+  for (let i = 0; i < pcs.length; i++) {
+    const upper = (i + 1) % pcs.length
+    if ((chromas[upper] - chromas[i] + 12) % 12 !== 3) continue
+    const ownsLower = chordChromas.has(chromas[i])
+    const ownsUpper = chordChromas.has(chromas[upper])
+    if (ownsLower === ownsUpper) continue
+    const moved = ownsUpper ? i : upper
+    pcs[moved] = tidy(Note.transpose(pcs[moved], ownsUpper ? '1A' : '-1A'))
+    chromas[moved] = Note.chroma(pcs[moved]) ?? chromas[moved]
+  }
   // Two degrees may have collapsed onto one pitch; drop the duplicate.
   return pcs.filter((pc, i) => chromas.indexOf(Note.chroma(pc) ?? -1) === i)
 }

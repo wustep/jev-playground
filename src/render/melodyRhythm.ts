@@ -13,37 +13,91 @@
 
 import { MOTION_RATE, type MotionId } from '../plan/schema'
 import type { BarPosition } from '../plan/phrase'
-import { choose, slotsFrom, type Slot } from './voice'
+import { slotsFrom, type Slot } from './voice'
 import type { MeterInfo } from './score'
+import type { StyleVoice } from './styleVoice'
+
+/** A way to divide one beat, and how often it is chosen among its size. */
+interface Cell {
+  durations: number[]
+  weight: (lilt: Lilt) => number
+}
+
+export type Lilt = StyleVoice['lilt']
+
+const always = () => 1
+const cell = (durations: number[], weight: (lilt: Lilt) => number = always): Cell => ({ durations, weight })
 
 /**
  * Ways one felt beat can be divided, by how many attacks they contain.
  * Simple beats (a quarter, 4 ticks) and compound beats (a dotted quarter,
  * 6 ticks) get their own tables; everything else falls back to filling evenly.
+ *
+ * No reference tune snaps a beat (sixteenth, dotted eighth), so no cell
+ * does. Whether a two-note beat is even or dotted is the style's `lilt`;
+ * three-note beats lead with the longer note.
  */
-const SIMPLE_CELLS: Record<number, number[][]> = {
-  1: [[4]],
-  2: [[2, 2], [3, 1], [1, 3]],
-  3: [[2, 1, 1], [1, 1, 2], [1, 2, 1]],
-  4: [[1, 1, 1, 1]],
+const SIMPLE_CELLS: Record<number, Cell[]> = {
+  1: [cell([4])],
+  2: [cell([2, 2], (lilt) => 1 - lilt.dotted), cell([3, 1], (lilt) => lilt.dotted)],
+  3: [cell([2, 1, 1], () => 0.5), cell([1, 1, 2], () => 0.35), cell([1, 2, 1], () => 0.15)],
+  4: [cell([1, 1, 1, 1])],
 }
-const COMPOUND_CELLS: Record<number, number[][]> = {
-  1: [[6]],
-  2: [[4, 2], [2, 4], [3, 3]],
-  3: [[2, 2, 2]],
-  4: [[2, 2, 1, 1], [1, 1, 2, 2], [2, 1, 1, 2]],
-  6: [[1, 1, 1, 1, 1, 1]],
+const COMPOUND_CELLS: Record<number, Cell[]> = {
+  1: [cell([6])],
+  2: [cell([4, 2], () => 0.6), cell([2, 4], () => 0.25), cell([3, 3], () => 0.15)],
+  3: [cell([2, 2, 2])],
+  4: [cell([2, 2, 1, 1], () => 0.45), cell([1, 1, 2, 2], () => 0.3), cell([2, 1, 1, 2], () => 0.25)],
+  6: [cell([1, 1, 1, 1, 1, 1])],
 }
 
-function cellsFor(beatTicks: number): Record<number, number[][]> {
+function cellsFor(beatTicks: number): Record<number, Cell[]> {
   if (beatTicks === 6) return COMPOUND_CELLS
   if (beatTicks === 4) return SIMPLE_CELLS
-  return { 1: [[beatTicks]], 2: [[Math.ceil(beatTicks / 2), Math.floor(beatTicks / 2)]] }
+  return { 1: [cell([beatTicks])], 2: [cell([Math.ceil(beatTicks / 2), Math.floor(beatTicks / 2)])] }
+}
+
+/** Neutral: the lilt of a style with no habit either way. */
+const PLAIN: Lilt = { dotted: 0.2, anticipate: 0 }
+
+function drawCell(cells: readonly Cell[], lilt: Lilt, rand: () => number): number[] {
+  const weights = cells.map((c) => Math.max(0, c.weight(lilt)))
+  const total = weights.reduce((a, b) => a + b, 0)
+  if (total <= 0) return cells[0].durations
+  let at = rand() * total
+  for (let i = 0; i < cells.length; i++) if ((at -= weights[i]) < 0) return cells[i].durations
+  return cells[cells.length - 1].durations
+}
+
+/**
+ * Strike the half-bar half a beat early and hold it across: the note before
+ * gives up its second half, or, where it is already an off-beat note, is
+ * held on over the half-bar instead of the half-bar being struck. Only in a
+ * duple or quadruple bar of simple beats, where the half-bar is the one the
+ * ear leans on.
+ */
+function anticipate(rhythm: number[], meter: MeterInfo): number[] {
+  const slots = slotsFrom(rhythm)
+  const target = meter.splitTick
+  const half = meter.beatTicks / 2
+  const at = slots.findIndex((slot) => slot.start === target)
+  if (at < 1 || rhythm.some((value) => value < 0)) return rhythm
+  const before = slots[at - 1]
+  const out = slots.map((slot) => ({ ...slot }))
+  if (before.start >= target - half) {
+    out[at - 1].dur += out[at].dur
+    out.splice(at, 1)
+  } else {
+    out[at - 1].dur -= half
+    out[at].start -= half
+    out[at].dur += half
+  }
+  return out.map((slot) => slot.dur)
 }
 
 /** How many attacks this beat gets, given the motion's target rate and where we are in the bar. */
-function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () => number): number {
-  const rate = MOTION_RATE[motion]
+function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () => number, lilt: Lilt = PLAIN): number {
+  const rate = motion === 'florid' && lilt.run ? lilt.run : MOTION_RATE[motion]
   if (motion === 'sustained') {
     // Fewer than one attack a beat: spread them evenly, but always sound the
     // downbeat. A long-note tune is two or three held notes in a wide bar, not
@@ -60,6 +114,12 @@ function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () 
   return Math.max(1, Math.round(rate * arc + jitter * 0.8))
 }
 
+/** The cell size nearest the attacks a beat wants. */
+function nearestCell(cells: Record<number, Cell[]>, wanted: number): number {
+  const available = Object.keys(cells).map(Number).sort((a, b) => a - b)
+  return available.reduce((best, n) => (Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best), available[0])
+}
+
 /** Longest available cell for a beat: used where the line should hold rather than move. */
 const holdCell = (beatTicks: number) => [beatTicks]
 
@@ -73,6 +133,14 @@ export interface RhythmOptions {
   recall?: Slot[]
   /** Decorate the recalled rhythm instead of repeating it literally. */
   ornament?: boolean
+  /**
+   * The phrase's rhythmic idea, for a bar that develops it rather than
+   * returning: its slots before `keep` (in ticks) are kept, the rest of the
+   * bar is written fresh.
+   */
+  motif?: { slots: readonly Slot[]; keep: number }
+  /** How the style divides a beat (`StyleVoice.lilt`). */
+  lilt?: Lilt
 }
 
 /**
@@ -85,6 +153,7 @@ export interface RhythmOptions {
  */
 export function melodyRhythm(options: RhythmOptions): Slot[] {
   const { motion, meter, position, isLast, rand } = options
+  const lilt = options.lilt ?? PLAIN
   const beats = Math.round(meter.ticksPerBar / meter.beatTicks)
   const cells = cellsFor(meter.beatTicks)
 
@@ -95,6 +164,14 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   // thought runs on, so the line runs on with it: a spun-out prelude, a Glass
   // cycle or a displaced-sixteenth vamp has no business stopping every four
   // bars. The last bar always lands, whatever its phrase says.
+  if (position.phraseFinal && (position.phraseEnd !== 'open' || isLast) && motion === 'florid' && !isLast && beats > 1) {
+    // Running figuration does not stop for an inner cadence: a prelude, an
+    // étude or a displaced-sixteenth vamp arrives on the downbeat, holds it a
+    // beat so the arrival is heard, and runs on into the next phrase.
+    const rhythm = [meter.beatTicks]
+    for (let beat = 1; beat < beats; beat++) rhythm.push(...drawCell(cells[nearestCell(cells, attacksForBeat(motion, beat, beats, rand, lilt))], lilt, rand))
+    return slotsFrom(rhythm)
+  }
   if (position.phraseFinal && (position.phraseEnd !== 'open' || isLast)) {
     // Closed phrases land on the downbeat and hold; half cadences get a beat
     // of approach first, so the pause sounds like a question and not a stop.
@@ -102,7 +179,7 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
     const holdFrom = approach ? meter.beatTicks : 0
     const holdFor = isLast ? meter.ticksPerBar - holdFrom : Math.max(meter.beatTicks, Math.round((meter.ticksPerBar - holdFrom) * (position.phraseEnd === 'closed' ? 0.62 : 0.5)))
     const rhythm: number[] = []
-    if (approach) rhythm.push(...(cells[Math.min(2, Math.max(1, Math.round(MOTION_RATE[motion])))] ?? [holdCell(meter.beatTicks)])[0])
+    if (approach) rhythm.push(...(cells[Math.min(2, Math.max(1, Math.round(MOTION_RATE[motion])))]?.[0].durations ?? holdCell(meter.beatTicks)))
     rhythm.push(holdFor)
     const rest = meter.ticksPerBar - holdFrom - holdFor
     if (rest > 0) rhythm.push(-rest)
@@ -110,9 +187,25 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   }
 
   // ── ordinary bars ────────────────────────────────────────────────────────
+  // A bar that develops the phrase's idea keeps its opening feet. A kept
+  // rhythm that ended in a breath runs on instead: only the statement stops
+  // to shape its head.
+  const kept = options.motif ? options.motif.slots.filter((slot) => slot.start < options.motif!.keep) : []
+  const from = kept.length ? Math.ceil(Math.max(options.motif!.keep, kept[kept.length - 1].start + 1) / meter.beatTicks) : 0
+  if (kept.length && from >= beats) {
+    const whole = kept.map((slot) => ({ ...slot }))
+    const tail = whole[whole.length - 1]
+    tail.dur = meter.ticksPerBar - tail.start
+    return whole
+  }
   const rhythm: number[] = []
-  for (let beat = 0; beat < beats; beat++) {
-    const wanted = attacksForBeat(motion, beat, beats, rand)
+  if (kept.length) {
+    const edge = from * meter.beatTicks
+    if (kept[0].start > 0) rhythm.push(-kept[0].start)
+    kept.forEach((slot, k) => rhythm.push(Math.min(kept[k + 1]?.start ?? edge, edge) - slot.start))
+  }
+  for (let beat = from; beat < beats; beat++) {
+    const wanted = attacksForBeat(motion, beat, beats, rand, lilt)
     if (wanted === 0) {
       // A sustained line ties through: extend the note already sounding.
       const lastIndex = rhythm.length - 1
@@ -120,10 +213,10 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
       else rhythm.push(meter.beatTicks)
       continue
     }
-    const available = Object.keys(cells).map(Number).sort((a, b) => a - b)
-    const nearest = available.reduce((best, n) => (Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best), available[0])
-    rhythm.push(...choose(cells[nearest], rand))
+    rhythm.push(...drawCell(cells[nearestCell(cells, wanted)], lilt, rand))
   }
+  const syncopates = !kept.length && motion !== 'florid' && meter.beatTicks === 4 && beats % 2 === 0
+  if (syncopates && lilt.anticipate > 0 && rand() < lilt.anticipate) rhythm.splice(0, rhythm.length, ...anticipate(rhythm, meter))
   // A statement bar breathes a little at its end even mid-phrase, so the head
   // of the idea is a shape and not a wall of notes.
   if (position.role === 'statement' && motion !== 'sustained' && rhythm.length > 2 && rand() < 0.35) {

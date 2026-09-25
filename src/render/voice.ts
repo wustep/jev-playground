@@ -93,6 +93,8 @@ export interface BarView {
   next?: ResolvedChord
   /** Melody / passing-tone pitch classes under this bar's chord. */
   scale: string[]
+  /** The same under the bar's second chord, when it has one. */
+  scale2?: string[]
   palette: PaletteId
   key: KeyInfo
   meter: MeterInfo
@@ -105,6 +107,14 @@ export interface BarView {
 /** Which half of a split bar a tick belongs to. */
 export const chordAt = (bar: BarView, tick: number): ResolvedChord =>
   bar.chord2 && tick >= bar.meter.splitTick ? bar.chord2 : bar.chord
+
+/**
+ * The passing-note scale at a tick: the second chord's from where it takes
+ * over. Drawn from the first chord's all bar long, a minor-key i6/4–V7 bar
+ * runs B♭ against the V7's B.
+ */
+export const scaleAt = (bar: Pick<BarView, 'chord2' | 'scale' | 'scale2' | 'meter'>, tick: number): string[] =>
+  bar.chord2 && bar.scale2 && tick >= bar.meter.splitTick ? bar.scale2 : bar.scale
 
 /** Beats in a bar, counting the felt beat (a dotted quarter in compound metres). */
 export const beatsPerBar = (meter: MeterInfo) => Math.round(meter.ticksPerBar / meter.beatTicks)

@@ -109,6 +109,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       chord2: seconds[index],
       next: chords[index + 1],
       scale: scaleFor(key, plan.palette, chords[index]),
+      scale2: seconds[index] ? scaleFor(key, plan.palette, seconds[index]!) : undefined,
       palette: plan.palette,
       key,
       meter,
@@ -130,12 +131,26 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     return bar
   })
 
+  /**
+   * Where a running bar of the tune is accented instead of on the beat: the
+   * start of each group in the style's grouping, one grouping a bar in turn.
+   * Only for a line that really runs — twelve or more attacks, in a bar the
+   * grouping exactly fills.
+   */
+  const groupStarts = (line: Voice, index: number): Set<number> | undefined => {
+    const groupings = voice.grouping?.filter((groups) => groups.reduce((a, b) => a + b, 0) === meter.ticksPerBar)
+    if (!groupings?.length || line.length < 12) return undefined
+    const groups = groupings[index % groupings.length]
+    return new Set(groups.map((_, g) => groups.slice(0, g).reduce((a, b) => a + b, 0)))
+  }
+
   /** Lean toward the next bar's level, lean on the metre, never play two notes identically. */
-  const shape = (line: Voice, index: number): Voice => {
+  const shape = (line: Voice, index: number, tune = false): Voice => {
     const towards = (velocities[index + 1] ?? velocities[index]) - velocities[index]
+    const grouped = tune ? groupStarts(line, index) : undefined
     return line.map((n) => {
       const onBeat = n.start % meter.beatTicks === 0
-      const metric = (n.start === 0 ? 3 : onBeat ? 1 : -2) * voice.accent
+      const metric = (grouped ? (grouped.has(n.start) ? 3 : -1.5) : n.start === 0 ? 3 : onBeat ? 1 : -2) * voice.accent
       const hairpin = towards * (n.start / meter.ticksPerBar) * 0.6
       const jitter = (touch() * 2 - 1) * voice.humanize
       return { ...n, velocity: clamp(Math.round(n.velocity + metric + hairpin + jitter), 1, 127) }
@@ -153,7 +168,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       role: positions[index]?.role ?? 'continuation',
       chordSymbol: chords[index].symbol,
       ...(seconds[index] ? { split: { tick: meter.splitTick, chordSymbol: seconds[index]!.symbol } } : {}),
-      treble: treble.map((line) => shape(cleanVoice(line, meter.ticksPerBar), index)).filter((line) => line.length > 0),
+      treble: treble.map((line, v) => shape(cleanVoice(line, meter.ticksPerBar), index, v === 0)).filter((line) => line.length > 0),
       bass: bass.map((line) => shape(cleanVoice(line, meter.ticksPerBar), index)).filter((line) => line.length > 0),
       dynamic: nearestDynamic(velocities[index]),
     }

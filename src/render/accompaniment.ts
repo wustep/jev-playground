@@ -18,7 +18,7 @@ import { Note as TonalNote } from 'tonal'
 import { clamp, ladder, midiOf, nearestIndex } from './pitch'
 import type { PedalId, Voice } from './score'
 import { bassFor, essentialTones, leadVoicing, lowBass, stackUp } from './voiceLeading'
-import { beatsPerBar, chordAt, note, pieceChoice, type BarView } from './voice'
+import { beatsPerBar, chordAt, note, pieceChoice, scaleAt, type BarView } from './voice'
 import type { MelodyBar } from './melody'
 
 /**
@@ -76,6 +76,23 @@ const BREAK_SHAPES = [
   [0, 2, 3, 2],
 ]
 
+/**
+ * The chord stacked from `from` in whichever inversion fits under `top` —
+ * dropping its highest tone only if none does. Under a low tune a
+ * root-first stack crosses the tune's floor, and a tone that cannot sound
+ * is a hole in the figure.
+ */
+function stackUnder(tones: readonly string[], from: number, top: number): string[] {
+  for (let size = tones.length; size >= 1; size--) {
+    for (let inversion = 0; inversion < tones.length; inversion++) {
+      const order = [...tones.slice(inversion), ...tones.slice(0, inversion)].slice(0, size)
+      const stack = stackUp(order, from)
+      if (midiOf(stack[stack.length - 1]) < top) return stack
+    }
+  }
+  return []
+}
+
 function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   const { meter } = bar
   const top = headroom(options.ceiling)
@@ -99,7 +116,7 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     }
     if (options.density === 0 && tick % meter.beatTicks !== 0) continue
     const tones = essentialTones(chord, 4)
-    const stack = stackUp(tones, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22))
+    const stack = stackUnder(tones, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22), top)
     const pick = stack[shape[k % shape.length] % stack.length] ?? stack[0]
     if (!pick || midiOf(pick) >= top) continue
     voice.push(note(tick, step, pick, bar.velocity - 16 + (tick % meter.beatTicks === 0 ? 5 : 0)))
@@ -207,7 +224,7 @@ function counterline(bar: BarView, options: AccompanimentOptions, melody: Melody
         let midi = midiOf(previous.pitches[k]) - 12
         while (midi > hi) midi -= 12
         while (midi < lo) midi += 12
-        const pool = strong ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
+        const pool = strong ? ladder(chord.core, lo, hi) : ladder(scaleAt(bar, slot.start), lo, hi)
         if (!pool.length) return
         answer.push(note(slot.start, slot.dur, pool[nearestIndex(pool, midi)], bar.velocity - 6))
       })
@@ -225,7 +242,7 @@ function counterline(bar: BarView, options: AccompanimentOptions, melody: Melody
   for (let tick = 0; tick < meter.ticksPerBar; tick += step) {
     const chord = chordAt(bar, tick)
     const strong = tick % meter.beatTicks === 0
-    const rungs = ladder(strong ? chord.core : bar.scale, lo, hi)
+    const rungs = ladder(strong ? chord.core : scaleAt(bar, tick), lo, hi)
     if (!rungs.length) continue
     // Contrary motion against the tune's direction at this moment.
     const heard = melody.notes.filter((n) => n.start <= tick)
