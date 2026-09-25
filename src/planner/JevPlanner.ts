@@ -174,12 +174,16 @@ export class JevPlanner implements Planner {
       pickedChords.push(...expandPhrase(phraseId, options))
       for (let k = 0; k < BARS_PER_PHRASE; k++) {
         const bar = slotIndex * BARS_PER_PHRASE + k
-        const source = positions[bar]?.returnsFrom
+        const position = positions[bar]
+        const source = position?.returnsFrom ?? (position?.role === 'sequence' && k > 0 ? bar - 1 : undefined)
         if (source === undefined || contours[source] === undefined) {
           contours.push(decide(slotAnswers, slotContourQuestionId(k), `bars[${bar}].contour`, CONTOURS))
           continue
         }
-        // A returning bar IS the earlier bar's tune: its shape is the form's decision, not a fresh one.
+        // A returning bar IS the earlier bar's tune, and a sequence IS the bar
+        // before it on a new harmony — the stub has always planned it so, and
+        // the renderer only carries the figure across when the shapes match.
+        // Either way the shape is the form's decision, not a fresh one.
         const contour = contours[source]
         contours.push(contour)
         decisions.push({ field: `bars[${bar}].contour`, choice: contour, confidence: 1, probabilities: normalize(Object.fromEntries(CONTOUR_IDS.map((id) => [id, id === contour ? 1 : 0]))) })
