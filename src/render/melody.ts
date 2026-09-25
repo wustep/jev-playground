@@ -659,7 +659,9 @@ const HOLD_OVER = 0.6
  * one bar rings on through the first slot of the next, instead of that slot
  * being struck. No pitch changes — the held note takes the struck note's
  * place — and only where it belongs there: a tone of the new chord, or a
- * suspension that steps into the note after it.
+ * suspension that steps into the note after it. The move on from it is the
+ * held note's to make, so it must be no wider than a fourth, or than the
+ * move the struck note made: a D4 held in place of a D5 leapt a tenth.
  *
  * Never over a breath (out of a phrase-final bar), into a landing (a
  * phrase-final bar) or into a statement, which enters on its own.
@@ -678,6 +680,7 @@ function holdOver(plan: CompositionPlan, bars: readonly BarView[], written: Note
     const suspension = head.dur <= bar.meter.beatTicks && step > 0 && step <= 2
     if (!chordTone && !suspension) continue
     if (chance() >= HOLD_OVER) continue
+    if (step > Math.max(5, Math.abs(midiOf(head.pitches[0]) - midiOf(after.pitches[0])))) continue
     written[i][0] = { ...head, pitches: [...tail.pitches], tied: true }
   }
 }

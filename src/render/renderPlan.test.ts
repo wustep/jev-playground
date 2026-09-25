@@ -869,8 +869,34 @@ describe('the accompaniment', () => {
     expect(held, 'an invention and a dance do hold over barlines').toBeGreaterThan(10)
   })
 
+  it('holds a note over the barline only where the line need not leap away from it', async () => {
+    // The held note takes the place of the one the bar would have struck, so
+    // the move into the bar's next note is the held note's to make. A D4 held
+    // in place of a D5 made a Laufey line leap a tenth to F5.
+    const planner = new HeuristicPlanner()
+    let held = 0
+    for (const style of ['bach', 'laufey', 'elijah_fox', 'chopin'] as const) {
+      for (let seed = 1; seed <= 24; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        if (drawn.accompaniment !== 'stride' && drawn.accompaniment !== 'counterline') continue
+        const score = renderPlan(drawn, seed)
+        const struck = renderPlan({ ...drawn, accompaniment: 'broken' }, seed)
+        score.bars.forEach((_, i) => {
+          const [head, after] = melody(score, i)
+          if (!head?.tied || !after) return
+          held++
+          const replaced = midisOf([melody(struck, i)[0]])[0]
+          const next = midisOf([after])[0]
+          const leap = Math.abs(midisOf([head])[0] - next)
+          expect(leap, `${style} seed ${seed} bar ${i + 1}`).toBeLessThanOrEqual(Math.max(5, Math.abs(replaced - next)))
+        })
+      }
+    }
+    expect(held, 'and it still holds where it can').toBeGreaterThan(40)
+  })
+
   it('plays a held note once, for its whole length', () => {
-    const score = renderPlan(plan({ accompaniment: 'counterline', bars: Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V', 'I'] as const)[i % 4], contour: 'wave' as const })) }), 2)
+    const score = renderPlan(plan({ accompaniment: 'counterline', bars: Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V', 'I'] as const)[i % 4], contour: 'wave' as const })) }), 3)
     const ties = score.bars.flatMap((_, i) => (melody(score, i)[0]?.tied ? [i] : []))
     expect(ties.length).toBeGreaterThan(0)
     const tune = timeline(score, { sustain: false }).filter((n) => n.hand === 'right')
