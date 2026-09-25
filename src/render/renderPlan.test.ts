@@ -376,6 +376,78 @@ describe('figureBetween', () => {
   })
 })
 
+describe('how a style divides the beat', () => {
+  /** Every beat of the tune in simple metres, as its attack offsets within the beat. */
+  const beatsOf = async (style: CompositionPlan['style'], over: Partial<CompositionPlan> = {}) => {
+    const planner = new HeuristicPlanner()
+    const beats: { onsets: string; bar: number; score: Score }[] = []
+    for (let seed = 1; seed <= 16; seed++) {
+      const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+      const score = renderPlan({ ...drawn, meter: 'four_four', ...over }, seed)
+      score.bars.forEach((bar, index) => {
+        const tune = (bar.treble[0] ?? []).filter((n) => !n.tied)
+        for (let beat = 0; beat < 4; beat++) {
+          const onsets = tune.filter((n) => n.start >= beat * 4 && n.start < beat * 4 + 4).map((n) => n.start - beat * 4)
+          if (onsets.length) beats.push({ onsets: onsets.join(), bar: index, score })
+        }
+      })
+    }
+    return beats
+  }
+  const share = (beats: { onsets: string }[], onsets: string) => beats.filter((b) => b.onsets === onsets).length / beats.length
+
+  it('never snaps a beat, which no reference tune does', async () => {
+    for (const style of STYLE_IDS) expect(share(await beatsOf(style, { motion: 'flowing' }), '0,1'), style).toBe(0)
+  })
+
+  it('dots where the style does, and Glass never', async () => {
+    const dotted = async (style: CompositionPlan['style']) => share(await beatsOf(style, { motion: 'flowing' }), '0,3')
+    expect(await dotted('glass')).toBe(0)
+    expect(await dotted('chopin')).toBeGreaterThan(2 * (await dotted('bach')))
+    expect(await dotted('beethoven')).toBeGreaterThan(2 * (await dotted('bach')))
+  })
+
+  it('anticipates the half-bar in a song, and not in an invention', async () => {
+    const anticipated = async (style: CompositionPlan['style']) => {
+      const planner = new HeuristicPlanner()
+      let bars = 0
+      for (let seed = 1; seed <= 16; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, meter: 'four_four', motion: 'walking' }, seed)
+        bars += score.bars.filter((bar) => (bar.treble[0] ?? []).some((n) => n.start === 6 && n.start + n.dur > 8)).length
+      }
+      return bars
+    }
+    expect(await anticipated('laufey')).toBeGreaterThan(10)
+    expect(await anticipated('bach')).toBe(0)
+  })
+
+  it("accents Fox's running sixteenths in his groupings, not on the beat", async () => {
+    const planner = new HeuristicPlanner()
+    const at = { group: [] as number[], beat: [] as number[] }
+    for (let seed = 1; seed <= 12; seed++) {
+      const { plan: drawn } = await planner.plan({ style: 'elijah_fox', bars: 16, pick: 'sample', seed, brief: true })
+      const score = renderPlan({ ...drawn, meter: 'four_four', motion: 'florid', form: 'chain' }, seed)
+      score.bars.forEach((bar, index) => {
+        const tune = bar.treble[0] ?? []
+        if (tune.length < 12) return
+        // 5+5+6 then 7+5+4, bar by bar: tick 5 or 7 starts a group; tick 4 or 8 is a beat inside one.
+        const [group, beat] = index % 2 === 0 ? [5, 4] : [7, 8]
+        const velocityAt = (tick: number) => tune.find((n) => n.start === tick)?.velocity
+        const g = velocityAt(group)
+        const b = velocityAt(beat)
+        if (g !== undefined && b !== undefined) {
+          at.group.push(g)
+          at.beat.push(b)
+        }
+      })
+    }
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+    expect(at.group.length).toBeGreaterThan(20)
+    expect(mean(at.group)).toBeGreaterThan(mean(at.beat) + 1.5)
+  })
+})
+
 describe('two-voice counterpoint', () => {
   const duet = () =>
     renderPlan(

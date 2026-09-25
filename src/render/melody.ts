@@ -21,6 +21,7 @@ import { REGISTER_RANGE, type CompositionPlan, type ContourId, type RegisterId }
 import { melodyRhythm } from './melodyRhythm'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 import type { Note } from './score'
+import { STYLE_VOICES } from './styleVoice'
 import { beatsPerBar, chordAt, note, type BarView, type Remembered, type Slot } from './voice'
 
 /** One finished bar of the tune. */
@@ -58,11 +59,15 @@ const PULL = 0.35
  * of it snapped to a chord tone and the tune came out as a broken chord —
  * A D F D | D F D A — at 38% stepwise motion against 52–70% in the reference
  * tunes.
+ *
+ * A note held across the half-bar from an off-beat is the note heard there,
+ * so it counts too: an anticipation is a chord tone struck early.
  */
 export function stressed(bar: Pick<BarView, 'meter' | 'chord2'>, slot: Slot): boolean {
   const { meter } = bar
   if (slot.start === 0 || slot.dur >= 2 * meter.beatTicks) return true
-  return slot.start === meter.splitTick && (Boolean(bar.chord2) || beatsPerBar(meter) % 2 === 0)
+  if (!bar.chord2 && beatsPerBar(meter) % 2 !== 0) return false
+  return slot.start === meter.splitTick || (slot.start < meter.splitTick && slot.start + slot.dur > meter.splitTick)
 }
 
 function contourOffset(contour: ContourId, t: number, span: number, k: number): number {
@@ -356,15 +361,18 @@ function applyChromaticApproach(bar: BarView, slots: readonly Slot[], pitches: s
  * between the last note and the middle, so a `rise` after a `rise` dropped a
  * fifth at the barline to start climbing again.
  *
- * A bar with more notes than two a beat is written as a figure: a chord tone
- * on every beat along the contour, and between them the turns and runs of
- * `fioritura`. Sampling the contour at every sixteenth moved it less than a
+ * A bar that moves faster than the beat is written as a figure: a note on
+ * every beat along the contour, and between them the runs and turns of
+ * `figureBetween`. Sampling the contour at every note moved it less than a
  * scale step a note, and the line trilled — A♭ B♭ A♭ B♭ — instead of running.
+ * A running bar, more than two notes a beat, puts a chord tone on every beat,
+ * as figuration outlines its harmony; a flowing one only where it is stressed.
  */
 function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number, centre: number): string[] {
   const { contour, meter } = bar
   const beat = meter.beatTicks
-  const figured = slots.length > 2 * beatsPerBar(meter)
+  const figured = slots.length >= 1.5 * beatsPerBar(meter)
+  const running = slots.length > 2 * beatsPerBar(meter)
   const skeleton = figured ? slots.flatMap((slot, k) => (k === 0 || slot.start % beat === 0 ? [k] : [])) : slots.map((_, k) => k)
   const span = contourSpan(bar, skeleton.length)
   const opening = contourOffset(contour, 0, span, 0)
@@ -380,7 +388,7 @@ function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) 
     const slot = slots[k]
     const chord = chordAt(bar, slot.start)
     const desired = desiredAt(tOf(slot), j)
-    const rungs = figured || isStrong(slot) ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
+    const rungs = running || isStrong(slot) ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
     if (!rungs.length) return
     let index = nearestIndex(rungs, desired)
     if (previous !== undefined && midiOf(rungs[index]) === previous) {
@@ -625,7 +633,7 @@ function development(plan: CompositionPlan, bars: readonly BarView[], index: num
     const idea = memory.melody[opening]
     if (!idea || opening === index) return {}
     const draw = bar.rand()
-    const keep = draw < 0.5 ? meter.ticksPerBar : draw < 0.85 ? meter.splitTick : 0
+    const keep = draw < 0.4 ? meter.ticksPerBar : draw < 0.8 ? meter.splitTick : 0
     return keep ? { motif: { slots: idea.slots, keep } } : {}
   }
   if (plan.form === 'chain' && index === opening && position.phrase > 0) {
@@ -641,6 +649,7 @@ function development(plan: CompositionPlan, bars: readonly BarView[], index: num
  * reshuffles the notes themselves.
  */
 export function writeMelody(plan: CompositionPlan, bars: readonly BarView[], hold: () => number): MelodyBar[] {
+  const { lilt } = STYLE_VOICES[plan.style]
   const written = bars.map((bar, index) => {
     const recalled = bar.position.returnsFrom === undefined ? undefined : bar.memory.melody[bar.position.returnsFrom]
     const developed = recalled ? {} : development(plan, bars, index)
@@ -653,6 +662,9 @@ export function writeMelody(plan: CompositionPlan, bars: readonly BarView[], hol
       recall: recalled?.slots ?? developed.recall,
       ornament: Boolean(recalled) && bar.ornament,
       motif: developed.motif,
+      // An anticipated half-bar belongs to the chord it anticipates; where the
+      // bar changes chord there, it would sound the old one early.
+      lilt: bar.chord2 ? { ...lilt, anticipate: 0 } : lilt,
     })
     const pitches = melodyPitches(bar, slots, plan.register, developed.model)
     const sung = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))

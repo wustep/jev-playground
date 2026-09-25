@@ -8,11 +8,12 @@
 // Nothing in this table chooses the tune. Which notes it has is the plan's
 // job (register, motion, accompaniment, palette); this is how they are
 // played: how hard the metre is leaned on, how long a short note is held, how
-// even the touch is, whether the bar breathes, and whether a phrase that
-// comes back is decorated the first time. That last one adds notes, and it
-// is here rather than in the plan because dressing a reprise is a player's
-// habit as much as a composer's — Chopin wrote extra fioriture for Op. 9/2
-// into his pupils' copies. Style as constraint, not costume.
+// even the touch is, whether the bar breathes, whether a phrase that comes
+// back is decorated the first time, and how a beat is divided. The last two
+// add or move notes, and they are here rather than in the plan because
+// dressing a reprise and dotting a rhythm are a player's habits as much as a
+// composer's — Chopin wrote extra fioriture for Op. 9/2 into his pupils'
+// copies. Style as constraint, not costume.
 //
 // A fifth column, `spacing` (how wide the left hand reaches), was declared
 // here and never read by any accompaniment pattern. It is gone rather than
@@ -41,15 +42,36 @@ export interface StyleVoice {
    * runs at 12.5 attacks a bar against its question's 7.25.
    */
   answers: 'literal' | 'dressed'
+  /**
+   * How the line divides the beats it moves within. `dotted` is the share of
+   * two-note beats played long–short rather than even; `anticipate` the
+   * chance an ordinary bar strikes its half-bar half a beat early and holds
+   * it across, the pop-vocal syncopation. Like `answers`, this adds and
+   * moves attacks but chooses no pitch.
+   *
+   * Measured on the reference top voices: two-note beats are even in 93% of
+   * BWV 772's, all of Op. 13 II's and all of Préludes I/4's, and dotted in
+   * 45% of the mazurka's. None of them ever snaps (sixteenth, dotted
+   * eighth), which the renderer used to play on a third of its two-note
+   * beats. Laufey has no reference; her anticipations are the one row value
+   * here that rests on the style notes, not a measurement.
+   */
+  lilt: { dotted: number; anticipate: number }
+  /**
+   * Accents that regroup a running bar of sixteenths against the metre, one
+   * grouping per bar in turn: Fox's 5+5+6 and 7+5+4. Absent: the metre
+   * accents it.
+   */
+  grouping?: readonly (readonly number[])[]
 }
 
 export const STYLE_VOICES: Record<StyleId, StyleVoice> = {
-  bach: { accent: 0.8, articulation: 0.9, humanize: 2, rubato: 'even', answers: 'literal' },
-  beethoven: { accent: 1.3, articulation: 0.95, humanize: 3, rubato: 'even', answers: 'literal' },
-  chopin: { accent: 0.7, articulation: 1, humanize: 3, rubato: 'light', answers: 'dressed' },
-  debussy: { accent: 0.4, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal' },
-  glass: { accent: 0.9, articulation: 0.92, humanize: 1, rubato: 'two_against_three', answers: 'literal' },
-  hans_zimmer: { accent: 1, articulation: 1, humanize: 2, rubato: 'even', answers: 'literal' },
-  laufey: { accent: 1.1, articulation: 0.9, humanize: 5, rubato: 'swung', answers: 'literal' },
-  elijah_fox: { accent: 0.8, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal' },
+  bach: { accent: 0.8, articulation: 0.9, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.07, anticipate: 0 } },
+  beethoven: { accent: 1.3, articulation: 0.95, humanize: 3, rubato: 'even', answers: 'literal', lilt: { dotted: 0.3, anticipate: 0 } },
+  chopin: { accent: 0.7, articulation: 1, humanize: 3, rubato: 'light', answers: 'dressed', lilt: { dotted: 0.35, anticipate: 0 } },
+  debussy: { accent: 0.4, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15 } },
+  glass: { accent: 0.9, articulation: 0.92, humanize: 1, rubato: 'two_against_three', answers: 'literal', lilt: { dotted: 0, anticipate: 0 } },
+  hans_zimmer: { accent: 1, articulation: 1, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.1, anticipate: 0.1 } },
+  laufey: { accent: 1.1, articulation: 0.9, humanize: 5, rubato: 'swung', answers: 'literal', lilt: { dotted: 0.15, anticipate: 0.35 } },
+  elijah_fox: { accent: 0.8, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15 }, grouping: [[5, 5, 6], [7, 5, 4]] },
 }
