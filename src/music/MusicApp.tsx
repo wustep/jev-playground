@@ -10,7 +10,7 @@ import { Masthead } from '../ui/Masthead'
 import { Confidence, PlanPanel } from '../ui/PlanPanel'
 import { SheetView } from '../ui/SheetView'
 import { STYLE_THEME } from '../ui/styleTheme'
-import { DIAL_PLANNER, autoplayAfterStyleSwitch, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan } from './dialPolicy'
+import { DIAL_PLANNER, autoplayAfterStyleSwitch, dialPendingTag, displayedPlanUsesJevScore, generatePlanner, resolveDialPlan, resolveMatchScore } from './dialPolicy'
 import { displayedPlanIdentity, displayedSheetIsStale, plannerSelectIsDirty, staleSettingsStatus } from './sheetStale'
 import { generateStatusLatencyMs, generatedPlanStatus, planHeuristicSample, readyPlanStatus, restoredPlanStatus, stampGenerateLatency } from './planTiming'
 import { styleCache, type Generated } from './styleCache'
@@ -392,6 +392,31 @@ export default function MusicApp() {
   // the plan's register and motion, then accompanies it. Jev chooses the
   // labels or the offline stub does; nothing else writes a note.
   const score = useMemo(() => (plan && generated ? renderPlan(plan, generated.input.seed) : null), [plan, generated])
+
+  // Style-match panel. Every path that swaps the plan clears `matches`; this
+  // refills it once nothing is in flight, reusing Best-of's scores when the
+  // plan carries them.
+  useEffect(() => {
+    if (!plan) return
+    const action = resolveMatchScore({
+      generated,
+      edited: editedPlan !== null,
+      busy: progress !== null || picking,
+      jevCanScore: Boolean(jev?.planner?.score),
+    })
+    if (action.kind === 'wait') return
+    if (action.kind === 'reuse') {
+      setMatches(action.matches)
+      return
+    }
+    const scorer = action.scorer === 'jev' && jev?.planner ? jev.planner : heuristicPlanner
+    const abort = new AbortController()
+    scorer
+      .score?.(plan, STYLE_IDS, { signal: abort.signal })
+      .then((result) => !abort.signal.aborted && setMatches(result))
+      .catch(() => !abort.signal.aborted && setMatches(null))
+    return () => abort.abort()
+  }, [plan, generated, jev, progress, picking, editedPlan])
 
   // A moved Planner select stops dimming the stand once a plan lands. Without
   // this, switching planner and pressing Generate left Play and MIDI disabled.
