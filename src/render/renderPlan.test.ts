@@ -224,6 +224,36 @@ describe('the singing line', () => {
     expect(steps / moving.length).toBeGreaterThan(0.5)
   })
 
+  it('walks through the second beat of a two-four bar', async () => {
+    // Stressed like four-four's third beat, beat two made a walking 2/4 tune
+    // two chord tones a bar: A D | A D, 40% of its moves by step. Beethoven
+    // is the style that writes in 2/4.
+    const planner = new HeuristicPlanner()
+    let moves = 0
+    let steps = 0
+    let downbeats = 0
+    let onChord = 0
+    for (let seed = 1; seed <= 24; seed++) {
+      const { plan: drawn } = await planner.plan({ style: 'beethoven', bars: 16, pick: 'sample', seed, brief: true })
+      const score = renderPlan({ ...drawn, meter: 'two_four', motion: 'walking' }, seed)
+      const key = keyInfo(drawn.key)
+      const line = score.bars.flatMap((_, i) => midisOf(melody(score, i).filter((n) => !n.tied)))
+      for (let k = 1; k < line.length; k++) {
+        if (line[k] === line[k - 1]) continue
+        moves++
+        if (Math.abs(line[k] - line[k - 1]) <= 2) steps++
+      }
+      for (const bar of score.bars) {
+        const first = bar.treble[0]?.[0]
+        if (!first || first.start !== 0 || first.tied) continue
+        downbeats++
+        if (resolveChord(key, bar.plan.chord).pcs.some((pc) => midiOf(`${pc}4`) % 12 === midisOf([first])[0] % 12)) onChord++
+      }
+    }
+    expect(steps / moves).toBeGreaterThan(0.5)
+    expect(onChord / downbeats, 'the downbeat still sounds the harmony').toBeGreaterThan(0.97)
+  })
+
   it('runs through a florid bar instead of trilling on two notes', async () => {
     const planner = new HeuristicPlanner()
     let trills = 0

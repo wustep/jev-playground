@@ -14,7 +14,7 @@ import { renderPlan, timeline } from './renderPlan'
  */
 const FINGERPRINTS: Record<StyleId, string> = {
   bach: '1f42c4163d6c1009',
-  beethoven: '82af9ee24368d3e6',
+  beethoven: 'c17e7004469c1273',
   chopin: 'ab4d8677e0daf38c',
   debussy: 'b78776a8f11d6668',
   glass: 'e014dfa8f8cf7a29',

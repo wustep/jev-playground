@@ -20,7 +20,7 @@ import { BARS_PER_PHRASE } from '../plan/phrase'
 import { REGISTER_RANGE, type CompositionPlan, type ContourId, type RegisterId } from '../plan/schema'
 import { melodyRhythm } from './melodyRhythm'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
-import type { Note } from './score'
+import { TICKS_PER_QUARTER, type Note } from './score'
 import { STYLE_VOICES } from './styleVoice'
 import { beatsPerBar, chordAt, note, scaleAt, type BarView, type Remembered, type Slot } from './voice'
 
@@ -64,6 +64,10 @@ export function stressed(bar: Pick<BarView, 'meter' | 'chord2'>, slot: Slot): bo
   const { meter } = bar
   if (slot.start === 0 || slot.dur >= 2 * meter.beatTicks) return true
   if (!bar.chord2 && beatsPerBar(meter) % 2 !== 0) return false
+  // Two quarter beats are half a four-four bar: the second is four-four's
+  // second beat, not its third. Stressed, it left a walking line two chord
+  // tones a bar, a bugle call.
+  if (!bar.chord2 && meter.num === 2 && meter.beatTicks === TICKS_PER_QUARTER) return false
   return slot.start === meter.splitTick || (slot.start < meter.splitTick && slot.start + slot.dur > meter.splitTick)
 }
 
