@@ -9,17 +9,16 @@
 // job (register, motion, accompaniment, palette); this is how they are
 // played: how hard the metre is leaned on, how long a short note is held, how
 // even the touch is, whether the bar breathes, whether a phrase that comes
-// back is decorated the first time, how a beat is divided, and whether held
-// harmony rings or moves in parts. The last three add or move notes, and they
-// are here rather than in the plan because dressing a reprise, dotting a
-// rhythm and realizing a chord are a player's habits as much as a
-// composer's — Chopin wrote extra fioriture for Op. 9/2 into his pupils'
-// copies. Style as constraint, not costume.
+// back is decorated the first time, how a beat is divided, whether held
+// harmony rings or moves in parts, whether a pulse keeps one speed, and how
+// far a broken chord spreads. The last five add or move notes, and they are
+// here rather than in the plan because dressing a reprise, dotting a rhythm
+// and realizing a chord are a player's habits as much as a composer's —
+// Chopin wrote extra fioriture for Op. 9/2 into his pupils' copies. Style as
+// constraint, not costume.
 //
-// A fifth column, `spacing` (how wide the left hand reaches), was declared
-// here and never read by any accompaniment pattern. It is gone rather than
-// left looking like it did something; wiring a left-hand reach back in is a
-// sound change and belongs with the patterns, not with this table.
+// A change to one row moves that style's notes and no other's;
+// `styleFingerprint.test.ts` holds every style to what it rendered before.
 
 import type { StyleId } from '../plan/schema'
 
