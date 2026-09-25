@@ -224,7 +224,10 @@ function parts(bar: BarView, options: AccompanimentOptions, melody: MelodyBar): 
     const onward = events[k + 1] ? midiOf(events[k + 1].low) : !bar.position.phraseFinal && bar.next ? midiOf(nearestNote([bar.next.bass], from, lo, hi)) : undefined
     const leap = onward === undefined ? 0 : Math.abs(onward - from)
     const between = meter.beatTicks === 4 && end - event.tick === meter.beatTicks && leap >= 3 && leap <= 4 ? ladder(scaleAt(bar, event.tick + half), Math.min(from, onward!) + 1, Math.max(from, onward!) - 1) : []
-    if (between.length === 1) lowLine.push(note(event.tick, half, event.low, bar.velocity - 6), note(event.tick + half, half, between[0], bar.velocity - 10))
+    const held = lowLine[lowLine.length - 1]
+    // The bass holds a note it would strike again; the voices above it still move.
+    if (held && held.pitches[0] === event.low && held.start + held.dur === event.tick && !between.length) held.dur = end - held.start
+    else if (between.length === 1) lowLine.push(note(event.tick, half, event.low, bar.velocity - 6), note(event.tick + half, half, between[0], bar.velocity - 10))
     else lowLine.push(note(event.tick, end - event.tick, event.low, bar.velocity - 6))
     if (event.inner.length) innerLine.push(note(event.tick, end - event.tick, event.inner, bar.velocity - 12))
   })
