@@ -237,5 +237,63 @@ Per variant, over 200 seeds: `perpetual` 9.3 → 12.4 attacks a bar, `hazy` 7.8 
 ### Left alone
 
 - **Bach's mean density.** Where Bach has a reference, the genre matches it: preludes render 11.7 attacks a bar against WTC I/1's 12, and inventions 10.0 against BWV 772's 11.1. The mean is low because chorales (4.5) and sarabandes (5.8) move slowly, which is right for them, and none of them has a reference. Re-weighting how often Bach writes a chorale would be a guess.
-- **Fox's last 4 attacks a bar.** See above.
+- **Fox's last 4 attacks a bar.** See above. *(Now 2.3; see the motif pass below.)*
 - **No listening pass, no keyed A/B.**
+
+---
+
+## Motif pass, 2026-09-25
+
+The earlier passes tuned register and density, and the audit shows both close to the references. What they did not measure is how the tune moves from note to note and bar to bar. There the renderer was weakest:
+
+- **Walking lines arpeggiated.** Every beat counted as strong, so a one-note-a-beat tune snapped every note to a chord tone.
+- **Bars had no rhythmic idea.** Every bar that did not return drew its rhythm fresh, beat by beat. A `sequence`, which the stub plans as the bar before on a new harmony, came out as an unrelated figure.
+- **Florid lines trilled** instead of running.
+- **Beats were divided uniformly**, so a third of two-note beats were Scotch snaps.
+- **Closes rarely stepped into the tonic.**
+
+Each fix below is a rule in `src/render/` or a style-row value. None of them is per-artist code.
+
+| measure (heuristic stub, sampled) | `main` | now | references |
+| --- | --- | --- | --- |
+| walking lines, moves by step | 38% | 55% | 52–70% |
+| sustained lines, moves by step | 41% | 49% | — |
+| florid bars with a six-note two-pitch trill | 135 / 752 | 3 | — |
+| flowing bars with the same | 22 / 1104 | 2 | — |
+| two-note beats that snap (16th, dotted 8th) | ⅓ | 0 | 0 in every reference |
+| closed cadences approached by step | 28% | 72% | — |
+| closes restriking their approach | 15% | 6% | — |
+| broken-figure bars with a dropped note | up to 23% | 0 | — |
+| Fox `perpetual`, attacks a bar | 12.4 | 14.1 | "Wyoming" 16.4 |
+| augmented seconds across scale × chord × key | 1834 | 10 | — |
+
+Against the `main` audit (`scripts/audit-samples.ts --seeds 24`), no style's mean register moves more than 1.2 semitones and no mean density more than 0.8 attacks a bar. Ceiling breaches stay at 0. `accompaniment` still sings one tune (label-reach is unchanged from `main`).
+
+### What changed
+
+- **Stress, not beats** (`stressed` in `melody.ts`). Chord tones are required on the downbeat, on the half-bar of a duple or quadruple bar, where a second chord arrives, and on any note held two beats or more. A fresh bar's contour starts where the line left off, and its span fits the notes that carry it.
+- **Figures** (`figureBetween`). A bar faster than the beat is a note on each beat along the contour, with runs and turns between: every move a step or a skip, never a pitch struck twice. A bar tends to repeat one figure on every beat.
+- **The phrase's idea** (`development`). A sequence repeats the bar before: always its rhythm, and its figure too, moved by the root, when the contour matches. A continuation or the climax keeps the opener's rhythm, whole or its first half. In a chain, each phrase's opening grows from the last. JevPlanner now gives a sequence its model's contour, as it already did for returning bars, so live pieces get the same sequences the stub does.
+- **Lilt** (`StyleVoice.lilt`). The share of dotted two-note beats is measured where there is a reference: BWV 772 7%, Op. 13 II and Préludes I/4 none, Op. 6/1 45%. Laufey's half-bar anticipations rest on the style notes. Fox gets a run rate of four a beat and his 5+5+6 / 7+5+4 accents. Glass never dots.
+- **Perpetual motion.** A florid line arrives at an inner cadence on the downbeat, holds a beat, and runs on. A closed arrival is pinned to the tonic before the run is written.
+- **Cadences.** The bar before a close ends a step from the tonic (2̂ or 7̂, a chord tone where stressed), and the close lands on the tonic nearest it.
+- **Two scale bugs that sounded at those cadences.** In a split bar, passing notes now come from the second chord's scale, so a minor i6/4–V7 bar no longer runs B♭ against B. Bending to a chord no longer leaves an augmented second: melodic minor under a leading tone, a lowered seventh over a borrowed sixth.
+- **Broken figures** stack whichever inversion fits under the tune, instead of dropping the tone that crosses its floor.
+
+### Left alone
+
+- **The stub score.** The rewrite (#56) deleted the `MusicApp` effect that asked for a style match after each plan landed, together with the notes-mode effect above it (`// Optional style-match scoring` in `git show 0290395 -- src/music/MusicApp.tsx`). Only Best sets `matches` now, so after Generate or a dial click every style reads "…" under the "stub score" tag. That is Coder's plumbing, and this pass does not touch `MusicApp`, the planners' `score()` or `/api/jev`.
+- **Bach chorale density**, for the reason above.
+- **Accompaniment density per style.** Bare-bass bars under soft Debussy (10%) and Zimmer (6%) match Clair de lune's 1.25 left-hand attacks a bar and Zimmer's drops to bare. The generated-vs-reference left-hand counts are confounded by which staff the references put their inner voices on.
+- **Dressed returns** still use `fioritura`, tuned in the ear pass; one of the three remaining florid trills is there.
+- **No listening pass, no keyed A/B.** The dial and sheet were checked in headless Chrome (the sheet engraves every style in every metre, which a test now covers), but nothing was listened to.
+
+### Ear-check
+
+At the same seed, on the Heuristic stub and then on live Jev:
+
+- **Laufey, Beethoven, Zimmer:** walking and sustained tunes step, and Laufey anticipates beat three.
+- **Bach:** a period's bars 9–11 are one figure three times on three harmonies, and inventions run instead of trilling.
+- **Chopin** in a minor key: the V half of a cadence bar has its leading tone, and the close steps into the tonic.
+- **Elijah Fox:** Generate until the plan shows `florid`. The sixteenths should not stop at bar 4 or 8, and should accent 5+5+6 then 7+5+4.
+- **Glass:** dead-even rhythm.
