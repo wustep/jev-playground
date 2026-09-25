@@ -22,7 +22,7 @@ import { rng } from '../planner/pick'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { midiOf } from './pitch'
 import { renderPlan, timeline } from './renderPlan'
-import { enteringAfter, figureBetween, fioritura, silenceUntil } from './melody'
+import { enteringAfter, figureBetween, fioritura, silenceUntil, stressed } from './melody'
 import { barPositions } from '../plan/phrase'
 import type { Score } from './score'
 
@@ -462,6 +462,46 @@ describe('the singing line', () => {
     }
     expect(sequences).toBeGreaterThan(100)
     expect(stayed / sequences).toBeLessThan(0.02)
+  })
+
+  it('moves a figure onto new harmony without restriking a note its source left, or leaving the chord where it must sound', async () => {
+    const planner = new HeuristicPlanner()
+    let moves = 0
+    let restruck = 0
+    let stresses = 0
+    let astray = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan(drawn, seed)
+        const key = keyInfo(drawn.key)
+        barPositions(drawn.form, 16).forEach((position, i) => {
+          const sequence = position.role === 'sequence' && drawn.bars[i].contour === drawn.bars[i - 1].contour
+          const from = position.returnsFrom ?? (sequence ? i - 1 : undefined)
+          if (from === undefined) return
+          const bar = melody(score, i)
+          const source = melody(score, from)
+          // Dressed returns add notes; only a figure moved note for note is compared.
+          if (bar.length !== source.length || bar.some((n, k) => k > 0 && n.start !== source[k].start)) return
+          const chord = resolveChord(key, drawn.bars[i].chord)
+          const chord2 = drawn.bars[i].chord2 ? resolveChord(key, drawn.bars[i].chord2!) : undefined
+          bar.forEach((n, k) => {
+            if (n.tied) return
+            if (stressed({ meter: score.meter, chord2 }, n)) {
+              stresses++
+              const under = chord2 && n.start >= score.meter.splitTick ? chord2 : chord
+              if (!under.pcs.some((pc) => midiOf(`${pc}4`) % 12 === midisOf([n])[0] % 12)) astray++
+            }
+            if (k === 0) return
+            moves++
+            if (midisOf([n])[0] === midisOf([bar[k - 1]])[0] && midisOf([source[k]])[0] !== midisOf([source[k - 1]])[0]) restruck++
+          })
+        })
+      }
+    }
+    expect(moves).toBeGreaterThan(1000)
+    expect(restruck / moves, 'a move the source made, struck twice instead').toBeLessThan(0.005)
+    expect(astray / stresses, 'a stressed note moved off its chord to make room').toBeLessThan(0.002)
   })
 
   it('keeps the rhythm of a sequence whose contour is its own, and sings that contour', () => {

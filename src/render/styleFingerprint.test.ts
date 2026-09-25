@@ -13,14 +13,14 @@ import { renderPlan, timeline } from './renderPlan'
  * style shares updates every line it moves, and its commit says why.
  */
 const FINGERPRINTS: Record<StyleId, string> = {
-  bach: '218c901f8c462d66',
-  beethoven: '43a7e836bee05b63',
-  chopin: '42f6dedc7cd4828e',
-  debussy: 'b737a4d23680c377',
-  glass: 'fc398c9408929973',
-  hans_zimmer: '93b1b3168344737a',
-  laufey: '99ad5c4ddaae97d4',
-  elijah_fox: '7e2dddfbd2a79f9d',
+  bach: '495ad44910450da1',
+  beethoven: '142cc19b4d68e444',
+  chopin: 'ef894cf582504c60',
+  debussy: '04a768467bf5fc43',
+  glass: '40528b80825344ff',
+  hans_zimmer: '2e1879aefa3e80d7',
+  laufey: 'd42140db0479a4e7',
+  elijah_fox: '0b12586b441e34c6',
 }
 
 const SEEDS = 12

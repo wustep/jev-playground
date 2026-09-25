@@ -155,25 +155,42 @@ function transposeFigure(bar: BarView, pitches: readonly string[], semitones: nu
     const candidates = [moved(octave), moved(0)].filter(fits)
     if (candidates.length) out = candidates.reduce((best, figure) => (Math.abs(midiOf(figure[0]) - last) < Math.abs(midiOf(best[0]) - last) ? figure : best))
   }
-  return keepSteps(pitches, reconcile(bar, out, slots, isStrong, lo, hi), ladder(bar.scale, lo, hi), slots, isStrong)
+  return keepSteps(bar, pitches, reconcile(bar, out, slots, isStrong, lo, hi), slots, isStrong, lo, hi)
 }
 
 /**
  * A moved figure keeps every step its source took. A chromatic note has no
  * rung of its own, so moving it lands on its neighbour's, and reconciling a
  * strong slot to the chord can do the same, striking a pitch twice where
- * the original moved. The weaker of the two steps on again, the way the
- * source went.
+ * the original moved. One of the two steps on again, the way the source
+ * went: a weak note along the scale before a stressed one, and a stressed
+ * one only to the next tone of its chord, so a stressed note never leaves
+ * the harmony to make room. A step that would strike its other neighbour
+ * instead is not taken.
  */
-function keepSteps(source: readonly string[], moved: string[], rungs: readonly string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean): string[] {
+function keepSteps(bar: BarView, source: readonly string[], moved: string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): string[] {
+  const strong = (j: number) => Boolean(slots[j]) && isStrong(slots[j])
+  const rungsFor = (j: number) => {
+    const tick = slots[j]?.start ?? 0
+    return strong(j) ? ladder(chordAt(bar, tick).core, lo, hi) : ladder(scaleAt(bar, tick), lo, hi)
+  }
   for (let k = 1; k < moved.length; k++) {
     const went = Math.sign(midiOf(source[k]) - midiOf(source[k - 1]))
     if (!went || midiOf(moved[k]) !== midiOf(moved[k - 1])) continue
-    const weak = slots[k] && !isStrong(slots[k]) ? k : k - 1
-    const direction = weak === k ? went : -went
-    const at = nearestIndex(rungs, midiOf(moved[weak]))
-    const next = rungs[at + direction]
-    if (next && (weak + 1 >= moved.length || midiOf(next) !== midiOf(moved[weak + 1]))) moved[weak] = next
+    const options: [number, number][] = [
+      [k, went],
+      [k - 1, -went],
+    ]
+    options.sort(([a], [b]) => Number(strong(a)) - Number(strong(b)))
+    for (const [j, direction] of options) {
+      const rungs = rungsFor(j)
+      if (!rungs.length) continue
+      const next = rungs[nearestIndex(rungs, midiOf(moved[j])) + direction]
+      const other = j === k ? moved[k + 1] : moved[k - 2]
+      if (!next || midiOf(next) === midiOf(moved[j]) || (other !== undefined && midiOf(next) === midiOf(other))) continue
+      moved[j] = next
+      break
+    }
   }
   return moved
 }
@@ -477,7 +494,7 @@ function sequenceFigure(bar: BarView, model: Remembered, isStrong: (slot: Slot) 
   for (const by of [heading, -heading, 2 * heading, -2 * heading]) {
     const stepped = alongScale(bar, model.pitches, by, lo, hi)
     if (stepped.some((pitch) => midiOf(pitch) < lo || midiOf(pitch) > hi)) continue
-    const figure = keepSteps(model.pitches, reconcile(bar, stepped, model.slots, isStrong, lo, hi), ladder(bar.scale, lo, hi), model.slots, isStrong)
+    const figure = keepSteps(bar, model.pitches, reconcile(bar, stepped, model.slots, isStrong, lo, hi), model.slots, isStrong, lo, hi)
     if (Math.abs(meanMidi(figure) - level) >= 1) return figure
   }
   return moved
@@ -515,7 +532,9 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
     // decorated between them.
     const related = source.chord === bar.chord.id || commonTones(source.core, bar.chord.core) >= 2
     const shift = rootShift(source.root, bar.chord.root)
-    let tune = related ? reconcile(bar, source.pitches, source.slots, isStrong, lo, hi) : transposeFigure(bar, source.pitches, shift, source.slots, isStrong, lo, hi)
+    let tune = related
+      ? keepSteps(bar, source.pitches, reconcile(bar, source.pitches, source.slots, isStrong, lo, hi), source.slots, isStrong, lo, hi)
+      : transposeFigure(bar, source.pitches, shift, source.slots, isStrong, lo, hi)
     if (bar.position.role === 'climax') {
       // The same figure reaching a third higher — if there is room above it.
       const lifted = transposeFigure(bar, source.pitches, shift + 4, source.slots, isStrong, lo, hi)
