@@ -328,6 +328,33 @@ describe('the singing line', () => {
     expect(await rate('chopin')).toBeLessThan(await rate('elijah_fox'))
   })
 
+  it("keeps Fox's sixteenths running through an inner cadence, arriving on the tonic", () => {
+    const bars = Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V7', 'I'] as const)[i % 4], contour: 'wave' as const }))
+    const positions = barPositions('period', 16)
+    const inner = positions.flatMap((position, i) => (position.phraseFinal && i < 15 && position.phraseEnd !== 'open' ? [i] : []))
+    expect(inner.length).toBeGreaterThan(0)
+    for (const seed of [1, 2, 3, 4]) {
+      const score = renderPlan(plan({ style: 'elijah_fox', motion: 'florid', form: 'period', bars }), seed)
+      for (const i of inner) {
+        const bar = melody(score, i)
+        expect(bar, `bar ${i + 1} does not stop for its cadence`).toHaveLength(16)
+        if (positions[i].role === 'cadence') expect(bar[0].pitches[0].replace(/\d/, ''), `bar ${i + 1} arrives on the tonic`).toBe('C')
+      }
+      expect(melody(score, 15), 'the end still lands and rings').toHaveLength(1)
+    }
+  })
+
+  it("runs Fox's sixteenths in compound time too, where the shared florid rate lilts", () => {
+    const bars = Array.from({ length: 8 }, (_, i) => ({ chord: (['I', 'vi', 'IV', 'V'] as const)[i % 4], contour: 'wave' as const }))
+    const running = (style: CompositionPlan['style']) => {
+      const score = renderPlan(plan({ style, meter: 'six_eight', motion: 'florid', form: 'chain', bars }), 3)
+      const inner = score.bars.slice(0, -1)
+      return inner.filter((_, i) => melody(score, i).filter((n) => !n.tied).length === score.meter.ticksPerBar).length / inner.length
+    }
+    expect(running('elijah_fox'), 'a dotted-quarter beat runs six sixteenths').toBe(1)
+    expect(running('chopin')).toBeLessThan(0.5)
+  })
+
   it('rings out at the very end rather than resting', () => {
     const score = renderPlan(plan({ motion: 'walking' }), 4)
     const last = melody(score, 3)
@@ -593,11 +620,94 @@ describe('two-voice counterpoint', () => {
 
 describe('the accompaniment', () => {
   it('never reaches the tune, under any pattern', () => {
-    for (const accompaniment of ACCOMPANIMENT_IDS) {
-      for (const register of REGISTER_IDS) {
-        assertNothingCoversTheTune(renderPlan(plan({ accompaniment, register }), 6))
+    for (const style of ['chopin', 'bach'] as const) {
+      for (const accompaniment of ACCOMPANIMENT_IDS) {
+        for (const register of REGISTER_IDS) {
+          assertNothingCoversTheTune(renderPlan(plan({ style, accompaniment, register }), 6))
+        }
       }
     }
+  })
+
+  describe('held harmony in parts, where the style has no pad', () => {
+    const hymns = async () => {
+      const planner = new HeuristicPlanner()
+      const out: Score[] = []
+      for (let seed = 1; seed <= 16; seed++) {
+        const { plan: drawn } = await planner.plan({ style: 'bach', bars: 16, pick: 'sample', seed, brief: true })
+        out.push(renderPlan({ ...drawn, accompaniment: 'sustained', motion: 'walking', meter: 'four_four' }, seed))
+      }
+      return out
+    }
+    /** Beats on which anything under the tune strikes, over all beats. */
+    const struckBeats = (score: Score) => {
+      let struck = 0
+      let beats = 0
+      for (const bar of score.bars) {
+        const onsets = new Set(bar.bass.flat().map((n) => n.start))
+        for (let tick = 0; tick < score.meter.ticksPerBar; tick += score.meter.beatTicks, beats++) if (onsets.has(tick)) struck++
+      }
+      return struck / beats
+    }
+
+    it('moves bass, tenor and alto with the tune on the beat, where a pad holds them', async () => {
+      // Bach's four-part chorales strike 92% of beats under the soprano.
+      const bach = await hymns()
+      const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+      expect(mean(bach.map(struckBeats))).toBeGreaterThan(0.75)
+      const pad = bach.map((score) => renderPlan({ ...score.plan, style: 'debussy' }, score.seed))
+      expect(mean(pad.map(struckBeats)), 'a pad sounds each chord once').toBeLessThan(0.4)
+      for (const score of bach) {
+        const tones = score.bars.flatMap((bar) => bar.bass.flat().filter((n) => n.pitches.length >= 2))
+        expect(tones.length, 'there are inner voices, not a bass line alone').toBeGreaterThan(score.bars.length)
+      }
+    })
+
+    it('carries the note the tune sings on each strike, and never moves in octaves or fifths with it', async () => {
+      const shapes = [[0, 4, 7], [0, 3, 7], [0, 3, 6], [0, 4, 8], [0, 4, 7, 10], [0, 4, 7, 11], [0, 3, 7, 10], [0, 3, 6, 10], [0, 3, 6, 9], [0, 5, 7], [0, 5, 7, 10]]
+      const spellsChord = (midis: number[]) => {
+        const pcs = [...new Set(midis.map((m) => m % 12))]
+        return Array.from({ length: 12 }, (_, root) => root).some((root) => shapes.some((shape) => pcs.every((pc) => shape.includes((pc - root + 12) % 12))))
+      }
+      let strikes = 0
+      let chords = 0
+      let moves = 0
+      let parallels = 0
+      for (const score of await hymns()) {
+        let before: { s: number; b: number } | undefined
+        for (const bar of score.bars) {
+          const bassLine = bar.bass[bar.bass.length - 1]
+          for (let tick = 0; tick < score.meter.ticksPerBar; tick += score.meter.beatTicks) {
+            const low = bassLine.find((n) => n.start === tick)
+            const sung = melody(score, bar.index).find((n) => n.start <= tick && n.start + n.dur > tick)
+            if (!low || !sung) continue
+            const s = midisOf([sung])[0]
+            const b = midisOf([low])[0]
+            strikes++
+            if (spellsChord([s, ...midisOf(bar.bass.flat().filter((n) => n.start <= tick && n.start + n.dur > tick))])) chords++
+            if (before && s !== before.s && b !== before.b) {
+              moves++
+              const interval = (s - b) % 12
+              if ((interval === 0 || interval === 7) && interval === (before.s - before.b) % 12 && Math.sign(s - before.s) === Math.sign(b - before.b)) parallels++
+            }
+            before = { s, b }
+          }
+        }
+      }
+      expect(strikes).toBeGreaterThan(500)
+      expect(chords / strikes, 'a passing note gets a passing chord, not a clash').toBeGreaterThan(0.97)
+      // Not zero: a downbeat takes the bass its label names, whatever the tune does.
+      expect(parallels / moves).toBeLessThan(0.04)
+    })
+
+    it('changes nothing the tune sings, and plays the parts dry', async () => {
+      const notes = (score: Score) => score.bars.map((_, i) => melody(score, i).map((n) => `${n.start}:${n.dur}:${n.pitches}`).join()).join('/')
+      for (const score of (await hymns()).slice(0, 4)) {
+        expect(notes(score)).toBe(notes(renderPlan({ ...score.plan, accompaniment: 'broken' }, score.seed)))
+        expect(score.pedal, 'four moving parts under a pedal blur into one another').toBe('dry')
+      }
+      expect(renderPlan(plan({ style: 'debussy', accompaniment: 'sustained' }), 1).pedal).toBe('half')
+    })
   })
 
   it('breaks a chord without holes, even under a low tune', async () => {

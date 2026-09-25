@@ -264,7 +264,7 @@ Each fix below is a rule in `src/render/` or a style-row value. None of them is 
 | closed cadences approached by step | 28% | 72% | — |
 | closes restriking their approach | 15% | 6% | — |
 | broken-figure bars with a dropped note | up to 23% | 0 | — |
-| Fox `perpetual`, attacks a bar | 12.4 | 14.1 | "Wyoming" 16.4 |
+| Fox `perpetual`, attacks a bar | 12.4 | 14.1 | "Wyoming" 16.4 *(now 16.0 in 4/4 before the final bar; see [the density pass](#density-pass-2026-09-25))* |
 | augmented seconds across scale × chord × key | 1834 | 10 | — |
 
 Against the `main` audit (`scripts/audit-samples.ts --seeds 24`), no style's mean register moves more than 1.2 semitones and no mean density more than 0.8 attacks a bar. Ceiling breaches stay at 0. `accompaniment` still sings one tune (label-reach is unchanged from `main`).
@@ -283,7 +283,7 @@ Against the `main` audit (`scripts/audit-samples.ts --seeds 24`), no style's mea
 ### Left alone
 
 - **The stub score.** The rewrite (#56) deleted the `MusicApp` effect that asked for a style match after each plan landed, together with the notes-mode effect above it (`// Optional style-match scoring` in `git show 0290395 -- src/music/MusicApp.tsx`). Only Best sets `matches` now, so after Generate or a dial click every style reads "…" under the "stub score" tag. That is Coder's plumbing, and this pass does not touch `MusicApp`, the planners' `score()` or `/api/jev`.
-- **Bach chorale density**, for the reason above.
+- **Bach chorale density**, for the reason above. *(The gap was under the tune, not in it; see [the density pass](#density-pass-2026-09-25).)*
 - **Accompaniment density per style.** Bare-bass bars under soft Debussy (10%) and Zimmer (6%) match Clair de lune's 1.25 left-hand attacks a bar and Zimmer's drops to bare. The generated-vs-reference left-hand counts are confounded by which staff the references put their inner voices on.
 - **Dressed returns** still use `fioritura`, tuned in the ear pass. All three remaining florid trills are there, and in Chopin's returns a turn around one note is arguably the ornament doing its job.
 - **No listening pass, no keyed A/B.** The dial and sheet were checked in headless Chrome (the sheet engraves every style in every metre, which a test now covers), but nothing was listened to.
@@ -297,3 +297,70 @@ At the same seed, on the Heuristic stub and then on live Jev:
 - **Chopin** in a minor key: the V half of a cadence bar has its leading tone, and the close steps into the tonic.
 - **Elijah Fox:** Generate until the plan shows `florid`. The sixteenths should not stop at bar 4 or 8, and should accent 5+5+6 then 7+5+4.
 - **Glass:** dead-even rhythm.
+
+---
+
+## Density pass, 2026-09-25
+
+The motif pass left two density gaps: Fox's florid line at 14.1 attacks a bar against "Wyoming"'s 16.4, and Bach's chorales. Measured first, neither gap was where the number said it was. Each fix is a style-row value read by one rule; every other style renders byte-identical, and Bach's tune is unchanged note for note.
+
+### Fox: the grid was already full
+
+In 4/4, every ordinary bar of a `perpetual` piece already ran 16 of 16 sixteenths, the ceiling of the grid. "Wyoming"'s extra 0.4 comes from notes finer than a sixteenth, and its window is bars 1–16 of an 18-bar transcription, so it never includes a final landing. The generated mean was lower for three reasons: its final bar lands on one held note, 3/4 bars top out at 12, and two rules broke his run.
+
+- **`lilt.run` is counted per quarter note.** Read per felt beat, a 6/8 florid bar got four attacks in each six-sixteenth beat, eighth–eighth–sixteenth–sixteenth. That is a lilt, not his run. A dotted-quarter beat now runs six. Simple metres are unchanged.
+- **A line that never lets up doesn't stop for an inner cadence either.** The shared florid rule arrives on the downbeat and holds it a beat (13 of 16). A `run` style now strikes the tonic as the first note of the run, and the 5+5+6 / 7+5+4 accent still falls on it. The last bar still lands and rings.
+
+| Fox, 600 seeds × 16 bars | `main` | now | reference |
+| --- | --- | --- | --- |
+| `perpetual`, 4/4, bars before the last | 15.68 | 16.00 | "Wyoming" 16.4 (bars 1–16 of 18) |
+| `perpetual`, every bar | 14.28 | 14.58 | — |
+| florid in 6/8, bars before the last | 7.81 | 12.00 | — |
+| florid, every bar | 13.27 | 13.85 | — |
+
+### Bach: the chorale's density is under the tune
+
+There is no chorale MIDI in `docs/ref-midi`, but music21 ships all of Bach's four-part chorales. `scripts/chorale-texture.py` measures the 330 in 4/4 (`pip install music21`). Their soprano attacks 3.91 times a bar, and the generated `hymn` tune already sings 4.57, so a denser tune would be less like a chorale. What the render lacked was the three voices under the soprano. In a chorale they strike on 92% of beats, 6.1 times a bar. `sustained` held one block chord a bar.
+
+`StyleVoice.held: 'parts'`, on Bach's row only, plays `sustained` as four-part writing:
+
+- Bass, tenor and alto strike with the tune on every beat it strikes, and hold where it holds.
+- A tune note that belongs to the bar's chord gets the chord voiced again over its root or third, whichever steps. A passing note gets a passing triad from the scale over a stepping bass: I–V6–I under 3̂–2̂–1̂, or V6–IV6–V. A minor seventh over the root makes a seventh chord, whose seventh resolves down in the alto.
+- A first-inversion label frees the bass after the downbeat. A pedal, a six-four or a seventh in the bass holds it.
+- A bass a third from its next note passes through the step between on the half-beat. A bass that would strike the same note again holds it instead.
+- The bass never moves in octaves or fifths with the tune, except where a downbeat takes the bass its label names.
+- The parts are pedalled dry, or each chord would blur into the next.
+
+| Bach `hymn`, 4/4, 79 pieces | `main` | now | 330 chorales |
+| --- | --- | --- | --- |
+| lower-voice onsets a bar | 1.10 | 4.37 | 6.11 |
+| beats the lower voices strike | 28% | 84% | 92% |
+| bass attacks a bar | 1.10 | 3.94 | 4.75 |
+| bass notes that are eighths | 0% | 50% | 46% |
+| bass repeats a note | 9% | 4% | 3% |
+| bass moves by step | 38% | 82% | 63% |
+| bass–tune parallel octaves or fifths, of bass moves | 12% | 3% | — |
+| on-beat strikes whose notes spell no chord | 1% | 1% | — |
+| alto more than an octave under the tune | 30% | 14% | 0.4% |
+| tune attacks a bar | 4.57 | 4.57 | 3.91 |
+
+The remaining 1% of clashes is the same on `main`: the tune holding its approach note over a half cadence's second chord. The alto can't close up to the tune the way a chorale's does, because nothing under the tune may reach its lowest note in the bar. That rule is the rewrite's one invariant, so the alto sits under the bar's lowest note and not under the note it harmonizes.
+
+Bach's mean melody density is unchanged at 8.5 attacks a bar, and it should be. Where Bach has a reference, the genre already matches: preludes 12.4 against WTC I/1's 12, inventions 11.3 against BWV 772's 11.1.
+
+### Left alone
+
+- **Florid trills.** Seven in 2,832 florid bars (0.25%), five of them in dressed returns, the same on `main`.
+- **The chorale soprano.** It moves in eighths on 40% of its notes against the chorales' 19%, from the `walking` rate every style shares. Slowing it for Bach alone would be a second lever for a smaller gap.
+- **Phrase length.** Chorales breathe at a fermata every two bars, and the phrase model's unit is four.
+- **Stub score and `MusicApp`** are not touched.
+- **No listening pass, no keyed A/B.** The sheet was checked in Chrome at the seeds below.
+
+### Ear-check
+
+On the Heuristic stub, with `?debug=1`, 16 bars, "sampling", then "Re-run this seed":
+
+- **Bach, seed 6** (C major `hymn`): bar 1's bass walks C–D–E–D–C under chords on every beat. Bar 2 is V6–IV6–V–V6/5, the bass B–A–G–A–B. Bar 7's F in the alto falls to E in bar 8's I. On `main` the same tune sits over one held chord a bar.
+- **Bach**, any `hymn` in a minor key: the i6/4 of a cadence bar keeps its bass while the upper parts move to V7.
+- **Elijah Fox, seed 2** (E♭ major `perpetual`): bar 4, a D♭9 half cadence, runs sixteenths from beat 1. On `main` it holds its first beat. Bar 8's inner cadence starts its run on E♭.
+- **Elijah Fox** in 6/8 (Generate until `florid` and 6/8, usually the `hazy` variant): twelve even sixteenths a bar, not eighth–eighth–sixteenth–sixteenth.

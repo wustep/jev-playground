@@ -9,9 +9,10 @@
 // job (register, motion, accompaniment, palette); this is how they are
 // played: how hard the metre is leaned on, how long a short note is held, how
 // even the touch is, whether the bar breathes, whether a phrase that comes
-// back is decorated the first time, and how a beat is divided. The last two
-// add or move notes, and they are here rather than in the plan because
-// dressing a reprise and dotting a rhythm are a player's habits as much as a
+// back is decorated the first time, how a beat is divided, and whether held
+// harmony rings or moves in parts. The last three add or move notes, and they
+// are here rather than in the plan because dressing a reprise, dotting a
+// rhythm and realizing a chord are a player's habits as much as a
 // composer's — Chopin wrote extra fioriture for Op. 9/2 into his pupils'
 // copies. Style as constraint, not costume.
 //
@@ -55,9 +56,12 @@ export interface StyleVoice {
    * eighth). Laufey has no reference; her anticipations are the one row
    * value here that rests on the style notes, not a measurement.
    *
-   * `run`, where set, is the attacks a florid beat aims at in place of the
-   * shared 3.5: a style whose running line never lets up. Fox's displacement
-   * lesson is sixteen sixteenths to the bar, and "Wyoming" plays 16.4.
+   * `run`, where set, is the attacks a florid line aims at per quarter note,
+   * in place of the shared 3.5 a beat: a style whose running line never lets
+   * up, in any metre — a dotted-quarter beat runs six. Such a line runs on
+   * through an inner cadence too, instead of holding its arrival a beat.
+   * Fox's displacement lesson is sixteen sixteenths to the bar, and
+   * "Wyoming" plays 16.4.
    */
   lilt: { dotted: number; anticipate: number; run?: number }
   /**
@@ -66,10 +70,20 @@ export interface StyleVoice {
    * accents it.
    */
   grouping?: readonly (readonly number[])[]
+  /**
+   * How a `sustained` accompaniment keeps its harmony alive. Absent, each
+   * chord sounds once and rings, as a pad does. `parts`: bass, tenor and alto
+   * strike again with the tune on the beat, as four-part harmony, and a
+   * passing note in the tune gets a passing chord under it. A harpsichord
+   * chord dies at once; across Bach's 330 four-part chorales in 4/4 the lower
+   * voices strike on 92% of beats, 6.1 times a bar. Like `answers`, it adds
+   * notes and changes none of the tune's.
+   */
+  held?: 'parts'
 }
 
 export const STYLE_VOICES: Record<StyleId, StyleVoice> = {
-  bach: { accent: 0.8, articulation: 0.9, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.07, anticipate: 0 } },
+  bach: { accent: 0.8, articulation: 0.9, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.07, anticipate: 0 }, held: 'parts' },
   beethoven: { accent: 1.3, articulation: 0.95, humanize: 3, rubato: 'even', answers: 'literal', lilt: { dotted: 0.3, anticipate: 0 } },
   chopin: { accent: 0.7, articulation: 1, humanize: 3, rubato: 'light', answers: 'dressed', lilt: { dotted: 0.35, anticipate: 0 } },
   debussy: { accent: 0.4, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15 } },
