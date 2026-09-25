@@ -285,7 +285,7 @@ Against the `main` audit (`scripts/audit-samples.ts --seeds 24`), no style's mea
 - **The stub score.** The rewrite (#56) deleted the `MusicApp` effect that asked for a style match after each plan landed, together with the notes-mode effect above it (`// Optional style-match scoring` in `git show 0290395 -- src/music/MusicApp.tsx`). Only Best sets `matches` now, so after Generate or a dial click every style reads "…" under the "stub score" tag. That is Coder's plumbing, and this pass does not touch `MusicApp`, the planners' `score()` or `/api/jev`.
 - **Bach chorale density**, for the reason above.
 - **Accompaniment density per style.** Bare-bass bars under soft Debussy (10%) and Zimmer (6%) match Clair de lune's 1.25 left-hand attacks a bar and Zimmer's drops to bare. The generated-vs-reference left-hand counts are confounded by which staff the references put their inner voices on.
-- **Dressed returns** still use `fioritura`, tuned in the ear pass; one of the three remaining florid trills is there.
+- **Dressed returns** still use `fioritura`, tuned in the ear pass. All three remaining florid trills are there, and in Chopin's returns a turn around one note is arguably the ornament doing its job.
 - **No listening pass, no keyed A/B.** The dial and sheet were checked in headless Chrome (the sheet engraves every style in every metre, which a test now covers), but nothing was listened to.
 
 ### Ear-check
