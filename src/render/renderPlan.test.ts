@@ -600,6 +600,32 @@ describe('the accompaniment', () => {
     }
   })
 
+  it('breaks a chord without holes, even under a low tune', async () => {
+    const planner = new HeuristicPlanner()
+    let moving = 0
+    let stumbling = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, accompaniment: 'broken', register: 'low' }, seed)
+        for (const bar of score.bars) {
+          const figure = bar.bass[bar.bass.length - 1] ?? []
+          if (!figure.some((n) => n.start % score.meter.beatTicks !== 0)) continue
+          moving++
+          const struck = new Set(figure.map((n) => n.start))
+          for (let tick = 0; tick < score.meter.ticksPerBar; tick += 2) {
+            if (!struck.has(tick)) {
+              stumbling++
+              break
+            }
+          }
+        }
+      }
+    }
+    expect(moving).toBeGreaterThan(100)
+    expect(stumbling, 'bars whose eighth-note figure drops a note').toBe(0)
+  })
+
   it('changes the accompaniment without changing the tune', () => {
     const tuneOf = (score: Score) => score.bars.map((_, i) => melody(score, i).map((n) => `${n.start}:${n.dur}:${n.pitches}`).join()).join('/')
     const reference = renderPlan(plan({ accompaniment: 'broken' }), 5)

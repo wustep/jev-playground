@@ -76,6 +76,23 @@ const BREAK_SHAPES = [
   [0, 2, 3, 2],
 ]
 
+/**
+ * The chord stacked from `from` in whichever inversion fits under `top` —
+ * dropping its highest tone only if none does. Stacked root-first, a
+ * figure's top note crossed the tune's floor in a fifth of broken bars under
+ * a low tune, and was skipped: the arpeggio stumbled, a hole every bar.
+ */
+function stackUnder(tones: readonly string[], from: number, top: number): string[] {
+  for (let size = tones.length; size >= 1; size--) {
+    for (let inversion = 0; inversion < tones.length; inversion++) {
+      const order = [...tones.slice(inversion), ...tones.slice(0, inversion)].slice(0, size)
+      const stack = stackUp(order, from)
+      if (midiOf(stack[stack.length - 1]) < top) return stack
+    }
+  }
+  return []
+}
+
 function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   const { meter } = bar
   const top = headroom(options.ceiling)
@@ -99,7 +116,7 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     }
     if (options.density === 0 && tick % meter.beatTicks !== 0) continue
     const tones = essentialTones(chord, 4)
-    const stack = stackUp(tones, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22))
+    const stack = stackUnder(tones, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22), top)
     const pick = stack[shape[k % shape.length] % stack.length] ?? stack[0]
     if (!pick || midiOf(pick) >= top) continue
     voice.push(note(tick, step, pick, bar.velocity - 16 + (tick % meter.beatTicks === 0 ? 5 : 0)))
