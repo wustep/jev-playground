@@ -109,6 +109,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
       chord2: seconds[index],
       next: chords[index + 1],
       scale: scaleFor(key, plan.palette, chords[index]),
+      scale2: seconds[index] ? scaleFor(key, plan.palette, seconds[index]!) : undefined,
       palette: plan.palette,
       key,
       meter,

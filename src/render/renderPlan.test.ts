@@ -124,6 +124,27 @@ describe('resolveChord', () => {
     expect(scale, 'the leading tone of a dominant seventh reaches the line').toContain('G#')
   })
 
+  it('leaves no augmented second for a line to step across, unless the chord owns it', () => {
+    const chromas = (pcs: string[]) => pcs.map((pc) => midiOf(`${pc}4`) % 12)
+    // C minor over V7: the melodic minor, A natural under the leading tone.
+    expect(scaleFor(keyInfo('C_minor'), 'diatonic', resolveChord(keyInfo('C_minor'), 'V7'))).toEqual(['C', 'D', 'Eb', 'F', 'G', 'A', 'B'])
+    // C major over a borrowed iv: B♭ over its A♭, not B.
+    expect(chromas(scaleFor(keyInfo('C_major'), 'diatonic', resolveChord(keyInfo('C_major'), 'iv')))).toContain(10)
+    // A diminished seventh's augmented second is its own.
+    expect(scaleFor(keyInfo('C_minor'), 'diatonic', resolveChord(keyInfo('C_minor'), 'vii_dim7'))).toContain('Ab')
+    let stray = 0
+    for (const key of KEY_IDS) {
+      for (const chord of CHORD_IDS) {
+        const resolved = resolveChord(keyInfo(key), chord)
+        const owned = new Set(chromas(resolved.pcs))
+        const scale = [...chromas(scaleFor(keyInfo(key), 'diatonic', resolved))].sort((a, b) => a - b)
+        if (scale.length < 7) continue
+        if (scale.some((c, i) => (scale[(i + 1) % scale.length] - c + 12) % 12 === 3 && !(owned.has(c) && owned.has(scale[(i + 1) % scale.length])))) stray++
+      }
+    }
+    expect(stray, 'of every diatonic scale bent to every chord in every key').toBeLessThanOrEqual(3)
+  })
+
   it('spells chords relative to the key', () => {
     expect(resolveChord(keyInfo('Eb_major'), 'V7').symbol).toBe('Bb7')
     expect(resolveChord(keyInfo('Db_major'), 'IV').root).toBe('Gb')
@@ -243,6 +264,50 @@ describe('the singing line', () => {
     }
     const last = melody(score, 15)
     expect(last, 'the end still lands and rings').toHaveLength(1)
+  })
+
+  it('passes over a second chord through its own scale', () => {
+    // i6/4 then V7 in one bar, C minor: the second half is heard over B, D, F.
+    const score = renderPlan(
+      plan({
+        key: 'C_minor',
+        motion: 'florid',
+        form: 'chain',
+        bars: Array.from({ length: 8 }, (_, i) => (i % 2 === 1 ? { chord: 'i64' as const, chord2: 'V7' as const, contour: 'wave' as const } : { chord: 'i' as const, contour: 'arch' as const })),
+      }),
+      3,
+    )
+    for (let i = 1; i < 8; i += 2) {
+      const second = melody(score, i).filter((n) => n.start >= score.meter.splitTick)
+      for (const n of second) expect(n.pitches[0], `bar ${i + 1} runs B♭ against the V7's B`).not.toMatch(/^Bb/)
+    }
+  })
+
+  it('steps into its closes', async () => {
+    const planner = new HeuristicPlanner()
+    let closes = 0
+    let stepped = 0
+    let struckAgain = 0
+    for (const style of ['bach', 'beethoven', 'chopin', 'laufey'] as const) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan(drawn, seed)
+        barPositions(drawn.form, 16).forEach((position, i) => {
+          if (position.role !== 'cadence' && i !== 15) return
+          const bar = melody(score, i)
+          const k = bar.reduce((best, n, j) => (n.dur > bar[best].dur ? j : best), 0)
+          const before = k > 0 ? bar[k - 1] : melody(score, i - 1).slice(-1)[0]
+          if (!before || !bar[k]) return
+          const move = Math.abs(midisOf([bar[k]])[0] - midisOf([before])[0])
+          closes++
+          if (move > 0 && move <= 2) stepped++
+          if (move === 0) struckAgain++
+        })
+      }
+    }
+    // A quarter used to arrive by step, and one in six by the tonic struck again.
+    expect(stepped / closes).toBeGreaterThan(0.7)
+    expect(struckAgain / closes).toBeLessThan(0.08)
   })
 
   it("runs Fox's florid line nearly unbroken, as his displacement lesson does", async () => {

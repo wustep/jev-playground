@@ -22,7 +22,7 @@ import { melodyRhythm } from './melodyRhythm'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
 import type { Note } from './score'
 import { STYLE_VOICES } from './styleVoice'
-import { beatsPerBar, chordAt, note, type BarView, type Remembered, type Slot } from './voice'
+import { beatsPerBar, chordAt, note, scaleAt, type BarView, type Remembered, type Slot } from './voice'
 
 /** One finished bar of the tune. */
 export interface MelodyBar {
@@ -329,7 +329,7 @@ function breakRepeats(bar: BarView, pitches: string[], slots: readonly Slot[], i
     const later = pitches.slice(k + 1).map(midiOf).find((midi) => midi !== here)
     const heading = later === undefined ? (k % 2 === 0 ? 1 : -1) : Math.sign(later - here)
     const strong = isStrong(slots[k])
-    const rungs = strong ? ladder(chordAt(bar, slots[k].start).core, lo, hi) : ladder(bar.scale, lo, hi)
+    const rungs = strong ? ladder(chordAt(bar, slots[k].start).core, lo, hi) : ladder(scaleAt(bar, slots[k].start), lo, hi)
     const at = rungs.findIndex((pitch) => midiOf(pitch) === here)
     const around = at >= 0 ? at : nearestIndex(rungs, here)
     const candidates = [around + heading, around - heading].filter((i) => i >= 0 && i < rungs.length && midiOf(rungs[i]) !== here)
@@ -389,10 +389,11 @@ function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) 
     const chord = chordAt(bar, slot.start)
     const desired = desiredAt(tOf(slot), j)
     const pinned = j === 0 && arrival?.length ? ladder(arrival, lo, hi) : []
-    const rungs = pinned.length ? pinned : running || isStrong(slot) ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
+    const rungs = pinned.length ? pinned : running || isStrong(slot) ? ladder(chord.core, lo, hi) : ladder(scaleAt(bar, slot.start), lo, hi)
     if (!rungs.length) return
-    let index = nearestIndex(rungs, desired)
-    if (previous !== undefined && midiOf(rungs[index]) === previous) {
+    // A pinned arrival is the one nearest where the line was, so it resolves.
+    let index = nearestIndex(rungs, pinned.length && previous !== undefined ? previous : desired)
+    if (!pinned.length && previous !== undefined && midiOf(rungs[index]) === previous) {
       // Don't stutter: step on in the direction the contour is heading — and
       // where the window's edge blocks that, turn around. A contour pressed
       // against the ceiling at a climax otherwise strikes one note six times.
@@ -406,11 +407,11 @@ function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) 
   })
   if (!figured) return out.filter(Boolean)
 
-  const scale = ladder(bar.scale, lo, hi)
   let shape: number[] | undefined
   skeleton.forEach((k, j) => {
     const until = skeleton[j + 1] ?? slots.length
     const count = until - k - 1
+    const scale = ladder(scaleAt(bar, slots[k].start), lo, hi)
     if (count <= 0 || !out[k] || !scale.length) return
     const goal = until < slots.length ? out[until] : undefined
     const from = nearestIndex(scale, midiOf(out[k]))
@@ -420,6 +421,25 @@ function freshLine(bar: BarView, slots: readonly Slot[], isStrong: (slot: Slot) 
     shape = [...figure, to].map((rung, i) => rung - (i ? figure[i - 1] : from))
   })
   return out.every(Boolean) ? out : out.filter(Boolean)
+}
+
+/**
+ * A remembered or moved figure bends to the chord each note sounds over: a
+ * note taken from the first chord's scale and heard over the second takes
+ * the second scale's degree of the same letter — B♭ becomes B under a V7 in
+ * C minor. Fresh lines draw from the right scale already; figures carried
+ * from another bar do not.
+ */
+function bendToSecond(bar: BarView, pitches: string[], slots: readonly Slot[]): void {
+  if (!bar.chord2 || !bar.scale2) return
+  const scale = new Set(bar.scale2.map((pc) => TonalNote.chroma(pc)))
+  const chord = new Set(bar.chord2.pcs.map((pc) => TonalNote.chroma(pc)))
+  pitches.forEach((pitch, k) => {
+    const chroma = TonalNote.chroma(pitch) ?? -1
+    if (!slots[k] || slots[k].start < bar.meter.splitTick || scale.has(chroma) || chord.has(chroma)) return
+    const degree = bar.scale2!.find((pc) => pc[0] === pitch[0] && Math.min((chroma - (TonalNote.chroma(pc) ?? 0) + 12) % 12, ((TonalNote.chroma(pc) ?? 0) - chroma + 12) % 12) === 1)
+    if (degree) pitches[k] = ladder([degree], midiOf(pitch) - 1, midiOf(pitch) + 1)[0] ?? pitch
+  })
 }
 
 /**
@@ -460,6 +480,7 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
 
   if (!source && model && model.pitches.length === slots.length) {
     pitches = transposeFigure(bar, model.pitches, sequenceShift(model, bar, centre), model.slots, isStrong, lo, hi)
+    bendToSecond(bar, pitches, slots)
   } else if (source && source.pitches.length) {
     // The tune as it comes back: the source's notes on the source's onsets,
     // moved onto this bar's harmony — and, where the return is dressed,
@@ -474,6 +495,7 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
       if (lifted.length && top(lifted) > top(tune)) tune = lifted
     }
     pitches = bar.ornament ? dress(bar, tune, source.slots, slots, lo, hi) : fitTo(tune, slots.length)
+    bendToSecond(bar, pitches, slots)
   } else {
     pitches = freshLine(bar, slots, isStrong, lo, hi, centre, runsOn ? [goal] : undefined)
     if (bar.palette === 'chromatic_approach') applyChromaticApproach(bar, slots, pitches, isStrong)
@@ -481,15 +503,42 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
 
   breakRepeats(bar, pitches, slots, isStrong, lo, hi)
 
-  // Closing bars land where the ear expects: the tonic, if the chord has it.
+  // Closing bars land where the ear expects: the tonic, if the chord has it,
+  // on the one nearest the note before it — which `leadInto` has put a step
+  // away. A one-note close used to pick the tonic nearest its own contour,
+  // and a quarter of all closes arrived by the tonic struck again.
   if (lands && !runsOn && pitches.length) {
     const landing = ladder([goal], lo, hi)
     if (landing.length) {
-      const around = midiOf(pitches[pitches.length - 2] ?? pitches[pitches.length - 1])
+      const around = pitches.length >= 2 ? midiOf(pitches[pitches.length - 2]) : (bar.memory.melodyLast ?? midiOf(pitches[0]))
       pitches[pitches.length - 1] = landing[nearestIndex(landing, around)]
     }
   }
   return pitches
+}
+
+/**
+ * The note before a close steps into it: the bar before a cadence ends on
+ * a degree a step from the tonic — 2̂ or 7̂ — where the harmony allows it,
+ * and not by a leap. Only a quarter of closed cadences used to arrive by
+ * step; more than a third arrived by a fourth or more.
+ */
+function leadInto(bar: BarView, pitches: string[], slots: readonly Slot[], register: RegisterId): void {
+  const k = pitches.length - 1
+  const slot = slots[k]
+  if (k < 0 || !slot) return
+  const { lo, hi } = windowFor(register, bar)
+  const tonics = ladder([bar.key.tonic], lo, hi).map(midiOf)
+  const chord = new Set(chordAt(bar, slot.start).pcs.map((pc) => TonalNote.chroma(pc)))
+  const neighbours = ladder(scaleAt(bar, slot.start), lo, hi).filter((pitch) => {
+    const midi = midiOf(pitch)
+    if (!tonics.some((tonic) => Math.abs(midi - tonic) >= 1 && Math.abs(midi - tonic) <= 2)) return false
+    return !stressed(bar, slot) || chord.has(TonalNote.chroma(pitch))
+  })
+  const before = k > 0 ? midiOf(pitches[k - 1]) : bar.memory.melodyLast
+  const usable = neighbours.filter((pitch) => before === undefined || (midiOf(pitch) !== before && Math.abs(midiOf(pitch) - before) <= 4))
+  if (!usable.length) return
+  pitches[k] = usable[nearestIndex(usable, midiOf(pitches[k]))]
 }
 
 /**
@@ -516,7 +565,7 @@ function pickupInto(bar: BarView, next: BarView | undefined, notes: Note[], plan
   const breath = Math.max(1, bar.meter.beatTicks / 2)
   if (bar.meter.ticksPerBar - restStart < length + breath) return []
   const [lo, hi] = REGISTER_RANGE[plan.register]
-  const rungs = ladder(bar.scale, lo - 5, hi)
+  const rungs = ladder(scaleAt(bar, bar.meter.ticksPerBar - length), lo - 5, hi)
   const goal = nearestIndex(rungs, midiOf(target))
   // Approach from below, as an upbeat does — from above only if there is no room under it.
   const direction = goal - count >= 0 ? -1 : 1
@@ -676,6 +725,8 @@ export function writeMelody(plan: CompositionPlan, bars: readonly BarView[], hol
       lilt: bar.chord2 ? { ...lilt, anticipate: 0 } : lilt,
     })
     const pitches = melodyPitches(bar, slots, plan.register, developed.model)
+    const next = bars[index + 1]
+    if (next && (next.position.role === 'cadence' || next.isLast) && !bar.position.phraseFinal) leadInto(bar, pitches, slots, plan.register)
     const sung = slots.slice(0, pitches.length).map((slot, k) => note(slot.start, slot.dur, pitches[k], bar.velocity))
     const notes = silenceUntil([...sung, ...pickupInto(bar, bars[index + 1], sung, plan)], enteringAfter(plan, bar))
     if (pitches.length) {

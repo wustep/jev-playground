@@ -18,7 +18,7 @@ import { Note as TonalNote } from 'tonal'
 import { clamp, ladder, midiOf, nearestIndex } from './pitch'
 import type { PedalId, Voice } from './score'
 import { bassFor, essentialTones, leadVoicing, lowBass, stackUp } from './voiceLeading'
-import { beatsPerBar, chordAt, note, pieceChoice, type BarView } from './voice'
+import { beatsPerBar, chordAt, note, pieceChoice, scaleAt, type BarView } from './voice'
 import type { MelodyBar } from './melody'
 
 /**
@@ -207,7 +207,7 @@ function counterline(bar: BarView, options: AccompanimentOptions, melody: Melody
         let midi = midiOf(previous.pitches[k]) - 12
         while (midi > hi) midi -= 12
         while (midi < lo) midi += 12
-        const pool = strong ? ladder(chord.core, lo, hi) : ladder(bar.scale, lo, hi)
+        const pool = strong ? ladder(chord.core, lo, hi) : ladder(scaleAt(bar, slot.start), lo, hi)
         if (!pool.length) return
         answer.push(note(slot.start, slot.dur, pool[nearestIndex(pool, midi)], bar.velocity - 6))
       })
@@ -225,7 +225,7 @@ function counterline(bar: BarView, options: AccompanimentOptions, melody: Melody
   for (let tick = 0; tick < meter.ticksPerBar; tick += step) {
     const chord = chordAt(bar, tick)
     const strong = tick % meter.beatTicks === 0
-    const rungs = ladder(strong ? chord.core : bar.scale, lo, hi)
+    const rungs = ladder(strong ? chord.core : scaleAt(bar, tick), lo, hi)
     if (!rungs.length) continue
     // Contrary motion against the tune's direction at this moment.
     const heard = melody.notes.filter((n) => n.start <= tick)
