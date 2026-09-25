@@ -31,11 +31,11 @@ export interface StyleVoice {
   /** Peak random velocity deviation, in MIDI units. */
   humanize: number
   /**
-   * How the bar's inner time bends. `two_against_three` leans each eighth
-   * pair toward a triplet in simple metres — the cross-rhythm a pulse piece
-   * lives on — and leaves compound metres even.
+   * How the bar's inner time bends. A cross-rhythm is not one of these: bent
+   * in both hands at once, a triplet lean on every eighth pair is a swing.
+   * Glass's two against three is written into the notes (`lilt.duplets`).
    */
-  rubato: 'even' | 'light' | 'swung' | 'two_against_three'
+  rubato: 'even' | 'light' | 'swung'
   /**
    * How the first return of a phrase is played — a period's answer, an
    * arch's restatement. `literal` restates it and saves the fioritura for the
@@ -62,8 +62,12 @@ export interface StyleVoice {
    * through an inner cadence too, instead of holding its arrival a beat.
    * Fox's displacement lesson is sixteen sixteenths to the bar, and
    * "Wyoming" plays 16.4.
+   *
+   * `duplets`, where set, is the share of two-note compound beats split
+   * evenly (two dotted eighths) instead of leaning long–short, as a
+   * barcarolle's do: over a left hand in eighths, two against three.
    */
-  lilt: { dotted: number; anticipate: number; run?: number }
+  lilt: { dotted: number; anticipate: number; run?: number; duplets?: number }
   /**
    * Accents that regroup a running bar of sixteenths against the metre, one
    * grouping per bar in turn: Fox's 5+5+6 and 7+5+4. Absent: the metre
@@ -87,7 +91,7 @@ export const STYLE_VOICES: Record<StyleId, StyleVoice> = {
   beethoven: { accent: 1.3, articulation: 0.95, humanize: 3, rubato: 'even', answers: 'literal', lilt: { dotted: 0.3, anticipate: 0 } },
   chopin: { accent: 0.7, articulation: 1, humanize: 3, rubato: 'light', answers: 'dressed', lilt: { dotted: 0.35, anticipate: 0 } },
   debussy: { accent: 0.4, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15 } },
-  glass: { accent: 0.9, articulation: 0.92, humanize: 1, rubato: 'two_against_three', answers: 'literal', lilt: { dotted: 0, anticipate: 0 } },
+  glass: { accent: 0.9, articulation: 0.92, humanize: 1, rubato: 'even', answers: 'literal', lilt: { dotted: 0, anticipate: 0, duplets: 1 } },
   hans_zimmer: { accent: 1, articulation: 1, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.1, anticipate: 0.1 } },
   laufey: { accent: 1.1, articulation: 0.9, humanize: 5, rubato: 'swung', answers: 'literal', lilt: { dotted: 0.15, anticipate: 0.35 } },
   elijah_fox: { accent: 0.8, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15, run: 4 }, grouping: [[5, 5, 6], [7, 5, 4]] },

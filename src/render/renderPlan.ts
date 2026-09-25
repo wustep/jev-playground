@@ -211,12 +211,6 @@ function timingOffsetSeconds(score: Score, startTick: number, tick: number): num
     const off = startTick % score.meter.beatTicks !== 0
     return (off ? 0.28 : 0.06) * tick
   }
-  if (rubato === 'two_against_three') {
-    // Duple subdivisions lean toward triplets; compound metres already are.
-    if (score.meter.beatTicks !== 4) return 0
-    const inBeat = startTick % 4
-    return (inBeat === 2 ? 0.33 : inBeat === 1 || inBeat === 3 ? 0.12 : 0) * tick
-  }
   // light: a small sine leans the middle of the bar; barlines stay put.
   return Math.sin(Math.PI * t) * 0.18 * tick
 }

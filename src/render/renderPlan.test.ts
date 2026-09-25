@@ -639,6 +639,40 @@ describe('how a style divides the beat', () => {
     expect(await anticipated('bach')).toBe(0)
   })
 
+  it('splits a compound beat evenly for Glass, two against the left hand’s three', async () => {
+    // Every two-note compound beat used to lean long–short, a barcarolle's
+    // lilt, in 91% of Glass's: the one style whose row says it never dots.
+    const planner = new HeuristicPlanner()
+    const pairs = { glass: [0, 0], chopin: [0, 0] }
+    for (const style of ['glass', 'chopin'] as const) {
+      for (let seed = 1; seed <= 16; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, meter: 'six_eight', motion: 'flowing' }, seed)
+        for (const bar of score.bars) {
+          const tune = (bar.treble[0] ?? []).filter((n) => !n.tied)
+          for (const beat of [0, 6]) {
+            const onsets = tune.filter((n) => n.start >= beat && n.start < beat + 6).map((n) => n.start - beat)
+            if (onsets.length !== 2 || onsets[0] !== 0) continue
+            pairs[style][1]++
+            if (onsets[1] === 3) pairs[style][0]++
+          }
+        }
+      }
+    }
+    expect(pairs.glass[1]).toBeGreaterThan(100)
+    expect(pairs.glass[0] / pairs.glass[1], 'Glass: two dotted eighths').toBeGreaterThan(0.95)
+    expect(pairs.chopin[0] / pairs.chopin[1], 'Chopin keeps his lilt').toBeLessThan(0.3)
+  })
+
+  it('plays Glass dead even, both hands on the grid', async () => {
+    const { plan: drawn } = await new HeuristicPlanner().plan({ style: 'glass', bars: 16, pick: 'sample', seed: 4, brief: true })
+    const score = renderPlan({ ...drawn, meter: 'four_four', motion: 'flowing' }, 4)
+    const tick = 60 / score.bpm / 4
+    const last = score.bars.length - 1
+    const off = timeline(score).filter((n) => n.bar < last && Math.abs(n.time - (n.bar * score.meter.ticksPerBar * tick + Math.round((n.time - n.bar * score.meter.ticksPerBar * tick) / tick) * tick)) > 1e-9)
+    expect(off, 'notes pulled off the sixteenth grid').toHaveLength(0)
+  })
+
   it("accents Fox's running sixteenths in his groupings, not on the beat", async () => {
     const planner = new HeuristicPlanner()
     const at = { group: [] as number[], beat: [] as number[] }
