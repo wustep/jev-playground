@@ -15,8 +15,9 @@
 
 import type { AccompanimentId, CompositionPlan } from '../plan/schema'
 import { Note as TonalNote } from 'tonal'
-import { clamp, ladder, midiOf, nearestIndex } from './pitch'
+import { clamp, ladder, midiOf, nearestIndex, nearestNote } from './pitch'
 import type { PedalId, Voice } from './score'
+import { STYLE_VOICES } from './styleVoice'
 import { bassFor, essentialTones, leadVoicing, lowBass, stackUp } from './voiceLeading'
 import { beatsPerBar, chordAt, note, pieceChoice, scaleAt, type BarView } from './voice'
 import type { MelodyBar } from './melody'
@@ -64,6 +65,172 @@ function sustained(bar: BarView, options: AccompanimentOptions): AccompanimentBa
     }
   }
   return { bass: chordVoice.length ? [bassVoice, chordVoice] : [bassVoice] }
+}
+
+// ── parts: held harmony as four-part writing ────────────────────────────────
+
+const mod12 = (n: number) => ((n % 12) + 12) % 12
+const chromaOf = (pc: string) => TonalNote.chroma(pc) ?? -1
+
+/** Octaves or fifths between the tune and the bass, reached in similar motion. */
+function parallel(from: { s: number; b: number } | undefined, s: number | undefined, b: number): boolean {
+  if (!from || s === undefined || s === from.s || b === from.b) return false
+  const interval = mod12(s - b)
+  return (interval === 0 || interval === 7) && interval === mod12(from.s - from.b) && Math.sign(s - from.s) === Math.sign(b - from.b)
+}
+
+/** Steps are how a bass line moves; a repeated or leaping bass is a last resort. */
+function moveCost(from: number | undefined, to: number): number {
+  if (from === undefined) return 0
+  const move = Math.abs(to - from)
+  return move === 0 ? 2 : move <= 2 ? 0 : move <= 4 ? 0.5 : move <= 7 ? 1.5 : 3
+}
+
+/**
+ * Tenor and alto for one strike: the tones the tune and bass leave out,
+ * with a doubling where a triad leaves only one — the root, else the fifth,
+ * else the third, never the leading tone. Between the bass and `top`, each as
+ * near to where it was as it can be, tenor within an octave of the alto and
+ * the alto, where it can be, within an octave of the tune.
+ */
+function innerVoices(tones: readonly string[], s: number | undefined, b: number, previous: readonly string[] | undefined, top: number, leadingTone: number): string[] {
+  const covered = new Set([mod12(b), ...(s === undefined ? [] : [mod12(s)])])
+  let needed = tones.filter((pc) => !covered.has(chromaOf(pc)))
+  if (needed.length > 2) needed = needed.filter((pc) => pc !== tones[2]).slice(0, 2)
+  const diminished = tones.length === 3 && mod12(chromaOf(tones[2]) - chromaOf(tones[0])) === 6
+  const doublings = needed.length >= 2 ? [] : (diminished ? [tones[1]] : [tones[0], tones[2], tones[1]]).filter((pc) => chromaOf(pc) !== leadingTone)
+  const pairs = doublings.length ? doublings.flatMap((pc) => [[needed[0] ?? pc, pc], [pc, needed[0] ?? pc]]) : needed.length === 2 ? [needed, [needed[1], needed[0]]] : [[needed[0], undefined]]
+  const [prevTenor, prevAlto] = previous?.length === 2 ? previous.map(midiOf) : [undefined, undefined]
+  const reach = s ?? top
+  let best: string[] = []
+  let bestCost = Infinity
+  for (const [upper, lower] of pairs) {
+    if (!upper) continue
+    const near = ladder([upper], Math.max(b + 3, reach - 12), top)
+    const altos = near.length ? near : ladder([upper], b + 3, top)
+    if (!altos.length) continue
+    const alto = altos[nearestIndex(altos, prevAlto ?? reach - 5)]
+    const tenors = lower ? ladder([lower], Math.max(b + 3, midiOf(alto) - 12), midiOf(alto) - 1) : []
+    const tenor = tenors.length ? tenors[nearestIndex(tenors, prevTenor ?? midiOf(alto) - 5)] : undefined
+    const voiced = tenor ? [tenor, alto] : [alto]
+    const gap = Math.max(0, reach - midiOf(alto) - 12)
+    const cost = (lower && !tenor ? 20 : 0) + gap + Math.abs(midiOf(alto) - (prevAlto ?? reach - 5)) + (tenor ? Math.abs(midiOf(tenor) - (prevTenor ?? midiOf(alto) - 5)) : 0)
+    if (cost < bestCost) {
+      best = voiced
+      bestCost = cost
+    }
+  }
+  return best
+}
+
+/**
+ * Held harmony for a style whose keyboard has no pad (`StyleVoice.held`):
+ * bass, tenor and alto strike with the tune on every beat it strikes, as a
+ * chorale moves, and hold where it holds.
+ *
+ * Each strike carries the note the tune sings over it. Where that note is a
+ * tone of the bar's chord, the chord is voiced again and the bass takes the
+ * root or third, whichever steps. Where it is a passing note, the bass steps
+ * to a triad of the scale that holds it — I–V6–I under 3̂–2̂–1̂ — or, with no
+ * such step, the parts hold under it. A bass a third from the next strike
+ * passes through the step between on the half-beat. A bass chosen here
+ * never moves in octaves or fifths with the tune.
+ *
+ * The downbeat and a second harmony take the label's own bass, so an
+ * inversion or a pedal it names is kept.
+ */
+function parts(bar: BarView, options: AccompanimentOptions, melody: MelodyBar): AccompanimentBar {
+  const { meter } = bar
+  const top = options.ceiling - 1
+  const lo = Math.min(38, top - 24)
+  const hi = Math.min(55, top - 10)
+  const middle = (lo + hi) / 2
+  const tune = melody.notes
+  const leadingTone = mod12(chromaOf(bar.key.tonic) - 1)
+  const strikes: number[] = []
+  for (let tick = 0; tick < meter.ticksPerBar; tick += meter.beatTicks) {
+    if (tick === 0 || (bar.chord2 && tick === meter.splitTick) || tune.some((n) => n.start === tick && !n.tied)) strikes.push(tick)
+  }
+
+  let bass = bar.memory.bass ? midiOf(bar.memory.bass) : undefined
+  let earlier: number | undefined
+  let voicing = bar.memory.voicing
+  const before = bar.memory.melody[bar.index - 1]
+  let pair = before?.pitches.length && bass !== undefined ? { s: midiOf(before.pitches[before.pitches.length - 1]), b: bass } : undefined
+  const events: { tick: number; low: string; inner: string[] }[] = []
+  // A bass that rocks between two notes is not a line: going back to the
+  // note before last is dearer than any other step or third.
+  const walk = (b: number) => moveCost(bass, b) + (b === earlier && b !== bass ? 1 : 0)
+
+  strikes.forEach((tick, k) => {
+    const chord = chordAt(bar, tick)
+    const sung = tune.find((n) => n.start <= tick && n.start + n.dur > tick)
+    const s = sung ? midiOf(sung.pitches[0]) : undefined
+    // A tune note a minor seventh over a triad's root makes it a seventh chord.
+    const seventh = s !== undefined && chord.core.length === 3 && mod12(s - chromaOf(chord.root)) === 10 ? TonalNote.pitchClass(sung!.pitches[0]) : undefined
+    const heard = s === undefined || seventh !== undefined || chord.pcs.some((pc) => chromaOf(pc) === mod12(s))
+    const change = tick === 0 || (bar.chord2 !== undefined && tick === meter.splitTick)
+    // A first inversion names only where the bass starts; a pedal, a six-four
+    // or a seventh in the bass names where it stays.
+    const pinned = chord.fixedBass && chromaOf(chord.bass) !== chromaOf(chord.pcs[1])
+    let tones: readonly string[] = seventh ? [...chord.core, seventh] : chord.core
+    let low: string | undefined
+    if (change || (heard && pinned)) {
+      low = nearestNote([chord.bass], bass ?? middle, lo, hi)
+    } else if (heard) {
+      const third = mod12(chromaOf(chord.pcs[1]) - chromaOf(chord.root))
+      const diminished = chord.core.length === 3 && mod12(chromaOf(chord.core[2]) - chromaOf(chord.root)) === 6
+      const pcs = third !== 3 && third !== 4 ? [chord.root] : diminished ? [chord.pcs[1]] : [chord.root, chord.pcs[1]]
+      const next = strikes[k + 1] === undefined ? bar.next : strikes[k + 1] === meter.splitTick ? bar.chord2 : undefined
+      const target = next ? midiOf(nearestNote([next.bass], bass ?? middle, lo, hi)) : undefined
+      const doubled = (b: number) => (s === undefined || mod12(b) !== mod12(s) ? 0 : mod12(b) === chromaOf(chord.root) ? 0.3 : 1)
+      const cost = (b: number) => walk(b) + (parallel(pair, s, b) ? 10 : 0) + doubled(b) + (target !== undefined && Math.abs(b - target) > 2 ? 0.5 : 0)
+      low = pcs.map((pc) => nearestNote([pc], bass ?? middle, lo, hi)).reduce((best, pitch) => (cost(midiOf(pitch)) < cost(midiOf(best)) ? pitch : best))
+    } else if (!pinned && s !== undefined) {
+      const scale = scaleAt(bar, tick)
+      let bestCost = 2
+      for (let d = 0; scale.length === 7 && d < 7; d++) {
+        const triad = [scale[d], scale[(d + 2) % 7], scale[(d + 4) % 7]]
+        const fifth = mod12(chromaOf(triad[2]) - chromaOf(triad[0]))
+        if (fifth === 8 || !triad.some((pc) => chromaOf(pc) === mod12(s))) continue
+        // A diminished triad passes only in first inversion: vii°6.
+        for (const pc of fifth === 6 ? [triad[1]] : [triad[0], triad[1]]) {
+          const b = nearestNote([pc], bass ?? middle, lo, hi)
+          const cost = walk(midiOf(b)) + (parallel(pair, s, midiOf(b)) ? 10 : 0) + (mod12(midiOf(b)) === mod12(s) ? 1.5 : 0)
+          if (cost < bestCost) {
+            bestCost = cost
+            low = b
+            tones = triad
+          }
+        }
+      }
+    }
+    if (!low) return
+    const b = midiOf(low)
+    const inner = options.density === 0 ? [] : innerVoices(tones, s, b, voicing, top, leadingTone)
+    events.push({ tick, low, inner })
+    earlier = bass
+    bass = b
+    pair = s === undefined ? pair : { s, b }
+    if (inner.length === 2) voicing = inner
+  })
+
+  const half = meter.beatTicks / 2
+  const lowLine: Voice = []
+  const innerLine: Voice = []
+  events.forEach((event, k) => {
+    const end = events[k + 1]?.tick ?? meter.ticksPerBar
+    const from = midiOf(event.low)
+    const onward = events[k + 1] ? midiOf(events[k + 1].low) : !bar.position.phraseFinal && bar.next ? midiOf(nearestNote([bar.next.bass], from, lo, hi)) : undefined
+    const leap = onward === undefined ? 0 : Math.abs(onward - from)
+    const between = meter.beatTicks === 4 && end - event.tick === meter.beatTicks && leap >= 3 && leap <= 4 ? ladder(scaleAt(bar, event.tick + half), Math.min(from, onward!) + 1, Math.max(from, onward!) - 1) : []
+    if (between.length === 1) lowLine.push(note(event.tick, half, event.low, bar.velocity - 6), note(event.tick + half, half, between[0], bar.velocity - 10))
+    else lowLine.push(note(event.tick, end - event.tick, event.low, bar.velocity - 6))
+    if (event.inner.length) innerLine.push(note(event.tick, end - event.tick, event.inner, bar.velocity - 12))
+  })
+  if (lowLine.length) bar.memory.bass = lowLine[lowLine.length - 1].pitches[0]
+  if (voicing) bar.memory.voicing = voicing
+  return { bass: [innerLine, lowLine].filter((voice) => voice.length) }
 }
 
 // ── broken ──────────────────────────────────────────────────────────────────
@@ -275,6 +442,11 @@ export const PEDAL_FOR: Record<AccompanimentId, PedalId> = {
   counterline: 'dry',
 }
 
+const inParts = (plan: CompositionPlan) => plan.accompaniment === 'sustained' && STYLE_VOICES[plan.style].held === 'parts'
+
+/** The pedal a plan's accompaniment is played with. Parts moving on every beat are played dry, or each chord blurs into the next. */
+export const pedalFor = (plan: CompositionPlan): PedalId => (inParts(plan) ? 'dry' : PEDAL_FOR[plan.accompaniment])
+
 /**
  * Accompaniment density from the bar's role. The old schema asked a planner
  * for an `arrangement` label and then measured that it changed no melody
@@ -326,5 +498,5 @@ export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: 
   // With no tune sounding this bar, the accompaniment keeps its own company
   // under where the tune last was, so a rest is a rest and not a hole.
   const ceiling = melody.floor ?? (lastSung ?? 72) - 2
-  return PATTERNS[plan.accompaniment](bar, { ceiling, density: densityFor(bar) }, melody)
+  return (inParts(plan) ? parts : PATTERNS[plan.accompaniment])(bar, { ceiling, density: densityFor(bar) }, melody)
 }

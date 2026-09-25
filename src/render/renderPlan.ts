@@ -15,7 +15,7 @@
 import { barPositions } from '../plan/phrase'
 import { BAR_COUNT_VALUES, TEMPO_BPM, type BarCount, type CompositionPlan, type DynamicId, type DynamicShapeId } from '../plan/schema'
 import { rng } from '../planner/pick'
-import { PEDAL_FOR, writeAccompaniment } from './accompaniment'
+import { pedalFor, writeAccompaniment } from './accompaniment'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { writeMelody } from './melody'
 import { clamp, midiOf } from './pitch'
@@ -181,7 +181,7 @@ export function renderPlan(plan: CompositionPlan, seed: number): Score {
     meter,
     bpm: TEMPO_BPM[plan.tempo],
     bars,
-    pedal: PEDAL_FOR[plan.accompaniment],
+    pedal: pedalFor(plan),
     articulation: voice.articulation,
     ritardando: true,
   }
