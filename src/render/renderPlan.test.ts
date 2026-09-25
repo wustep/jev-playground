@@ -22,7 +22,7 @@ import { rng } from '../planner/pick'
 import { keyInfo, resolveChord, scaleFor } from './harmony'
 import { midiOf } from './pitch'
 import { renderPlan, timeline } from './renderPlan'
-import { enteringAfter, fioritura, silenceUntil } from './melody'
+import { enteringAfter, figureBetween, fioritura, silenceUntil } from './melody'
 import { barPositions } from '../plan/phrase'
 import type { Score } from './score'
 
@@ -180,6 +180,48 @@ describe('the singing line', () => {
     expect(into).not.toBe(0)
   })
 
+  /** Every note-to-note move of the tune, in semitones, over many drawn plans at one motion. */
+  const movesAt = async (motion: CompositionPlan['motion']) => {
+    const planner = new HeuristicPlanner()
+    const moves: number[] = []
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, motion }, seed)
+        const line = score.bars.flatMap((_, i) => midisOf(melody(score, i).filter((n) => !n.tied)))
+        for (let k = 1; k < line.length; k++) moves.push(line[k] - line[k - 1])
+      }
+    }
+    return moves
+  }
+
+  it('walks by step, not by the notes of the chord', async () => {
+    // Every beat used to be a chord tone, so a walking tune was an arpeggio:
+    // 38% of its moves by step, against 52–70% in the reference tunes.
+    const moving = (await movesAt('walking')).filter((move) => move !== 0)
+    const steps = moving.filter((move) => Math.abs(move) <= 2).length
+    expect(steps / moving.length).toBeGreaterThan(0.5)
+  })
+
+  it('runs through a florid bar instead of trilling on two notes', async () => {
+    const planner = new HeuristicPlanner()
+    let trills = 0
+    let bars = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, motion: 'florid', form: 'chain' }, seed)
+        for (const bar of score.bars) {
+          const line = midisOf(bar.treble[0] ?? [])
+          bars++
+          const alternates = line.some((_, k) => k >= 5 && new Set(line.slice(k - 5, k + 1)).size === 2 && line.slice(k - 4, k + 1).every((m, i) => m !== line[k - 5 + i]))
+          if (alternates) trills++
+        }
+      }
+    }
+    expect(trills / bars, 'six notes rocking between two pitches').toBeLessThan(0.02)
+  })
+
   it('rings out at the very end rather than resting', () => {
     const score = renderPlan(plan({ motion: 'walking' }), 4)
     const last = melody(score, 3)
@@ -245,6 +287,32 @@ describe('fioritura', () => {
     }
     // Three notes around one pitch is the textbook turn: above, on, below.
     expect(fioritura(15, 7, 7, 3)).toEqual([8, 7, 6])
+  })
+})
+
+describe('figureBetween', () => {
+  it('arrives on the next beat by step or skip, never striking a pitch twice', () => {
+    for (let count = 1; count <= 6; count++) {
+      for (let from = 0; from < 12; from++) {
+        for (let to = 0; to < 12; to++) {
+          const figure = figureBetween(12, from, to, count)
+          expect(figure).toHaveLength(count)
+          const line = [from, ...figure, to]
+          for (let k = 1; k < line.length; k++) expect(line[k], `${from}→${to} in ${count}: ${line.join(' ')}`).not.toBe(line[k - 1])
+          for (const rung of figure) expect(rung >= 0 && rung < 12).toBe(true)
+          if (Math.abs(to - from) <= 2 * (count + 1)) {
+            for (let k = 1; k < line.length; k++) expect(Math.abs(line[k] - line[k - 1]), `${from}→${to} in ${count}: ${line.join(' ')}`).toBeLessThanOrEqual(2)
+          }
+        }
+      }
+    }
+  })
+
+  it('runs where a run fits, and repeats the figure it is offered', () => {
+    // G to D in three sixteenths is a scale: G F♯ E | D.
+    expect(figureBetween(12, 7, 3, 3)).toEqual([6, 5, 4])
+    const turn = figureBetween(12, 5, 5, 3)
+    expect(figureBetween(12, 8, 8, 3, [turn[0] - 5, turn[1] - turn[0], turn[2] - turn[1], 5 - turn[2]])).toEqual(turn.map((rung) => rung + 3))
   })
 })
 
