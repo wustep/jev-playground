@@ -94,12 +94,19 @@ export interface StyleVoice {
    * third of their barlines.
    */
   ostinato?: true
+  /**
+   * How far a `broken` figure spreads. Absent, it is the chord in close
+   * position an octave over the held bass, rocking inside a sixth — the
+   * shapes an Alberti bass makes. `wide` opens it over the bass, as a
+   * nocturne's left hand does: the fifth, the tenth, the fifteenth.
+   */
+  reach?: 'wide'
 }
 
 export const STYLE_VOICES: Record<StyleId, StyleVoice> = {
   bach: { accent: 0.8, articulation: 0.9, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.07, anticipate: 0 }, held: 'parts' },
   beethoven: { accent: 1.3, articulation: 0.95, humanize: 3, rubato: 'even', answers: 'literal', lilt: { dotted: 0.3, anticipate: 0 } },
-  chopin: { accent: 0.7, articulation: 1, humanize: 3, rubato: 'light', answers: 'dressed', lilt: { dotted: 0.35, anticipate: 0 } },
+  chopin: { accent: 0.7, articulation: 1, humanize: 3, rubato: 'light', answers: 'dressed', lilt: { dotted: 0.35, anticipate: 0 }, reach: 'wide' },
   debussy: { accent: 0.4, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15 } },
   glass: { accent: 0.9, articulation: 0.92, humanize: 1, rubato: 'even', answers: 'literal', lilt: { dotted: 0, anticipate: 0, duplets: 1 }, ostinato: true },
   hans_zimmer: { accent: 1, articulation: 1, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.1, anticipate: 0.1 }, ostinato: true },

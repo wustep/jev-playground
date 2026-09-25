@@ -858,6 +858,34 @@ describe('the accompaniment', () => {
     })
   })
 
+  it('spreads a Chopin left hand open over its bass, not Alberti in close position', async () => {
+    // His brief: a wide-span left-hand arpeggio, not Alberti. The broken
+    // figure was a close triad an octave over a held bass, rocking inside a
+    // fifth — E3 B3 E3 B3.
+    const planner = new HeuristicPlanner()
+    const reach = async (style: CompositionPlan['style']) => {
+      const spans: { from: number; to: number }[] = []
+      for (let seed = 1; seed <= 16; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, accompaniment: 'broken' }, seed)
+        const key = keyInfo(drawn.key)
+        for (const bar of score.bars) {
+          const [bass, figure] = bar.bass
+          if (!figure || bar.split || resolveChord(key, bar.plan.chord).fixedBass || !figure.some((n) => n.start % score.meter.beatTicks !== 0)) continue
+          const low = midisOf(bass)[0]
+          spans.push({ from: Math.min(...midisOf(figure)) - low, to: Math.max(...midisOf(figure)) - low })
+        }
+      }
+      return spans
+    }
+    // Open: from the fifth over the bass to at least the tenth.
+    const open = (spans: { from: number; to: number }[]) => spans.filter((span) => span.from <= 8 && span.to >= 15).length / spans.length
+    const chopin = await reach('chopin')
+    expect(chopin.length).toBeGreaterThan(100)
+    expect(open(chopin), 'from the fifth over the bass to the tenth').toBeGreaterThan(0.8)
+    expect(open(await reach('beethoven')), 'Beethoven keeps his close figures').toBeLessThan(0.2)
+  })
+
   it('breaks a chord without holes, even under a low tune', async () => {
     const planner = new HeuristicPlanner()
     let moving = 0

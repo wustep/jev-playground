@@ -39,6 +39,8 @@ export interface AccompanimentOptions {
   density: 0 | 1 | 2 | 3
   /** A pulse keeps the metre's eighths whatever the density (`StyleVoice.ostinato`). */
   ostinato?: boolean
+  /** How far a broken figure spreads (`StyleVoice.reach`). */
+  reach?: 'wide'
 }
 
 /** A safe top for accompaniment voices: clear of the tune by a comfortable step. */
@@ -270,6 +272,30 @@ function stackUnder(chord: ResolvedChord, count: number, from: number, top: numb
   return []
 }
 
+/**
+ * The chord spread open over its bass, from the fifth to the tenth and past
+ * it where the tune leaves room: 1, 5, 10, 15 over a triad (1, 5, 10, 14
+ * over a seventh chord), else 1, 5, 8, 10 (1, 5, 7, 10). Each tone sits at
+ * least a third over the one before. Undefined where the label fixes the
+ * bass or not even the tenth fits under `top`.
+ */
+function openOver(chord: ResolvedChord, bass: number, top: number): string[] | undefined {
+  if (chord.fixedBass) return undefined
+  const [root, third, fifth, seventh] = chord.core
+  const spread = (order: readonly string[]) => {
+    const out: string[] = []
+    let floor = bass + 5
+    for (const pc of order) {
+      const [pitch] = ladder([pc], floor, Math.min(top - 1, floor + 11))
+      if (!pitch) return undefined
+      out.push(pitch)
+      floor = midiOf(pitch) + 3
+    }
+    return out
+  }
+  return spread([fifth, third, seventh ?? root]) ?? spread([fifth, seventh ?? root, third])
+}
+
 function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   const { meter } = bar
   const top = headroom(options.ceiling)
@@ -296,8 +322,9 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
     // A shape that plays three places of a four-note chord plays the three
     // tones that name it, in its own order. Over all four stacked, the place
     // it skipped could be the seventh: a ii7 or a V7 broken as a triad.
-    const compact = chord.core.length > 3 && played.length < 4
-    const stack = stackUnder(chord, compact ? played.length : 4, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22), top)
+    const open = options.reach === 'wide' && previousBass ? openOver(chord, midiOf(previousBass), top) : undefined
+    const compact = (open !== undefined || chord.core.length > 3) && played.length < 4
+    const stack = open ?? stackUnder(chord, compact ? played.length : 4, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22), top)
     const place = compact ? played.indexOf(shape[k % shape.length]) : shape[k % shape.length]
     const pick = stack[place % stack.length] ?? stack[0]
     if (!pick || midiOf(pick) >= top) continue
@@ -529,6 +556,7 @@ export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: 
   // With no tune sounding this bar, the accompaniment keeps its own company
   // under where the tune last was, so a rest is a rest and not a hole.
   const ceiling = melody.floor ?? (lastSung ?? 72) - 2
-  const options = { ceiling, density: densityFor(bar), ostinato: STYLE_VOICES[plan.style].ostinato }
+  const { ostinato, reach } = STYLE_VOICES[plan.style]
+  const options = { ceiling, density: densityFor(bar), ostinato, reach }
   return (inParts(plan) ? parts : PATTERNS[plan.accompaniment])(bar, options, melody)
 }
