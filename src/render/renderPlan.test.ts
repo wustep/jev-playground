@@ -420,6 +420,50 @@ describe('the singing line', () => {
     }
   })
 
+  /** Mean pitch of the notes a bar strikes; a note held over the barline is the bar before's. */
+  const meanOf = (notes: { pitches: string[]; tied?: boolean }[]) => {
+    const struck = midisOf(notes.filter((n) => !n.tied))
+    return struck.reduce((a, b) => a + b, 0) / struck.length
+  }
+
+  it('moves a sequence off its model’s pitch, even where the harmony stands still', () => {
+    // A contrast bar and two sequences of it, all on ii: the model's own
+    // root, so the root's move is none, and each sequence used to sing the
+    // bar before it again — three identical bars.
+    const chords = ['I', 'IV', 'V', 'I', 'I', 'IV', 'V', 'I', 'ii', 'ii', 'ii', 'V', 'I', 'IV', 'V', 'I'] as const
+    for (const seed of [1, 4, 7]) {
+      const score = renderPlan(plan({ motion: 'flowing', form: 'period', bars: chords.map((chord) => ({ chord, contour: 'wave' as const })) }), seed)
+      for (const bar of [9, 10]) {
+        expect(rhythmOf(melody(score, bar)), `bar ${bar + 1} keeps the model's rhythm`).toBe(rhythmOf(melody(score, bar - 1)))
+        expect(Math.abs(meanOf(melody(score, bar)) - meanOf(melody(score, bar - 1))), `seed ${seed}, bar ${bar + 1} sings its model again`).toBeGreaterThanOrEqual(1)
+        const same = turnsOf(melody(score, bar)).filter((turn, k) => turn === turnsOf(melody(score, bar - 1))[k]).length
+        expect(same / turnsOf(melody(score, bar)).length, `bar ${bar + 1} keeps the model's shape`).toBeGreaterThanOrEqual(0.75)
+      }
+    }
+  })
+
+  it('never lets a sequence sing its model again at the same pitch', async () => {
+    // A figure that would leave the register by the root's move, with the
+    // octave back leaping away from the line, used to stay where it was.
+    const planner = new HeuristicPlanner()
+    let sequences = 0
+    let stayed = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan(drawn, seed)
+        barPositions(drawn.form, 16).forEach((position, i) => {
+          if (position.role !== 'sequence' || position.returnsFrom !== undefined || drawn.bars[i].contour !== drawn.bars[i - 1].contour) return
+          if (melody(score, i).filter((n) => !n.tied).length < 2) return
+          sequences++
+          if (Math.abs(meanOf(melody(score, i)) - meanOf(melody(score, i - 1))) < 1) stayed++
+        })
+      }
+    }
+    expect(sequences).toBeGreaterThan(100)
+    expect(stayed / sequences).toBeLessThan(0.02)
+  })
+
   it('keeps the rhythm of a sequence whose contour is its own, and sings that contour', () => {
     const score = departure(['arch', 'fall', 'rise'])
     for (const bar of [9, 10]) expect(rhythmOf(melody(score, bar))).toBe(rhythmOf(melody(score, bar - 1)))

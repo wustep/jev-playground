@@ -128,13 +128,20 @@ function reconcile(bar: BarView, pitches: readonly string[], slots: readonly Slo
   })
 }
 
+/** A figure moved `by` rungs along this bar's scale, note for note. */
+function alongScale(bar: BarView, pitches: readonly string[], by: number, lo: number, hi: number): string[] {
+  const rungs = ladder(bar.scale, Math.max(0, lo - 14), Math.min(127, hi + 14))
+  if (rungs.length === 0) return [...pitches]
+  return pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + by, 0, rungs.length - 1)])
+}
+
 /** Move a figure diagonally along this bar's scale, then reconcile its strong slots. */
 function transposeFigure(bar: BarView, pitches: readonly string[], semitones: number, slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): string[] {
   const rungs = ladder(bar.scale, Math.max(0, lo - 14), Math.min(127, hi + 14))
   if (rungs.length === 0 || pitches.length === 0) return [...pitches]
   const reference = midiOf(pitches[0])
   const steps = nearestIndex(rungs, reference + semitones) - nearestIndex(rungs, reference)
-  const moved = (by: number) => pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + by, 0, rungs.length - 1)])
+  const moved = (by: number) => alongScale(bar, pitches, by, lo, hi)
   let out = moved(steps)
   const top = Math.max(...out.map(midiOf))
   const bottom = Math.min(...out.map(midiOf))
@@ -451,6 +458,31 @@ function sequenceShift(model: Remembered, bar: BarView, centre: number): number 
   return [root, root - 12, root + 12].reduce((best, shift) => (cost(shift) < cost(best) ? shift : best))
 }
 
+const meanMidi = (pitches: readonly string[]) => pitches.reduce((sum, pitch) => sum + midiOf(pitch), 0) / pitches.length
+
+/**
+ * A sequence's figure on this bar's harmony: its model moved by the root's
+ * move. Where that leaves it at the model's own pitch — the root stood
+ * still, or its move left the register and the octave back would leap away
+ * — the figure moves a step instead, the commonest sequence there is. Left
+ * where it was, a contrast bar and its two sequences sang one bar three
+ * times, in a third of all sequences.
+ */
+function sequenceFigure(bar: BarView, model: Remembered, isStrong: (slot: Slot) => boolean, lo: number, hi: number, centre: number): string[] {
+  const shift = sequenceShift(model, bar, centre)
+  const moved = transposeFigure(bar, model.pitches, shift, model.slots, isStrong, lo, hi)
+  const level = meanMidi(model.pitches)
+  if (Math.abs(meanMidi(moved) - level) >= 1) return moved
+  const heading = Math.sign(shift) || Math.sign(centre - level) || -1
+  for (const by of [heading, -heading, 2 * heading, -2 * heading]) {
+    const stepped = alongScale(bar, model.pitches, by, lo, hi)
+    if (stepped.some((pitch) => midiOf(pitch) < lo || midiOf(pitch) > hi)) continue
+    const figure = keepSteps(model.pitches, reconcile(bar, stepped, model.slots, isStrong, lo, hi), ladder(bar.scale, lo, hi), model.slots, isStrong)
+    if (Math.abs(meanMidi(figure) - level) >= 1) return figure
+  }
+  return moved
+}
+
 /**
  * One spelled pitch per slot. `model` is the bar a sequence repeats: its
  * figure is carried onto this bar's harmony, the way a return carries its
@@ -475,7 +507,7 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
   const goal = landingChord.pcs.find((pc) => TonalNote.chroma(pc) === TonalNote.chroma(bar.key.tonic)) ?? landingChord.root
 
   if (!source && model && model.pitches.length === slots.length) {
-    pitches = transposeFigure(bar, model.pitches, sequenceShift(model, bar, centre), model.slots, isStrong, lo, hi)
+    pitches = sequenceFigure(bar, model, isStrong, lo, hi, centre)
     bendToSecond(bar, pitches, slots)
   } else if (source && source.pitches.length) {
     // The tune as it comes back: the source's notes on the source's onsets,

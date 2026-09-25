@@ -9,7 +9,7 @@
  *   npx --yes tsx scripts/quality-audit.ts --seeds 48
  *
  * Columns:
- *   seq=   sequence bars that sing their model's pitches unchanged, of sequence bars
+ *   seq=   sequence bars sung within a semitone of their model's mean pitch, of sequence bars
  *   dead   runs of three bars in a row with the same tune, per 100 bars
  *   stut   notes a moved bar (return, sequence) strikes twice where its source moved, per 100 moved notes
  *   off%   notes on a stressed slot that are not a tone of the chord under them
@@ -82,7 +82,7 @@ const empty = (): Tally => ({
 
 const tune = (score: Score, i: number): Note[] => score.bars[i]?.treble[0] ?? []
 const printOf = (notes: Note[]) => notes.map((n) => `${n.start}:${n.dur}:${n.pitches.join()}`).join('|')
-const pitchesOf = (notes: Note[]) => notes.map((n) => n.pitches[0])
+const meanOf = (notes: Note[]) => notes.reduce((sum, n) => sum + midiOf(n.pitches[0]), 0) / notes.length
 
 function audit(plan: CompositionPlan, score: Score, t: Tally) {
   const key = keyInfo(plan.key)
@@ -101,10 +101,12 @@ function audit(plan: CompositionPlan, score: Score, t: Tally) {
 
     if (i >= 2 && notes.length && printOf(notes) === printOf(tune(score, i - 1)) && printOf(notes) === printOf(tune(score, i - 2))) t.dead++
 
-    // A sequence (the stub gives it its model's contour) that sings its model unchanged.
-    if (position.role === 'sequence' && i > 0 && bar.plan.contour === score.bars[i - 1].plan.contour && notes.length) {
+    // A sequence (the stub gives it its model's contour) sung at its model's pitch.
+    const struck = notes.filter((n) => !n.tied)
+    if (position.role === 'sequence' && position.returnsFrom === undefined && bar.plan.contour === score.bars[i - 1].plan.contour && struck.length >= 2) {
       t.seqBars++
-      if (pitchesOf(notes).join() === pitchesOf(tune(score, i - 1)).join()) t.seqSame++
+      const before = tune(score, i - 1).filter((n) => !n.tied)
+      if (before.length && Math.abs(meanOf(struck) - meanOf(before)) < 1) t.seqSame++
     }
 
     // Moved bars: the same slots as their source, so note k answers note k.
