@@ -33,10 +33,9 @@ const cell = (durations: number[], weight: (lilt: Lilt) => number = always): Cel
  * Simple beats (a quarter, 4 ticks) and compound beats (a dotted quarter,
  * 6 ticks) get their own tables; everything else falls back to filling evenly.
  *
- * The cells used to be drawn uniformly, which made a third of all two-note
- * beats a snap (sixteenth, dotted eighth) that no reference tune plays, and
- * dotted a third more whatever the style. A two-note beat is now even or
- * dotted by the style's `lilt`; three-note beats lead with the longer note.
+ * No reference tune snaps a beat (sixteenth, dotted eighth), so no cell
+ * does. Whether a two-note beat is even or dotted is the style's `lilt`;
+ * three-note beats lead with the longer note.
  */
 const SIMPLE_CELLS: Record<number, Cell[]> = {
   1: [cell([4])],
@@ -168,9 +167,7 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   if (position.phraseFinal && (position.phraseEnd !== 'open' || isLast) && motion === 'florid' && !isLast && beats > 1) {
     // Running figuration does not stop for an inner cadence: a prelude, an
     // étude or a displaced-sixteenth vamp arrives on the downbeat, holds it a
-    // beat so the arrival is heard, and runs on into the next phrase. It used
-    // to hold half the bar and rest, which is most of why a perpetual-motion
-    // piece came out at twelve attacks a bar against "Wyoming"'s sixteen.
+    // beat so the arrival is heard, and runs on into the next phrase.
     const rhythm = [meter.beatTicks]
     for (let beat = 1; beat < beats; beat++) rhythm.push(...drawCell(cells[nearestCell(cells, attacksForBeat(motion, beat, beats, rand, lilt))], lilt, rand))
     return slotsFrom(rhythm)

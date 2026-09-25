@@ -51,10 +51,9 @@ export interface StyleVoice {
    *
    * Measured on the reference top voices: two-note beats are even in 93% of
    * BWV 772's, all of Op. 13 II's and all of Préludes I/4's, and dotted in
-   * 45% of the mazurka's. None of them ever snaps (sixteenth, dotted
-   * eighth), which the renderer used to play on a third of its two-note
-   * beats. Laufey has no reference; her anticipations are the one row value
-   * here that rests on the style notes, not a measurement.
+   * 45% of the mazurka's, and none of them ever snaps (sixteenth, dotted
+   * eighth). Laufey has no reference; her anticipations are the one row
+   * value here that rests on the style notes, not a measurement.
    *
    * `run`, where set, is the attacks a florid beat aims at in place of the
    * shared 3.5: a style whose running line never lets up. Fox's displacement

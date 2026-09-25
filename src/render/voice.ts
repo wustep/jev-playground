@@ -110,8 +110,8 @@ export const chordAt = (bar: BarView, tick: number): ResolvedChord =>
 
 /**
  * The passing-note scale at a tick: the second chord's from where it takes
- * over. The line's weak notes used to come from the first chord's scale all
- * bar long, so a minor-key i6/4–V7 bar ran B♭ and A♭ against the V7's B.
+ * over. Drawn from the first chord's all bar long, a minor-key i6/4–V7 bar
+ * runs B♭ against the V7's B.
  */
 export const scaleAt = (bar: Pick<BarView, 'chord2' | 'scale' | 'scale2' | 'meter'>, tick: number): string[] =>
   bar.chord2 && bar.scale2 && tick >= bar.meter.splitTick ? bar.scale2 : bar.scale

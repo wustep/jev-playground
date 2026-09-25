@@ -181,9 +181,9 @@ export class JevPlanner implements Planner {
           continue
         }
         // A returning bar IS the earlier bar's tune, and a sequence IS the bar
-        // before it on a new harmony — the stub has always planned it so, and
-        // the renderer only carries the figure across when the shapes match.
-        // Either way the shape is the form's decision, not a fresh one.
+        // before it on a new harmony, as the stub plans it: the renderer
+        // carries a figure across only when the shapes match. Either way the
+        // shape is the form's decision, not a fresh one.
         const contour = contours[source]
         contours.push(contour)
         decisions.push({ field: `bars[${bar}].contour`, choice: contour, confidence: 1, probabilities: normalize(Object.fromEntries(CONTOUR_IDS.map((id) => [id, id === contour ? 1 : 0]))) })

@@ -36,8 +36,7 @@ const CONTOUR_SPAN: Record<ContourId, number> = { rise: 7, fall: 7, arch: 7, dip
 
 /**
  * A contour's span, fitted to the notes that have to carry it. Two half
- * notes asked to trace a fifth can only leap it: the sustained line used to
- * fall a sixth between its two notes on a `dip`.
+ * notes asked to trace a fifth can only leap it.
  */
 function contourSpan(bar: BarView, notes: number): number {
   const base = CONTOUR_SPAN[bar.contour] + (bar.position.role === 'climax' ? 3 : 0)
@@ -55,10 +54,8 @@ const PULL = 0.35
  * a duple or quadruple bar, the arrival of a bar's second chord, and any
  * note held two beats or more. Everywhere else the line may pass through.
  *
- * Every beat used to count. A walking line is one note a beat, so every note
- * of it snapped to a chord tone and the tune came out as a broken chord —
- * A D F D | D F D A — at 38% stepwise motion against 52–70% in the reference
- * tunes.
+ * Where every beat counts, a walking line — one note a beat — snaps every
+ * note to a chord tone and comes out as a broken chord: A D F D | D F D A.
  *
  * A note held across the half-bar from an off-beat is the note heard there,
  * so it counts too: an anticipation is a chord tone struck early.
@@ -144,8 +141,7 @@ function transposeFigure(bar: BarView, pitches: readonly string[], semitones: nu
   if (top > hi || bottom < lo) {
     // A figure that has left the register comes back by the octave, not by
     // being squashed — or stays where it was, on the new harmony, where the
-    // octave would leap away from the note the line just sang. A figure one
-    // semitone over the ceiling used to drop a ninth at the barline.
+    // octave would leap away from the note the line just sang.
     const octave = top > hi ? steps - bar.scale.length : steps + bar.scale.length
     const fits = (figure: string[]) => figure.every((pitch) => midiOf(pitch) >= lo && midiOf(pitch) <= hi)
     const last = bar.memory.melodyLast ?? (lo + hi) / 2
@@ -158,9 +154,9 @@ function transposeFigure(bar: BarView, pitches: readonly string[], semitones: nu
 /**
  * A moved figure keeps every step its source took. A chromatic note has no
  * rung of its own, so moving it lands on its neighbour's, and reconciling a
- * strong slot to the chord can do the same: the figure came back with a
- * pitch struck twice where the original moved. The weaker of the two steps
- * on again, the way the source went.
+ * strong slot to the chord can do the same, striking a pitch twice where
+ * the original moved. The weaker of the two steps on again, the way the
+ * source went.
  */
 function keepSteps(source: readonly string[], moved: string[], rungs: readonly string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean): string[] {
   for (let k = 1; k < moved.length; k++) {
@@ -225,10 +221,10 @@ export function fioritura(size: number, from: number, to: number, count: number)
  * indices: every move a step or a skip, never a pitch struck twice, and the
  * arrival on `to` one move after the last of them.
  *
- * Unlike `fioritura`, which must never land its last note on the next one's
- * neighbour's neighbour, this lets a run pass through or a skip absorb the
- * odd step. Filling G to D in three sixteenths, `fioritura` leaps to E and
- * wiggles — E D E | D — where a player runs G F♯ E | D.
+ * Unlike `fioritura`, whose last note must sit a step from the next, this
+ * lets a skip absorb an odd step. Filling G to D in three sixteenths,
+ * `fioritura` leaps to E and wiggles — E D E | D — where a player runs
+ * G F♯ E | D.
  *
  * Fewest skips first, then fewest turns; `prefer` is the figure the beat
  * before used, so a bar tends to repeat one shape on every beat.
@@ -339,9 +335,9 @@ function breakRepeats(bar: BarView, pitches: string[], slots: readonly Slot[], i
 
 /**
  * Chromatic lower neighbours on the weak slot before a strong one — where
- * the line can reach the neighbour without leaping to it. Replacing the
- * passing note of a run with the semitone under its goal broke the run with
- * a fourth: B♭ A G F became B♭ A E F.
+ * the line can reach the neighbour without leaping to it. Put in place of a
+ * run's passing note, the semitone under its goal breaks the run with a
+ * fourth: B♭ A G F would become B♭ A E F.
  */
 function applyChromaticApproach(bar: BarView, slots: readonly Slot[], pitches: string[], isStrong: (slot: Slot) => boolean): void {
   for (let k = 0; k < slots.length - 1; k++) {
@@ -357,14 +353,14 @@ function applyChromaticApproach(bar: BarView, slots: readonly Slot[], pitches: s
  * A bar of new tune along its contour.
  *
  * The contour starts where the line left off and leans back toward the
- * middle of the register as it goes. It used to be centred on a point
- * between the last note and the middle, so a `rise` after a `rise` dropped a
- * fifth at the barline to start climbing again.
+ * middle of the register as it goes. Centred between the last note and the
+ * middle instead, a `rise` after a `rise` drops a fifth at the barline to
+ * start climbing again.
  *
  * A bar that moves faster than the beat is written as a figure: a note on
  * every beat along the contour, and between them the runs and turns of
- * `figureBetween`. Sampling the contour at every note moved it less than a
- * scale step a note, and the line trilled — A♭ B♭ A♭ B♭ — instead of running.
+ * `figureBetween`. Sampled at every note, the contour moves less than a
+ * scale step a note, and the line trills — A♭ B♭ A♭ B♭ — instead of running.
  * A running bar, more than two notes a beat, puts a chord tone on every beat,
  * as figuration outlines its harmony; a flowing one only where it is stressed.
  */
@@ -445,8 +441,8 @@ function bendToSecond(bar: BarView, pitches: string[], slots: readonly Slot[]): 
 /**
  * How far a sequence moves its model: the root's move, or that move an
  * octave the other way, whichever keeps the figure nearer the middle of the
- * register. The nearest root move alone climbed a fourth a bar through a
- * circle of fifths and left the register by the third link.
+ * register. The nearest root move alone climbs a fourth a bar through a
+ * circle of fifths and leaves the register by the third link.
  */
 function sequenceShift(model: Remembered, bar: BarView, centre: number): number {
   const root = rootShift(model.root, bar.chord.root)
@@ -505,8 +501,7 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
 
   // Closing bars land where the ear expects: the tonic, if the chord has it,
   // on the one nearest the note before it — which `leadInto` has put a step
-  // away. A one-note close used to pick the tonic nearest its own contour,
-  // and a quarter of all closes arrived by the tonic struck again.
+  // away — so the close resolves rather than restriking its approach.
   if (lands && !runsOn && pitches.length) {
     const landing = ladder([goal], lo, hi)
     if (landing.length) {
@@ -520,8 +515,7 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
 /**
  * The note before a close steps into it: the bar before a cadence ends on
  * a degree a step from the tonic — 2̂ or 7̂ — where the harmony allows it,
- * and not by a leap. Only a quarter of closed cadences used to arrive by
- * step; more than a third arrived by a fourth or more.
+ * and not by a leap.
  */
 function leadInto(bar: BarView, pitches: string[], slots: readonly Slot[], register: RegisterId): void {
   const k = pitches.length - 1
@@ -664,10 +658,9 @@ interface Development {
 /**
  * What a bar that does not return does with the phrase's idea.
  *
- * Every such bar used to draw its rhythm fresh, beat by beat, so a phrase
- * had no rhythmic identity, and a `sequence` — which the stub plans as the
- * bar before on a new harmony, with the same contour — came out as a
- * different figure altogether.
+ * Drawn fresh beat by beat, such bars give a phrase no rhythmic identity,
+ * and a `sequence` — planned as the bar before on a new harmony, with the
+ * same contour — comes out as a different figure altogether.
  *
  *   • A sequence repeats the bar before it: its rhythm always, and its
  *     figure too, moved by the root, where the plan gives it the same

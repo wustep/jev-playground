@@ -78,9 +78,9 @@ const BREAK_SHAPES = [
 
 /**
  * The chord stacked from `from` in whichever inversion fits under `top` —
- * dropping its highest tone only if none does. Stacked root-first, a
- * figure's top note crossed the tune's floor in a fifth of broken bars under
- * a low tune, and was skipped: the arpeggio stumbled, a hole every bar.
+ * dropping its highest tone only if none does. Under a low tune a
+ * root-first stack crosses the tune's floor, and a tone that cannot sound
+ * is a hole in the figure.
  */
 function stackUnder(tones: readonly string[], from: number, top: number): string[] {
   for (let size = tones.length; size >= 1; size--) {
