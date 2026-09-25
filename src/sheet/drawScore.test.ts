@@ -430,4 +430,23 @@ describe('ties over the barline', () => {
     }
     quiet.mockRestore()
   })
+
+  it('draws a generated piece in every style and metre', async () => {
+    // Syncopations, run-on cadences and figured bars write lengths the old
+    // rhythms never did; every one of them has to engrave.
+    const { HeuristicPlanner } = await import('../planner/HeuristicPlanner')
+    const { METER_IDS, STYLE_IDS } = await import('../plan/schema')
+    const theme = { ink: '#000', muted: '#666', accent: '#a00' } as unknown as Parameters<typeof drawScore>[3]
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const planner = new HeuristicPlanner()
+    for (const style of STYLE_IDS) {
+      for (const [k, meter] of METER_IDS.entries()) {
+        const { plan } = await planner.plan({ style, bars: 16, pick: 'sample', seed: k + 1, brief: true })
+        const score = renderPlan({ ...plan, meter }, k + 1)
+        const layout = drawScore(blankCanvas(), score, 900, theme)
+        expect(layout.bars, `${style} in ${meter}`).toHaveLength(16)
+      }
+    }
+    quiet.mockRestore()
+  }, 30_000)
 })
