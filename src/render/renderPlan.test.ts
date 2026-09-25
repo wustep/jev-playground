@@ -880,6 +880,32 @@ describe('the accompaniment', () => {
     expect(missing / sevenths).toBeLessThan(0.05)
   })
 
+  it('keeps an ostinato at one rate while it builds, where the style lives on one', async () => {
+    // Zimmer's and Glass's pulse used to thin to quarters under every
+    // statement and fill back to eighths after it: the figure changed speed
+    // at a third of their barlines. The build is in the weight, not the rate.
+    const planner = new HeuristicPlanner()
+    const rates = async (style: CompositionPlan['style'], meter: CompositionPlan['meter']) => {
+      const seen: number[][] = []
+      for (let seed = 1; seed <= 8; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, accompaniment: 'pulse', meter }, seed)
+        seen.push(score.bars.slice(0, -1).flatMap((bar) => {
+          const chords = bar.bass[bar.bass.length - 1] ?? []
+          return !bar.split && chords.length >= 2 ? [chords[1].start - chords[0].start] : []
+        }))
+      }
+      return seen
+    }
+    for (const style of ['hans_zimmer', 'glass'] as const) {
+      for (const pieces of [await rates(style, 'four_four'), await rates(style, 'six_eight')]) {
+        for (const steps of pieces) expect(new Set(steps), `${style}: one rate a piece`).toEqual(new Set([2]))
+      }
+    }
+    // Where the style has no ostinato, the pulse still follows the form.
+    expect((await rates('beethoven', 'four_four')).some((steps) => new Set(steps).size > 1)).toBe(true)
+  })
+
   it('strides in four as a stride does, bass and chord in turn', () => {
     // A stride, a march or a two-feel ballad alternates: bass on one and
     // three, chords on two and four. Four-four used to go bass, chord, chord,

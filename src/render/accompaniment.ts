@@ -37,6 +37,8 @@ export interface AccompanimentOptions {
   ceiling: number
   /** 0 bare … 3 full. Derived from the bar's role, not from a plan label. */
   density: 0 | 1 | 2 | 3
+  /** A pulse keeps the metre's eighths whatever the density (`StyleVoice.ostinato`). */
+  ostinato?: boolean
 }
 
 /** A safe top for accompaniment voices: clear of the tune by a comfortable step. */
@@ -309,7 +311,7 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
 function pulse(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   const { meter } = bar
   const top = headroom(options.ceiling)
-  const step = options.density >= 2 ? Math.max(2, meter.beatTicks / 2) : meter.beatTicks
+  const step = options.ostinato ? 2 : options.density >= 2 ? Math.max(2, meter.beatTicks / 2) : meter.beatTicks
   const voice: Voice = []
   const bassVoice: Voice = []
   let previousBass: string | undefined = bar.memory.bass
@@ -527,5 +529,6 @@ export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: 
   // With no tune sounding this bar, the accompaniment keeps its own company
   // under where the tune last was, so a rest is a rest and not a hole.
   const ceiling = melody.floor ?? (lastSung ?? 72) - 2
-  return (inParts(plan) ? parts : PATTERNS[plan.accompaniment])(bar, { ceiling, density: densityFor(bar) }, melody)
+  const options = { ceiling, density: densityFor(bar), ostinato: STYLE_VOICES[plan.style].ostinato }
+  return (inParts(plan) ? parts : PATTERNS[plan.accompaniment])(bar, options, melody)
 }

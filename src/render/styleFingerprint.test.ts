@@ -17,8 +17,8 @@ const FINGERPRINTS: Record<StyleId, string> = {
   beethoven: '82af9ee24368d3e6',
   chopin: 'ab4d8677e0daf38c',
   debussy: 'b78776a8f11d6668',
-  glass: '1bfcaec6e4ff4ba3',
-  hans_zimmer: 'cce7eebc8b67d26d',
+  glass: 'e014dfa8f8cf7a29',
+  hans_zimmer: 'ad8ae4e69fe7780f',
   laufey: 'e574ac68d9bd9852',
   elijah_fox: '082bb33cf79bffc8',
 }
