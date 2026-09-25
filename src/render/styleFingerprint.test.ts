@@ -14,13 +14,13 @@ import { renderPlan, timeline } from './renderPlan'
  */
 const FINGERPRINTS: Record<StyleId, string> = {
   bach: '30c2ba88a8180f68',
-  beethoven: '142cc19b4d68e444',
-  chopin: 'b6c52c4dd1843908',
-  debussy: '04a768467bf5fc43',
-  glass: '40528b80825344ff',
-  hans_zimmer: '2e1879aefa3e80d7',
-  laufey: '1c0e187d90630e98',
-  elijah_fox: '0b12586b441e34c6',
+  beethoven: '82af9ee24368d3e6',
+  chopin: 'ab4d8677e0daf38c',
+  debussy: '9ebef731ae5690bf',
+  glass: '657108fd6b60a732',
+  hans_zimmer: 'cce7eebc8b67d26d',
+  laufey: '51285ebd033376b8',
+  elijah_fox: '9173ef6c40b9cf5d',
 }
 
 const SEEDS = 12

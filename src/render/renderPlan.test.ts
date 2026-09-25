@@ -820,6 +820,32 @@ describe('the accompaniment', () => {
     expect(stumbling, 'bars whose eighth-note figure drops a note').toBe(0)
   })
 
+  it('sounds the seventh of a seventh chord in a broken figure', async () => {
+    // Half the figures play three of four stacked tones. Stacked from the
+    // root, the one left out was the seventh: a ii7 or a V7 broken as a triad.
+    const planner = new HeuristicPlanner()
+    let sevenths = 0
+    let missing = 0
+    for (const style of STYLE_IDS) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const { plan: drawn } = await planner.plan({ style, bars: 16, pick: 'sample', seed, brief: true })
+        const score = renderPlan({ ...drawn, accompaniment: 'broken' }, seed)
+        const key = keyInfo(drawn.key)
+        score.bars.forEach((bar) => {
+          const chord = resolveChord(key, bar.plan.chord)
+          if (bar.plan.chord2 || chord.core.length !== 4) return
+          const seventh = midiOf(`${chord.core[3]}4`) % 12
+          sevenths++
+          if (!bar.bass.flat().some((n) => n.pitches.some((p) => midiOf(p) % 12 === seventh))) missing++
+        })
+      }
+    }
+    expect(sevenths).toBeGreaterThan(300)
+    // Not zero: the barest bars play only the figure's beats, and there two
+    // of the four shapes land on the root and the third.
+    expect(missing / sevenths).toBeLessThan(0.05)
+  })
+
   it('changes the accompaniment without changing the tune', () => {
     const tuneOf = (score: Score) => score.bars.map((_, i) => melody(score, i).map((n) => `${n.start}:${n.dur}:${n.pitches}`).join()).join('/')
     const reference = renderPlan(plan({ accompaniment: 'broken' }), 5)

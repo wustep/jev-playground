@@ -15,6 +15,7 @@
 
 import type { AccompanimentId, CompositionPlan } from '../plan/schema'
 import { Note as TonalNote } from 'tonal'
+import type { ResolvedChord } from './harmony'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from './pitch'
 import type { PedalId, Voice } from './score'
 import { STYLE_VOICES } from './styleVoice'
@@ -246,16 +247,20 @@ const BREAK_SHAPES = [
   [0, 2, 3, 2],
 ]
 
+const rotations = (tones: readonly string[]) => tones.map((_, inversion) => [...tones.slice(inversion), ...tones.slice(0, inversion)])
+
 /**
- * The chord stacked from `from` in whichever inversion fits under `top` —
- * dropping its highest tone only if none does. Under a low tune a
- * root-first stack crosses the tune's floor, and a tone that cannot sound
- * is a hole in the figure.
+ * `count` of the chord's tones stacked from `from` in whichever inversion
+ * fits under `top` — fewer only if none does, and a seventh chord then
+ * gives up its fifth and root before its third and seventh. Under a low
+ * tune a root-first stack crosses the tune's floor, and a tone that cannot
+ * sound is a hole in the figure.
  */
-function stackUnder(tones: readonly string[], from: number, top: number): string[] {
-  for (let size = tones.length; size >= 1; size--) {
-    for (let inversion = 0; inversion < tones.length; inversion++) {
-      const order = [...tones.slice(inversion), ...tones.slice(0, inversion)].slice(0, size)
+function stackUnder(chord: ResolvedChord, count: number, from: number, top: number): string[] {
+  const all = essentialTones(chord, count)
+  for (let size = all.length; size >= 1; size--) {
+    const preferred = chord.core.length > 3 ? rotations(essentialTones(chord, size)) : []
+    for (const order of [...preferred, ...rotations(all).map((order) => order.slice(0, size))]) {
       const stack = stackUp(order, from)
       if (midiOf(stack[stack.length - 1]) < top) return stack
     }
@@ -270,6 +275,7 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   // compound one: continuous under the tune without outrunning it.
   const step = 2
   const shape = BREAK_SHAPES[pieceChoice(bar.memory, bar.rand, 'break', BREAK_SHAPES.length)]
+  const played = [...new Set(shape)].sort((a, b) => a - b)
   const voice: Voice = []
   const bassVoice: Voice = []
   let previousBass: string | undefined = bar.memory.bass
@@ -285,9 +291,13 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
       bassVoice.push(note(tick, tick === 0 ? dur : meter.ticksPerBar - tick, low, bar.velocity - 4))
     }
     if (options.density === 0 && tick % meter.beatTicks !== 0) continue
-    const tones = essentialTones(chord, 4)
-    const stack = stackUnder(tones, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22), top)
-    const pick = stack[shape[k % shape.length] % stack.length] ?? stack[0]
+    // A shape that plays three places of a four-note chord plays the three
+    // tones that name it, in its own order. Over all four stacked, the place
+    // it skipped could be the seventh: a ii7 or a V7 broken as a triad.
+    const compact = chord.core.length > 3 && played.length < 4
+    const stack = stackUnder(chord, compact ? played.length : 4, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22), top)
+    const place = compact ? played.indexOf(shape[k % shape.length]) : shape[k % shape.length]
+    const pick = stack[place % stack.length] ?? stack[0]
     if (!pick || midiOf(pick) >= top) continue
     voice.push(note(tick, step, pick, bar.velocity - 16 + (tick % meter.beatTicks === 0 ? 5 : 0)))
   }
