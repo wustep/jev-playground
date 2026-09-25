@@ -413,7 +413,7 @@ Each shared fix moves every style that hits it, and its commit says which. Each 
 - **Laufey's swing** delays off-beats by 0.28 of a sixteenth. Her most typical plan, walking over stride, has no off-beats to delay.
 - **Other pulses.** Chopin's Op. 28/4 and Beethoven's Waldstein keep one rate too. `ostinato` is a row value if the ear agrees.
 - **Cross-relations.** 1–2 notes in 1,000 for Bach, Beethoven, Chopin, Laufey and Fox: a weak note of a related return keeps its source's diatonic pitch over a chromatic chord. Unchanged.
-- **Zimmer's restruck moves** rose, 0.8 → 1.2 per 100. His sequences now move, and what is left is a chromatic step with no rung of its own on the new chord's scale, such as F major's B♮ carried onto F minor. That is the same residue as every other style's, just more of his sequences reach it.
+- **Zimmer's restruck moves** rose, 0.8 → 1.2 per 100. His sequences now move, and what is left is a chromatic step with no rung of its own on the new chord's scale, such as a figure over IV carried onto a borrowed iv, where its A and B collapse onto A♭. That is the same residue as every other style's, just more of his sequences reach it.
 - **Fox's best-matching plan** in `compare-generated-vs-reference.ts --summary` returns less (ret4 0.31 → 0.13). That is one plan. His 24-seed mean is 0.29 → 0.30.
 - **No listening pass, no keyed A/B.** Everything above is read from the notes. The seeds below are where to listen.
 
