@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CompositionPlan } from '../plan/schema'
-import type { PlanInput, PlanTrace } from '../planner'
+import { heuristicPlanner, type PlanInput, type PlanTrace, type ScoreResult } from '../planner'
+import { STYLE_IDS } from '../plan/schema'
 import {
   DIAL_PLANNER,
   autoplayAfterStyleSwitch,
@@ -8,6 +9,7 @@ import {
   displayedPlanUsesJevScore,
   generatePlanner,
   resolveDialPlan,
+  resolveMatchScore,
 } from './dialPolicy'
 import type { Generated } from './styleCache'
 
@@ -83,5 +85,40 @@ describe('autoplayAfterStyleSwitch', () => {
   it('restarts playback only when the previous style was already playing', () => {
     expect(autoplayAfterStyleSwitch(true)).toBe(true)
     expect(autoplayAfterStyleSwitch(false)).toBe(false)
+  })
+})
+
+describe('resolveMatchScore', () => {
+  const idle = { edited: false, busy: false, jevCanScore: true }
+
+  it('scores a dial/boot stub plan with the heuristic (stub score), without Best', () => {
+    expect(resolveMatchScore({ ...idle, generated: stubGenerated({ planner: 'heuristic' }) })).toEqual({ kind: 'score', scorer: 'heuristic' })
+  })
+
+  it('scores a Jev plan with Jev when Jev can score', () => {
+    const generated = stubGenerated({ planner: 'jev' })
+    expect(resolveMatchScore({ ...idle, generated })).toEqual({ kind: 'score', scorer: 'jev' })
+    expect(resolveMatchScore({ ...idle, generated, jevCanScore: false })).toEqual({ kind: 'score', scorer: 'heuristic' })
+  })
+
+  it('waits while a plan or Best-of is in flight', () => {
+    expect(resolveMatchScore({ ...idle, busy: true, generated: stubGenerated() })).toEqual({ kind: 'wait' })
+    expect(resolveMatchScore({ ...idle, generated: null })).toEqual({ kind: 'wait' })
+  })
+
+  it('reuses scores carried by a (cached) Best-of winner, but rescores an edited plan', () => {
+    const matches: ScoreResult = { scores: { bach: { match: 'high', confidence: 0.9 } } as ScoreResult['scores'], exchanges: [] }
+    const generated = { ...stubGenerated(), matches }
+    expect(resolveMatchScore({ ...idle, generated })).toEqual({ kind: 'reuse', matches })
+    expect(resolveMatchScore({ ...idle, generated, edited: true })).toEqual({ kind: 'score', scorer: 'heuristic' })
+  })
+
+  it('stub score fills every style card for a real heuristic plan', async () => {
+    const input: PlanInput = { style: 'bach', bars: 16, pick: 'sample', brief: true, seed: 11 }
+    const result = await heuristicPlanner.plan(input)
+    const action = resolveMatchScore({ ...idle, generated: { ...result, input, notice: null } })
+    expect(action).toEqual({ kind: 'score', scorer: 'heuristic' })
+    const { scores } = await heuristicPlanner.score!(result.plan, STYLE_IDS)
+    for (const id of STYLE_IDS) expect(['low', 'medium', 'high']).toContain(scores[id]?.match)
   })
 })

@@ -1,5 +1,5 @@
 import type { BarCount } from '../plan/schema'
-import type { PlannerId } from '../planner'
+import type { PlannerId, ScoreResult } from '../planner'
 import type { Generated } from './styleCache'
 
 export type DialPlanAction =
@@ -46,4 +46,26 @@ export function dialPendingTag(pendingAsksJev: boolean, progress: number): strin
 /** Dial switch: restart the new piece only if the previous style was already sounding. */
 export function autoplayAfterStyleSwitch(wasPlaying: boolean): boolean {
   return wasPlaying
+}
+
+export type MatchScoreAction =
+  | { kind: 'wait' }
+  | { kind: 'reuse'; matches: ScoreResult }
+  | { kind: 'score'; scorer: PlannerId }
+
+/**
+ * Style-match panel after a plan lands. Waits while planning or Best-of is
+ * running, reuses scores that came with the plan (Best-of winner, cached or
+ * not), and otherwise scores the displayed plan: Jev only for a Jev plan.
+ */
+export function resolveMatchScore(args: {
+  generated: Generated | null
+  edited: boolean
+  busy: boolean
+  jevCanScore: boolean
+}): MatchScoreAction {
+  const { generated } = args
+  if (!generated || args.busy) return { kind: 'wait' }
+  if (!args.edited && generated.matches) return { kind: 'reuse', matches: generated.matches }
+  return { kind: 'score', scorer: displayedPlanUsesJevScore(generated.trace.planner) && args.jevCanScore ? 'jev' : 'heuristic' }
 }
