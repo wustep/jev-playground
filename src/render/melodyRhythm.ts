@@ -14,7 +14,7 @@
 import { MOTION_RATE, type MotionId } from '../plan/schema'
 import type { BarPosition } from '../plan/phrase'
 import { slotsFrom, type Slot } from './voice'
-import type { MeterInfo } from './score'
+import { TICKS_PER_QUARTER, type MeterInfo } from './score'
 import type { StyleVoice } from './styleVoice'
 
 /** A way to divide one beat, and how often it is chosen among its size. */
@@ -96,8 +96,8 @@ function anticipate(rhythm: number[], meter: MeterInfo): number[] {
 }
 
 /** How many attacks this beat gets, given the motion's target rate and where we are in the bar. */
-function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () => number, lilt: Lilt = PLAIN): number {
-  const rate = motion === 'florid' && lilt.run ? lilt.run : MOTION_RATE[motion]
+function attacksForBeat(motion: MotionId, beat: number, beats: number, rand: () => number, lilt: Lilt, beatTicks: number): number {
+  const rate = motion === 'florid' && lilt.run ? (lilt.run * beatTicks) / TICKS_PER_QUARTER : MOTION_RATE[motion]
   if (motion === 'sustained') {
     // Fewer than one attack a beat: spread them evenly, but always sound the
     // downbeat. A long-note tune is two or three held notes in a wide bar, not
@@ -165,11 +165,12 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
   // cycle or a displaced-sixteenth vamp has no business stopping every four
   // bars. The last bar always lands, whatever its phrase says.
   if (position.phraseFinal && (position.phraseEnd !== 'open' || isLast) && motion === 'florid' && !isLast && beats > 1) {
-    // Running figuration does not stop for an inner cadence: a prelude, an
-    // étude or a displaced-sixteenth vamp arrives on the downbeat, holds it a
-    // beat so the arrival is heard, and runs on into the next phrase.
-    const rhythm = [meter.beatTicks]
-    for (let beat = 1; beat < beats; beat++) rhythm.push(...drawCell(cells[nearestCell(cells, attacksForBeat(motion, beat, beats, rand, lilt))], lilt, rand))
+    // Running figuration does not stop for an inner cadence: a prelude or an
+    // étude arrives on the downbeat, holds it a beat so the arrival is heard,
+    // and runs on into the next phrase. A line that never lets up (`run`)
+    // does not hold it either: the arrival is the first note of the run.
+    const rhythm = lilt.run ? [] : [meter.beatTicks]
+    for (let beat = rhythm.length; beat < beats; beat++) rhythm.push(...drawCell(cells[nearestCell(cells, attacksForBeat(motion, beat, beats, rand, lilt, meter.beatTicks))], lilt, rand))
     return slotsFrom(rhythm)
   }
   if (position.phraseFinal && (position.phraseEnd !== 'open' || isLast)) {
@@ -205,7 +206,7 @@ export function melodyRhythm(options: RhythmOptions): Slot[] {
     kept.forEach((slot, k) => rhythm.push(Math.min(kept[k + 1]?.start ?? edge, edge) - slot.start))
   }
   for (let beat = from; beat < beats; beat++) {
-    const wanted = attacksForBeat(motion, beat, beats, rand, lilt)
+    const wanted = attacksForBeat(motion, beat, beats, rand, lilt, meter.beatTicks)
     if (wanted === 0) {
       // A sustained line ties through: extend the note already sounding.
       const lastIndex = rhythm.length - 1

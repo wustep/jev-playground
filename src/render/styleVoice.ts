@@ -55,9 +55,12 @@ export interface StyleVoice {
    * eighth). Laufey has no reference; her anticipations are the one row
    * value here that rests on the style notes, not a measurement.
    *
-   * `run`, where set, is the attacks a florid beat aims at in place of the
-   * shared 3.5: a style whose running line never lets up. Fox's displacement
-   * lesson is sixteen sixteenths to the bar, and "Wyoming" plays 16.4.
+   * `run`, where set, is the attacks a florid line aims at per quarter note,
+   * in place of the shared 3.5 a beat: a style whose running line never lets
+   * up, in any metre — a dotted-quarter beat runs six. Such a line runs on
+   * through an inner cadence too, instead of holding its arrival a beat.
+   * Fox's displacement lesson is sixteen sixteenths to the bar, and
+   * "Wyoming" plays 16.4.
    */
   lilt: { dotted: number; anticipate: number; run?: number }
   /**

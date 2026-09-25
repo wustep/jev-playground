@@ -328,6 +328,33 @@ describe('the singing line', () => {
     expect(await rate('chopin')).toBeLessThan(await rate('elijah_fox'))
   })
 
+  it("keeps Fox's sixteenths running through an inner cadence, arriving on the tonic", () => {
+    const bars = Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V7', 'I'] as const)[i % 4], contour: 'wave' as const }))
+    const positions = barPositions('period', 16)
+    const inner = positions.flatMap((position, i) => (position.phraseFinal && i < 15 && position.phraseEnd !== 'open' ? [i] : []))
+    expect(inner.length).toBeGreaterThan(0)
+    for (const seed of [1, 2, 3, 4]) {
+      const score = renderPlan(plan({ style: 'elijah_fox', motion: 'florid', form: 'period', bars }), seed)
+      for (const i of inner) {
+        const bar = melody(score, i)
+        expect(bar, `bar ${i + 1} does not stop for its cadence`).toHaveLength(16)
+        if (positions[i].role === 'cadence') expect(bar[0].pitches[0].replace(/\d/, ''), `bar ${i + 1} arrives on the tonic`).toBe('C')
+      }
+      expect(melody(score, 15), 'the end still lands and rings').toHaveLength(1)
+    }
+  })
+
+  it("runs Fox's sixteenths in compound time too, where the shared florid rate lilts", () => {
+    const bars = Array.from({ length: 8 }, (_, i) => ({ chord: (['I', 'vi', 'IV', 'V'] as const)[i % 4], contour: 'wave' as const }))
+    const running = (style: CompositionPlan['style']) => {
+      const score = renderPlan(plan({ style, meter: 'six_eight', motion: 'florid', form: 'chain', bars }), 3)
+      const inner = score.bars.slice(0, -1)
+      return inner.filter((_, i) => melody(score, i).filter((n) => !n.tied).length === score.meter.ticksPerBar).length / inner.length
+    }
+    expect(running('elijah_fox'), 'a dotted-quarter beat runs six sixteenths').toBe(1)
+    expect(running('chopin')).toBeLessThan(0.5)
+  })
+
   it('rings out at the very end rather than resting', () => {
     const score = renderPlan(plan({ motion: 'walking' }), 4)
     const last = melody(score, 3)
