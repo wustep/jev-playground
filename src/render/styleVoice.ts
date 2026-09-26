@@ -9,17 +9,16 @@
 // job (register, motion, accompaniment, palette); this is how they are
 // played: how hard the metre is leaned on, how long a short note is held, how
 // even the touch is, whether the bar breathes, whether a phrase that comes
-// back is decorated the first time, how a beat is divided, and whether held
-// harmony rings or moves in parts. The last three add or move notes, and they
-// are here rather than in the plan because dressing a reprise, dotting a
-// rhythm and realizing a chord are a player's habits as much as a
-// composer's — Chopin wrote extra fioriture for Op. 9/2 into his pupils'
-// copies. Style as constraint, not costume.
+// back is decorated the first time, how a beat is divided, whether held
+// harmony rings or moves in parts, whether a pulse keeps one speed, and how
+// far a broken chord spreads. The last five add or move notes, and they are
+// here rather than in the plan because dressing a reprise, dotting a rhythm
+// and realizing a chord are a player's habits as much as a composer's —
+// Chopin wrote extra fioriture for Op. 9/2 into his pupils' copies. Style as
+// constraint, not costume.
 //
-// A fifth column, `spacing` (how wide the left hand reaches), was declared
-// here and never read by any accompaniment pattern. It is gone rather than
-// left looking like it did something; wiring a left-hand reach back in is a
-// sound change and belongs with the patterns, not with this table.
+// A change to one row moves that style's notes and no other's;
+// `styleFingerprint.test.ts` holds every style to what it rendered before.
 
 import type { StyleId } from '../plan/schema'
 
@@ -31,11 +30,11 @@ export interface StyleVoice {
   /** Peak random velocity deviation, in MIDI units. */
   humanize: number
   /**
-   * How the bar's inner time bends. `two_against_three` leans each eighth
-   * pair toward a triplet in simple metres — the cross-rhythm a pulse piece
-   * lives on — and leaves compound metres even.
+   * How the bar's inner time bends. A cross-rhythm is not one of these: bent
+   * in both hands at once, a triplet lean on every eighth pair is a swing.
+   * Glass's two against three is written into the notes (`lilt.duplets`).
    */
-  rubato: 'even' | 'light' | 'swung' | 'two_against_three'
+  rubato: 'even' | 'light' | 'swung'
   /**
    * How the first return of a phrase is played — a period's answer, an
    * arch's restatement. `literal` restates it and saves the fioritura for the
@@ -62,8 +61,12 @@ export interface StyleVoice {
    * through an inner cadence too, instead of holding its arrival a beat.
    * Fox's displacement lesson is sixteen sixteenths to the bar, and
    * "Wyoming" plays 16.4.
+   *
+   * `duplets`, where set, is the share of two-note compound beats split
+   * evenly (two dotted eighths) instead of leaning long–short, as a
+   * barcarolle's do: over a left hand in eighths, two against three.
    */
-  lilt: { dotted: number; anticipate: number; run?: number }
+  lilt: { dotted: number; anticipate: number; run?: number; duplets?: number }
   /**
    * Accents that regroup a running bar of sixteenths against the metre, one
    * grouping per bar in turn: Fox's 5+5+6 and 7+5+4. Absent: the metre
@@ -80,15 +83,32 @@ export interface StyleVoice {
    * notes and changes none of the tune's.
    */
   held?: 'parts'
+  /**
+   * A `pulse` that never changes speed. Absent, the repeated chords thin to
+   * the beat under a statement or a soft bar and fill back to eighths after
+   * it. Set, they run in the metre's eighths all piece long, and the form
+   * and the dynamic change only their weight: voices, and the octave under
+   * the bass. Zimmer's build and Glass's process both keep the figure while
+   * the layers change; switching rate, their ostinato changed speed at a
+   * third of their barlines.
+   */
+  ostinato?: true
+  /**
+   * How far a `broken` figure spreads. Absent, it is the chord in close
+   * position an octave over the held bass, rocking inside a sixth — the
+   * shapes an Alberti bass makes. `wide` opens it over the bass, as a
+   * nocturne's left hand does: the fifth, the tenth, the fifteenth.
+   */
+  reach?: 'wide'
 }
 
 export const STYLE_VOICES: Record<StyleId, StyleVoice> = {
   bach: { accent: 0.8, articulation: 0.9, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.07, anticipate: 0 }, held: 'parts' },
   beethoven: { accent: 1.3, articulation: 0.95, humanize: 3, rubato: 'even', answers: 'literal', lilt: { dotted: 0.3, anticipate: 0 } },
-  chopin: { accent: 0.7, articulation: 1, humanize: 3, rubato: 'light', answers: 'dressed', lilt: { dotted: 0.35, anticipate: 0 } },
+  chopin: { accent: 0.7, articulation: 1, humanize: 3, rubato: 'light', answers: 'dressed', lilt: { dotted: 0.35, anticipate: 0 }, reach: 'wide' },
   debussy: { accent: 0.4, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15 } },
-  glass: { accent: 0.9, articulation: 0.92, humanize: 1, rubato: 'two_against_three', answers: 'literal', lilt: { dotted: 0, anticipate: 0 } },
-  hans_zimmer: { accent: 1, articulation: 1, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.1, anticipate: 0.1 } },
+  glass: { accent: 0.9, articulation: 0.92, humanize: 1, rubato: 'even', answers: 'literal', lilt: { dotted: 0, anticipate: 0, duplets: 1 }, ostinato: true },
+  hans_zimmer: { accent: 1, articulation: 1, humanize: 2, rubato: 'even', answers: 'literal', lilt: { dotted: 0.1, anticipate: 0.1 }, ostinato: true },
   laufey: { accent: 1.1, articulation: 0.9, humanize: 5, rubato: 'swung', answers: 'literal', lilt: { dotted: 0.15, anticipate: 0.35 } },
   elijah_fox: { accent: 0.8, articulation: 1, humanize: 4, rubato: 'light', answers: 'literal', lilt: { dotted: 0.05, anticipate: 0.15, run: 4 }, grouping: [[5, 5, 6], [7, 5, 4]] },
 }

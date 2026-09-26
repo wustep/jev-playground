@@ -20,7 +20,7 @@ import { BARS_PER_PHRASE } from '../plan/phrase'
 import { REGISTER_RANGE, type CompositionPlan, type ContourId, type RegisterId } from '../plan/schema'
 import { melodyRhythm } from './melodyRhythm'
 import { clamp, ladder, midiOf, nearestIndex, tidyNote } from './pitch'
-import type { Note } from './score'
+import { TICKS_PER_QUARTER, type Note } from './score'
 import { STYLE_VOICES } from './styleVoice'
 import { beatsPerBar, chordAt, note, scaleAt, type BarView, type Remembered, type Slot } from './voice'
 
@@ -64,6 +64,10 @@ export function stressed(bar: Pick<BarView, 'meter' | 'chord2'>, slot: Slot): bo
   const { meter } = bar
   if (slot.start === 0 || slot.dur >= 2 * meter.beatTicks) return true
   if (!bar.chord2 && beatsPerBar(meter) % 2 !== 0) return false
+  // Two quarter beats are half a four-four bar: the second is four-four's
+  // second beat, not its third. Stressed, it left a walking line two chord
+  // tones a bar, a bugle call.
+  if (!bar.chord2 && meter.num === 2 && meter.beatTicks === TICKS_PER_QUARTER) return false
   return slot.start === meter.splitTick || (slot.start < meter.splitTick && slot.start + slot.dur > meter.splitTick)
 }
 
@@ -128,13 +132,20 @@ function reconcile(bar: BarView, pitches: readonly string[], slots: readonly Slo
   })
 }
 
+/** A figure moved `by` rungs along this bar's scale, note for note. */
+function alongScale(bar: BarView, pitches: readonly string[], by: number, lo: number, hi: number): string[] {
+  const rungs = ladder(bar.scale, Math.max(0, lo - 14), Math.min(127, hi + 14))
+  if (rungs.length === 0) return [...pitches]
+  return pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + by, 0, rungs.length - 1)])
+}
+
 /** Move a figure diagonally along this bar's scale, then reconcile its strong slots. */
 function transposeFigure(bar: BarView, pitches: readonly string[], semitones: number, slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): string[] {
   const rungs = ladder(bar.scale, Math.max(0, lo - 14), Math.min(127, hi + 14))
   if (rungs.length === 0 || pitches.length === 0) return [...pitches]
   const reference = midiOf(pitches[0])
   const steps = nearestIndex(rungs, reference + semitones) - nearestIndex(rungs, reference)
-  const moved = (by: number) => pitches.map((pitch) => rungs[clamp(nearestIndex(rungs, midiOf(pitch)) + by, 0, rungs.length - 1)])
+  const moved = (by: number) => alongScale(bar, pitches, by, lo, hi)
   let out = moved(steps)
   const top = Math.max(...out.map(midiOf))
   const bottom = Math.min(...out.map(midiOf))
@@ -148,25 +159,42 @@ function transposeFigure(bar: BarView, pitches: readonly string[], semitones: nu
     const candidates = [moved(octave), moved(0)].filter(fits)
     if (candidates.length) out = candidates.reduce((best, figure) => (Math.abs(midiOf(figure[0]) - last) < Math.abs(midiOf(best[0]) - last) ? figure : best))
   }
-  return keepSteps(pitches, reconcile(bar, out, slots, isStrong, lo, hi), ladder(bar.scale, lo, hi), slots, isStrong)
+  return keepSteps(bar, pitches, reconcile(bar, out, slots, isStrong, lo, hi), slots, isStrong, lo, hi)
 }
 
 /**
  * A moved figure keeps every step its source took. A chromatic note has no
  * rung of its own, so moving it lands on its neighbour's, and reconciling a
  * strong slot to the chord can do the same, striking a pitch twice where
- * the original moved. The weaker of the two steps on again, the way the
- * source went.
+ * the original moved. One of the two steps on again, the way the source
+ * went: a weak note along the scale before a stressed one, and a stressed
+ * one only to the next tone of its chord, so a stressed note never leaves
+ * the harmony to make room. A step that would strike its other neighbour
+ * instead is not taken.
  */
-function keepSteps(source: readonly string[], moved: string[], rungs: readonly string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean): string[] {
+function keepSteps(bar: BarView, source: readonly string[], moved: string[], slots: readonly Slot[], isStrong: (slot: Slot) => boolean, lo: number, hi: number): string[] {
+  const strong = (j: number) => Boolean(slots[j]) && isStrong(slots[j])
+  const rungsFor = (j: number) => {
+    const tick = slots[j]?.start ?? 0
+    return strong(j) ? ladder(chordAt(bar, tick).core, lo, hi) : ladder(scaleAt(bar, tick), lo, hi)
+  }
   for (let k = 1; k < moved.length; k++) {
     const went = Math.sign(midiOf(source[k]) - midiOf(source[k - 1]))
     if (!went || midiOf(moved[k]) !== midiOf(moved[k - 1])) continue
-    const weak = slots[k] && !isStrong(slots[k]) ? k : k - 1
-    const direction = weak === k ? went : -went
-    const at = nearestIndex(rungs, midiOf(moved[weak]))
-    const next = rungs[at + direction]
-    if (next && (weak + 1 >= moved.length || midiOf(next) !== midiOf(moved[weak + 1]))) moved[weak] = next
+    const options: [number, number][] = [
+      [k, went],
+      [k - 1, -went],
+    ]
+    options.sort(([a], [b]) => Number(strong(a)) - Number(strong(b)))
+    for (const [j, direction] of options) {
+      const rungs = rungsFor(j)
+      if (!rungs.length) continue
+      const next = rungs[nearestIndex(rungs, midiOf(moved[j])) + direction]
+      const other = j === k ? moved[k + 1] : moved[k - 2]
+      if (!next || midiOf(next) === midiOf(moved[j]) || (other !== undefined && midiOf(next) === midiOf(other))) continue
+      moved[j] = next
+      break
+    }
   }
   return moved
 }
@@ -451,6 +479,31 @@ function sequenceShift(model: Remembered, bar: BarView, centre: number): number 
   return [root, root - 12, root + 12].reduce((best, shift) => (cost(shift) < cost(best) ? shift : best))
 }
 
+const meanMidi = (pitches: readonly string[]) => pitches.reduce((sum, pitch) => sum + midiOf(pitch), 0) / pitches.length
+
+/**
+ * A sequence's figure on this bar's harmony: its model moved by the root's
+ * move. Where that leaves it at the model's own pitch — the root stood
+ * still, or its move left the register and the octave back would leap away
+ * — the figure moves a step instead, the commonest sequence there is. Left
+ * where it was, a contrast bar and its two sequences sang one bar three
+ * times, in a third of all sequences.
+ */
+function sequenceFigure(bar: BarView, model: Remembered, isStrong: (slot: Slot) => boolean, lo: number, hi: number, centre: number): string[] {
+  const shift = sequenceShift(model, bar, centre)
+  const moved = transposeFigure(bar, model.pitches, shift, model.slots, isStrong, lo, hi)
+  const level = meanMidi(model.pitches)
+  if (Math.abs(meanMidi(moved) - level) >= 1) return moved
+  const heading = Math.sign(shift) || Math.sign(centre - level) || -1
+  for (const by of [heading, -heading, 2 * heading, -2 * heading]) {
+    const stepped = alongScale(bar, model.pitches, by, lo, hi)
+    if (stepped.some((pitch) => midiOf(pitch) < lo || midiOf(pitch) > hi)) continue
+    const figure = keepSteps(bar, model.pitches, reconcile(bar, stepped, model.slots, isStrong, lo, hi), model.slots, isStrong, lo, hi)
+    if (Math.abs(meanMidi(figure) - level) >= 1) return figure
+  }
+  return moved
+}
+
 /**
  * One spelled pitch per slot. `model` is the bar a sequence repeats: its
  * figure is carried onto this bar's harmony, the way a return carries its
@@ -475,7 +528,7 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
   const goal = landingChord.pcs.find((pc) => TonalNote.chroma(pc) === TonalNote.chroma(bar.key.tonic)) ?? landingChord.root
 
   if (!source && model && model.pitches.length === slots.length) {
-    pitches = transposeFigure(bar, model.pitches, sequenceShift(model, bar, centre), model.slots, isStrong, lo, hi)
+    pitches = sequenceFigure(bar, model, isStrong, lo, hi, centre)
     bendToSecond(bar, pitches, slots)
   } else if (source && source.pitches.length) {
     // The tune as it comes back: the source's notes on the source's onsets,
@@ -483,7 +536,9 @@ function melodyPitches(bar: BarView, slots: readonly Slot[], register: RegisterI
     // decorated between them.
     const related = source.chord === bar.chord.id || commonTones(source.core, bar.chord.core) >= 2
     const shift = rootShift(source.root, bar.chord.root)
-    let tune = related ? reconcile(bar, source.pitches, source.slots, isStrong, lo, hi) : transposeFigure(bar, source.pitches, shift, source.slots, isStrong, lo, hi)
+    let tune = related
+      ? keepSteps(bar, source.pitches, reconcile(bar, source.pitches, source.slots, isStrong, lo, hi), source.slots, isStrong, lo, hi)
+      : transposeFigure(bar, source.pitches, shift, source.slots, isStrong, lo, hi)
     if (bar.position.role === 'climax') {
       // The same figure reaching a third higher — if there is room above it.
       const lifted = transposeFigure(bar, source.pitches, shift + 4, source.slots, isStrong, lo, hi)
@@ -608,7 +663,9 @@ const HOLD_OVER = 0.6
  * one bar rings on through the first slot of the next, instead of that slot
  * being struck. No pitch changes — the held note takes the struck note's
  * place — and only where it belongs there: a tone of the new chord, or a
- * suspension that steps into the note after it.
+ * suspension that steps into the note after it. The move on from it is the
+ * held note's to make, so it must be no wider than a fourth, or than the
+ * move the struck note made: a D4 held in place of a D5 leapt a tenth.
  *
  * Never over a breath (out of a phrase-final bar), into a landing (a
  * phrase-final bar) or into a statement, which enters on its own.
@@ -627,6 +684,7 @@ function holdOver(plan: CompositionPlan, bars: readonly BarView[], written: Note
     const suspension = head.dur <= bar.meter.beatTicks && step > 0 && step <= 2
     if (!chordTone && !suspension) continue
     if (chance() >= HOLD_OVER) continue
+    if (step > Math.max(5, Math.abs(midiOf(head.pitches[0]) - midiOf(after.pitches[0])))) continue
     written[i][0] = { ...head, pitches: [...tail.pitches], tied: true }
   }
 }

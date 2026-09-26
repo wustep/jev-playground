@@ -15,6 +15,7 @@
 
 import type { AccompanimentId, CompositionPlan } from '../plan/schema'
 import { Note as TonalNote } from 'tonal'
+import type { ResolvedChord } from './harmony'
 import { clamp, ladder, midiOf, nearestIndex, nearestNote } from './pitch'
 import type { PedalId, Voice } from './score'
 import { STYLE_VOICES } from './styleVoice'
@@ -36,6 +37,10 @@ export interface AccompanimentOptions {
   ceiling: number
   /** 0 bare … 3 full. Derived from the bar's role, not from a plan label. */
   density: 0 | 1 | 2 | 3
+  /** A pulse keeps the metre's eighths whatever the density (`StyleVoice.ostinato`). */
+  ostinato?: boolean
+  /** How far a broken figure spreads (`StyleVoice.reach`). */
+  reach?: 'wide'
 }
 
 /** A safe top for accompaniment voices: clear of the tune by a comfortable step. */
@@ -246,21 +251,49 @@ const BREAK_SHAPES = [
   [0, 2, 3, 2],
 ]
 
+const rotations = (tones: readonly string[]) => tones.map((_, inversion) => [...tones.slice(inversion), ...tones.slice(0, inversion)])
+
 /**
- * The chord stacked from `from` in whichever inversion fits under `top` —
- * dropping its highest tone only if none does. Under a low tune a
- * root-first stack crosses the tune's floor, and a tone that cannot sound
- * is a hole in the figure.
+ * `count` of the chord's tones stacked from `from` in whichever inversion
+ * fits under `top` — fewer only if none does, and a seventh chord then
+ * gives up its fifth and root before its third and seventh. Under a low
+ * tune a root-first stack crosses the tune's floor, and a tone that cannot
+ * sound is a hole in the figure.
  */
-function stackUnder(tones: readonly string[], from: number, top: number): string[] {
-  for (let size = tones.length; size >= 1; size--) {
-    for (let inversion = 0; inversion < tones.length; inversion++) {
-      const order = [...tones.slice(inversion), ...tones.slice(0, inversion)].slice(0, size)
+function stackUnder(chord: ResolvedChord, count: number, from: number, top: number): string[] {
+  const all = essentialTones(chord, count)
+  for (let size = all.length; size >= 1; size--) {
+    const preferred = chord.core.length > 3 ? rotations(essentialTones(chord, size)) : []
+    for (const order of [...preferred, ...rotations(all).map((order) => order.slice(0, size))]) {
       const stack = stackUp(order, from)
       if (midiOf(stack[stack.length - 1]) < top) return stack
     }
   }
   return []
+}
+
+/**
+ * The chord spread open over its bass, from the fifth to the tenth and past
+ * it where the tune leaves room: 1, 5, 10, 15 over a triad (1, 5, 10, 14
+ * over a seventh chord), else 1, 5, 8, 10 (1, 5, 7, 10). Each tone sits at
+ * least a third over the one before. Undefined where the label fixes the
+ * bass or not even the tenth fits under `top`.
+ */
+function openOver(chord: ResolvedChord, bass: number, top: number): string[] | undefined {
+  if (chord.fixedBass) return undefined
+  const [root, third, fifth, seventh] = chord.core
+  const spread = (order: readonly string[]) => {
+    const out: string[] = []
+    let floor = bass + 5
+    for (const pc of order) {
+      const [pitch] = ladder([pc], floor, Math.min(top - 1, floor + 11))
+      if (!pitch) return undefined
+      out.push(pitch)
+      floor = midiOf(pitch) + 3
+    }
+    return out
+  }
+  return spread([fifth, third, seventh ?? root]) ?? spread([fifth, seventh ?? root, third])
 }
 
 function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
@@ -270,6 +303,7 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   // compound one: continuous under the tune without outrunning it.
   const step = 2
   const shape = BREAK_SHAPES[pieceChoice(bar.memory, bar.rand, 'break', BREAK_SHAPES.length)]
+  const played = [...new Set(shape)].sort((a, b) => a - b)
   const voice: Voice = []
   const bassVoice: Voice = []
   let previousBass: string | undefined = bar.memory.bass
@@ -285,9 +319,14 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
       bassVoice.push(note(tick, tick === 0 ? dur : meter.ticksPerBar - tick, low, bar.velocity - 4))
     }
     if (options.density === 0 && tick % meter.beatTicks !== 0) continue
-    const tones = essentialTones(chord, 4)
-    const stack = stackUnder(tones, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22), top)
-    const pick = stack[shape[k % shape.length] % stack.length] ?? stack[0]
+    // A shape that plays three places of a four-note chord plays the three
+    // tones that name it, in its own order. Over all four stacked, the place
+    // it skipped could be the seventh: a ii7 or a V7 broken as a triad.
+    const open = options.reach === 'wide' && previousBass ? openOver(chord, midiOf(previousBass), top) : undefined
+    const compact = (open !== undefined || chord.core.length > 3) && played.length < 4
+    const stack = open ?? stackUnder(chord, compact ? played.length : 4, Math.max(midiOf(previousBass ?? 'C3') + 7, top - 22), top)
+    const place = compact ? played.indexOf(shape[k % shape.length]) : shape[k % shape.length]
+    const pick = stack[place % stack.length] ?? stack[0]
     if (!pick || midiOf(pick) >= top) continue
     voice.push(note(tick, step, pick, bar.velocity - 16 + (tick % meter.beatTicks === 0 ? 5 : 0)))
   }
@@ -299,7 +338,7 @@ function broken(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
 function pulse(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   const { meter } = bar
   const top = headroom(options.ceiling)
-  const step = options.density >= 2 ? Math.max(2, meter.beatTicks / 2) : meter.beatTicks
+  const step = options.ostinato ? 2 : options.density >= 2 ? Math.max(2, meter.beatTicks / 2) : meter.beatTicks
   const voice: Voice = []
   const bassVoice: Voice = []
   let previousBass: string | undefined = bar.memory.bass
@@ -323,19 +362,35 @@ function pulse(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
 
 // ── stride ──────────────────────────────────────────────────────────────────
 
+/**
+ * The bass a stride answers itself with on the half-bar of a four-beat bar:
+ * the chord's fifth, nearest the bass it struck on one — or, where the label
+ * fixes the bass (an inversion, a pedal), that bass again.
+ */
+function alternateBass(chord: ResolvedChord, struck: string, lo: number, hi: number): string {
+  return chord.fixedBass ? struck : nearestNote([chord.core[2]], midiOf(struck), lo, hi)
+}
+
 function stride(bar: BarView, options: AccompanimentOptions): AccompanimentBar {
   const { meter } = bar
   const top = headroom(options.ceiling)
   const beats = beatsPerBar(meter)
+  const lo = Math.min(31, top - 28)
+  const hi = Math.min(50, top - 16)
   const bassVoice: Voice = []
   const chordVoice: Voice = []
   for (let beat = 0; beat < beats; beat++) {
     const tick = beat * meter.beatTicks
     const chord = chordAt(bar, tick)
-    if (beat === 0 || (bar.chord2 && tick === meter.splitTick)) {
-      const low = bassFor(chord, bar.memory.bass, { lo: Math.min(31, top - 28), hi: Math.min(50, top - 16), allowInversion: !bar.isLast && bar.index > 0 })
+    const arrives = beat === 0 || (bar.chord2 && tick === meter.splitTick)
+    // In four, bass and chord take turns: a stride, a march and a two-feel
+    // ballad all go bass, chord, bass, chord — not the waltz's bass, chord,
+    // chord with a beat added. The barest bar keeps its rest on three.
+    const answers = !arrives && beats === 4 && tick === meter.splitTick && options.density > 0 && bar.memory.bass !== undefined
+    if (arrives || answers) {
+      const low = arrives ? bassFor(chord, bar.memory.bass, { lo, hi, allowInversion: !bar.isLast && bar.index > 0 }) : alternateBass(chord, bar.memory.bass!, lo, hi)
       bar.memory.bass = low
-      bassVoice.push(note(tick, meter.beatTicks, withOctave(low, options.density), bar.velocity))
+      bassVoice.push(note(tick, meter.beatTicks, withOctave(low, options.density), bar.velocity - (arrives ? 0 : 6)))
       continue
     }
     if (options.density === 0 && beat % 2 === 0) continue
@@ -501,5 +556,7 @@ export function writeAccompaniment(plan: CompositionPlan, bar: BarView, melody: 
   // With no tune sounding this bar, the accompaniment keeps its own company
   // under where the tune last was, so a rest is a rest and not a hole.
   const ceiling = melody.floor ?? (lastSung ?? 72) - 2
-  return (inParts(plan) ? parts : PATTERNS[plan.accompaniment])(bar, { ceiling, density: densityFor(bar) }, melody)
+  const { ostinato, reach } = STYLE_VOICES[plan.style]
+  const options = { ceiling, density: densityFor(bar), ostinato, reach }
+  return (inParts(plan) ? parts : PATTERNS[plan.accompaniment])(bar, options, melody)
 }

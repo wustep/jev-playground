@@ -43,9 +43,10 @@ const SIMPLE_CELLS: Record<number, Cell[]> = {
   3: [cell([2, 1, 1], () => 0.5), cell([1, 1, 2], () => 0.35), cell([1, 2, 1], () => 0.15)],
   4: [cell([1, 1, 1, 1])],
 }
+const leans = (share: number) => (lilt: Lilt) => (lilt.duplets === undefined ? share : (share / 0.85) * (1 - lilt.duplets))
 const COMPOUND_CELLS: Record<number, Cell[]> = {
   1: [cell([6])],
-  2: [cell([4, 2], () => 0.6), cell([2, 4], () => 0.25), cell([3, 3], () => 0.15)],
+  2: [cell([4, 2], leans(0.6)), cell([2, 4], leans(0.25)), cell([3, 3], (lilt) => lilt.duplets ?? 0.15)],
   3: [cell([2, 2, 2])],
   4: [cell([2, 2, 1, 1], () => 0.45), cell([1, 1, 2, 2], () => 0.3), cell([2, 1, 1, 2], () => 0.25)],
   6: [cell([1, 1, 1, 1, 1, 1])],

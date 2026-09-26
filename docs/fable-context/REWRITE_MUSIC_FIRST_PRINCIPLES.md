@@ -364,3 +364,71 @@ On the Heuristic stub, with `?debug=1`, 16 bars, "sampling", then "Re-run this s
 - **Bach**, any `hymn` in a minor key: the i6/4 of a cadence bar keeps its bass while the upper parts move to V7.
 - **Elijah Fox, seed 2** (E♭ major `perpetual`): bar 4, a D♭9 half cadence, runs sixteenths from beat 1. On `main` it holds its first beat. Bar 8's inner cadence starts its run on E♭.
 - **Elijah Fox** in 6/8 (Generate until `florid` and 6/8, usually the `hazy` variant): twelve even sixteenths a bar, not eighth–eighth–sixteenth–sixteenth.
+
+---
+
+## Quality bash, 2026-09-25
+
+The earlier passes measured register and density against the references, and those still hold: no style's mean register moves more than 0.1 semitone here, and no mean density more than 0.01 attacks a bar. This pass read pieces bar by bar at fixed seeds (`scripts/dump-piece.ts`) and counted what the ear caught (`scripts/quality-audit.ts`). Five of the defects were in rules every style shares. Four were a style speaking the wrong dialect.
+
+Each shared fix moves every style that hits it, and its commit says which. Each style fix is a `StyleVoice` value, or, for Beethoven, a metre only his priors reach. `src/render/styleFingerprint.test.ts` hashes every style's rendered notes and playback timing over 24 sampled plans, so a style's commit shows the other seven rendered byte-identical.
+
+### What the audit counts
+
+24 seeds × 16 bars, heuristic stub, `main` → now:
+
+| style | sequences at the model's pitch | moves struck twice, per 100 | broken 7th chords without the 7th | 6/8 two-note beats long–short | pulse bars that change rate | 2/4 and 6/8 walking by step |
+| --- | --- | --- | --- | --- | --- | --- |
+| bach | 42% → 3% | 1.2 → 0.4 | 20% → 0% | — | — | 67% → 67% |
+| beethoven | 24% → 0% | 1.5 → 0.3 | 59% → 9% | 95% → 95% | 27% → 27% | **44% → 61%** |
+| chopin | 28% → 2% | 1.9 → 0.5 | 55% → 0% | 73% → 73% | 32% → 28% | — |
+| debussy | 30% → 0% | 0.5 → 0 | 39% → 6% | 58% → 58% | — | 27% → 26% |
+| glass | 40% → 0% | 0.7 → 0 | 100% → 0% | **91% → 0%** | **43% → 0%** | — |
+| hans_zimmer | 24% → 2% | 0.8 → 1.2 | 0% → 0% | — | **36% → 0%** | 61% → 57% |
+| laufey | 40% → 5% | 2.3 → 0.5 | 40% → 0% | — | 27% → 27% | 58% → 56% |
+| elijah_fox | 47% → 4% | 0.7 → 0.2 | 28% → 6% | 82% → 83% | 41% → 41% | 21% → 21% |
+
+"At the model's pitch" is a sequence whose mean pitch is within a semitone of the bar it repeats. Stressed notes off their chord went from ≤1% to 0 in every style. Leaps wider than a fifth out of a note held over the barline went from 3 to 0 in Laufey's 24 pieces (up to 15 semitones), 2 to 0 in Fox's and 2 to 1 in Bach's.
+
+### Shared rules
+
+- **A sequence moves.** A sequence carries its model onto the next chord by the root's move. Where the root stood still, or its move left the register and the octave back would leap away, the figure stayed where it was. A contrast bar and its two sequences could be one bar three times. It now moves a step, toward the root's move or the middle of the register, and keeps its shape.
+- **A moved figure keeps its steps without leaving the chord.** `keepSteps` separates two notes a transposition struck on one pitch. It moved the earlier note along the scale whenever the later was stressed, a downbeat included, so a sequence could land a G over A major. Now a weak note steps first, a stressed note only to the next tone of its chord, and never onto its other neighbour. Returns over a related chord, which never ran it, keep their steps too.
+- **A held note doesn't leave the line leaping.** Under `counterline` and `stride`, a held note replaces the struck one whatever the distance. A D4 held in place of a D5 made a Laufey line leap a tenth. The move on from a held note is now no wider than a fourth, or than the struck note's own.
+- **A broken figure sounds the seventh.** Three of the four shapes play three places of a stacked chord. Over a four-note chord, the place skipped could be the seventh. Such a shape now stacks the three tones that name the chord (third, seventh, root). Triads take the old path exactly.
+- **Stride in four alternates.** A four-beat bar went bass, chord, chord, chord, which is the waltz with a beat added. It now goes bass, chord, fifth, chord, as stride, march and a two-feel ballad do. That is Laufey's *From the Start* plan (walking, stride, 4/4).
+
+### Style rows
+
+- **Glass: `lilt.duplets: 1`, `rubato: 'even'`.** His row said he never dots, but compound beats ignored the row, and 91% of his two-note 6/8 beats leaned long–short like a barcarolle. They split evenly now, two dotted eighths over a left hand in eighths: an exact two against three. The `two_against_three` rubato leaned every eighth pair toward a triplet in both hands at once. That is a light swing, not a cross-rhythm, and it is gone.
+- **Glass, Zimmer: `ostinato: true`.** The pulse took its rate from the bar's density: quarters under a statement or a soft bar, eighths after. Their ostinato changed speed at 36–43% of barlines. It now runs in the metre's eighths all piece long. The build is in the weight: voices, and the octave under the bass.
+- **Chopin: `reach: 'wide'`.** His brief asks for a wide-span left hand, not Alberti. The broken figure was a close triad an octave over the held bass, in exactly the Alberti shapes. It now opens from the fifth over the bass through the tenth: 1–5–10–15 over a triad and 1–5–10–14 over a seventh chord where the tune leaves room, else 1–5–8–10 or 1–5–7–10. Of his own broken plans' full bars, 0% → 100% open from the fifth to the tenth. His melody-to-accompaniment gap goes 19.0 → 19.7 against Op. 9/2's 18.6.
+- **Beethoven: 2/4's second beat passes.** The stress rule counts the half-bar as strong, which is 4/4's third beat but 2/4's second. A walking 2/4 tune was therefore two chord tones a bar, A4 D5 | A4 D5. Two quarter beats are now half a 4/4 bar. Only his priors draw 2/4. His Op. 13 II reference plan's register moves 64.2 → 65.7 against the MIDI's 66.3.
+
+### Left alone
+
+- **6/8's second beat** is the same shape as 2/4's. Freeing it would lift walking step rates in two-beat bars for Debussy (26% → 45%), Fox (21% → 29%) and Laufey (56% → 72%), and change every style's 6/8 pieces, flowing and florid ones included. It needs a listening call.
+- **A stressed note snaps down on a tie.** `reconcile` resolves a note equidistant from two chord tones downward. In Laufey seed 1, bar 11 opens F4–B4, a tritone, where A4 would have stepped.
+- **Stride chords sit low.** They centre an octave under the tune's headroom, so under a mid-register tune they are close thirds around A2–F3.
+- **Laufey's swing** delays off-beats by 0.28 of a sixteenth. Her most typical plan, walking over stride, has no off-beats to delay.
+- **Other pulses.** Chopin's Op. 28/4 and Beethoven's Waldstein keep one rate too. `ostinato` is a row value if the ear agrees.
+- **Cross-relations.** 1–2 notes in 1,000 for Bach, Beethoven, Chopin, Laufey and Fox: a weak note of a related return keeps its source's diatonic pitch over a chromatic chord. Unchanged.
+- **Zimmer's restruck moves** rose, 0.8 → 1.2 per 100. His sequences now move, and what is left is a chromatic step with no rung of its own on the new chord's scale, such as a figure over IV carried onto a borrowed iv, where its A and B collapse onto A♭. That is the same residue as every other style's, just more of his sequences reach it.
+- **Fox's best-matching plan** in `compare-generated-vs-reference.ts --summary` returns less (ret4 0.31 → 0.13). That is one plan. His 24-seed mean is 0.29 → 0.30.
+- **No listening pass, no keyed A/B.** Everything above is read from the notes. The seeds below are where to listen.
+
+### Ear-check
+
+On the Heuristic stub, with `?debug=1`, 16 bars, "sampling the distribution", type the seed, then "Re-run this seed". Compare against production (`main`). `npx tsx scripts/dump-piece.ts --style <id> --seed <n> --bass` prints the same piece bar by bar.
+
+- **Laufey, seed 1** (C major, flowing, `pulse`, period): bars 9–11. On `main` they are one bar three times, A B C D C B G B. Now bar 10 is a step higher and bar 11 comes back down.
+- **Laufey, seed 6** (F major, walking, `stride`, 4/4): the left hand goes bass, chord, bass, chord, with bar 4 C2 then G1. On `main` it is one bass and three chords. In bar 10, `main` holds D4 over the barline and leaps to F5; now D5 is struck.
+- **Glass, seed 2** (E minor, 6/8, `pulse`): the tune moves in dotted eighths, G4 A4 | B4 A4, over six even eighth-note chords a bar. On `main` it lilted, eighth then quarter, over chords that switched between dotted quarters and dotted eighths.
+- **Glass, seed 4** (G minor, 4/4, `pulse`): both hands dead even, and bars 1 and 5 keep the eighth-note pulse. On `main` every off-beat leaned late, and those bars dropped to quarters.
+- **Zimmer, seed 2** (F minor, `pulse`, build then drop): bars 1, 5 and 13 keep the eighth-note ostinato. On `main` each dropped to quarters.
+- **Beethoven, seed 2** (D major, 2/4, walking): bars 1–2 are A4 B4 | A4 C♯5. On `main`, A4 D5 | A4 D5.
+- **Chopin, seed 7** (A♭ major, 12/8 nocturne, `broken`): bar 1's left hand is E♭3 C4 A♭4 C4 over A♭2, the fifth, tenth and fifteenth. On `main`, A♭3 C4 E♭4 C4, a close triad.
+- **Bach, seed 1** (G major, flowing, `stride`, period): bar 10 sings bar 9 a step higher, and bar 11 walks E4 G4 A4 B4 C♯5. On `main`, bar 10 repeated bar 9's pitch level and bar 11 struck B4 twice.
+- **Debussy, seed 1** (F major, 3/4, sustained): bar 7 moves off bar 6, E♭5 C5 after E♭5 D5. On `main` they are the same bar.
+- **Elijah Fox, seed 3** (F♯ minor `perpetual`): bar 7's run goes C♯5 G♯5 E5 where `main` struck E5 twice. Bar 11 moves off bar 10, which it repeated.
+- **Elijah Fox, seed 2**: its tune is unchanged, and the earlier ear-check still holds. Its E♭maj9 bars now break G3 F4 D4 F4 over E♭2, the third, ninth and seventh. On `main` they broke E♭3 D4 G3 D4.

@@ -408,7 +408,7 @@ describe('ties over the barline', () => {
       dynamicShape: 'steady',
       bars: Array.from({ length: 16 }, (_, i) => ({ chord: (['I', 'IV', 'V', 'I'] as const)[i % 4], contour: 'wave' as const })),
     }
-    const score = renderPlan(plan, 2)
+    const score = renderPlan(plan, 3)
     const heldBars = score.bars.flatMap((bar) => (bar.treble[0]?.[0]?.tied ? [bar.index] : []))
     expect(heldBars.length).toBeGreaterThan(0)
     const theme = { ink: '#000', muted: '#666', accent: '#a00' } as unknown as Parameters<typeof drawScore>[3]
