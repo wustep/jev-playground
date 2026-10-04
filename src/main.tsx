@@ -4,6 +4,8 @@ import { Landing } from './landing/Landing'
 import { routeFor } from './shell/route'
 import { Diamond } from './ui/Diamond'
 import { Masthead } from './ui/Masthead'
+import '@fontsource-variable/source-serif-4/opsz.css'
+import '@fontsource-variable/source-serif-4/opsz-italic.css'
 import './styles.css'
 
 // Each demo is its own chunk: the landing page and the trolley / inbox /

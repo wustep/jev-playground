@@ -7,7 +7,7 @@
   --line: #d6cfbf;
   --accent: #9a6a1c;
   --warn: #b3261e;
-  --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --serif: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
   --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
