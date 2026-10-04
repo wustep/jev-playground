@@ -530,10 +530,10 @@ export function sheetScale(width: number): number {
   return 0.68 + ((width - 420) / 300) * 0.32
 }
 
-/** Wait for VexFlow's bundled music + text fonts before the first draw. */
+/** Wait for VexFlow's bundled music + text fonts and the self-hosted label serif before the first draw. */
 export async function sheetFontsReady(): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts) return
-  await Promise.allSettled([document.fonts.load('30px Bravura'), document.fonts.load('16px Academico')])
+  await Promise.allSettled([document.fonts.load('30px Bravura'), document.fonts.load('16px Academico'), document.fonts.load('600 15px "Source Serif 4 Variable"'), document.fonts.load('italic 600 17px "Source Serif 4 Variable"')])
 }
 
 export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: number, theme: SheetTheme): SheetLayout {
@@ -684,7 +684,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       pen.save()
       pen.textBaseline = 'alphabetic'
       pen.fillStyle = theme.ink
-      pen.font = '600 15px "Fraunces", "Academico", Georgia, serif'
+      pen.font = '600 15px "Source Serif 4 Variable", Georgia, serif'
       pen.fillText(prettyChord(bar.chordSymbol), labelX, chordY)
       const symbolWidth = pen.measureText(prettyChord(bar.chordSymbol)).width
       pen.fillStyle = theme.accent
@@ -695,7 +695,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
         const at = anchors.find((anchor) => anchor.tick >= bar.split!.tick)
         const splitX = Math.max(labelX + symbolWidth + pen.measureText(bar.plan.chord).width + 16, at ? at.x - 4 : x + staveWidth / 2)
         pen.fillStyle = theme.ink
-        pen.font = '600 15px "Fraunces", "Academico", Georgia, serif'
+        pen.font = '600 15px "Source Serif 4 Variable", Georgia, serif'
         pen.fillText(prettyChord(bar.split.chordSymbol), splitX, chordY)
         const splitWidth = pen.measureText(prettyChord(bar.split.chordSymbol)).width
         pen.fillStyle = theme.accent
@@ -707,7 +707,7 @@ export function drawScore(canvas: HTMLCanvasElement, score: Score, cssWidth: num
       pen.fillText(`${bar.index + 1} · ${bar.role.replace(/_/g, ' ')}`, labelX, roleY)
       if (bar.dynamic !== lastDynamic) {
         pen.fillStyle = theme.ink
-        pen.font = 'italic 600 17px "Academico", "Fraunces", Georgia, serif'
+        pen.font = 'italic 600 17px "Source Serif 4 Variable", Georgia, serif'
         pen.fillText(bar.dynamic, dynamicX, dynamicY)
         lastDynamic = bar.dynamic
       }
